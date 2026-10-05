@@ -12,10 +12,35 @@ ACCOUNTS_FILE="${1:-$REPO/accounts.txt}"
 MODEL="gemini-3.8-flash-medium"
 MIN_SIZE=600   # bytes; an unfilled skeleton index.html is smaller than this
 
-[ -f "$ACCOUNTS_FILE" ] || { echo "Accounts file not found: $ACCOUNTS_FILE"; exit 1; }
-mkdir -p "$ROOT"
+if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+  C_INFO=$'\033[36m'
+  C_SUCCESS=$'\033[32m'
+  C_WARN=$'\033[33m'
+  C_ERROR=$'\033[31m'
+  C_RESET=$'\033[0m'
+else
+  C_INFO=''
+  C_SUCCESS=''
+  C_WARN=''
+  C_ERROR=''
+  C_RESET=''
+fi
 
-log() { echo "[$(date +%H:%M:%S)] $*"; }
+log() {
+  local level="$1"
+  shift
+  local color
+  case "$level" in
+    SUCCESS) color="$C_SUCCESS" ;;
+    WARN) color="$C_WARN" ;;
+    ERROR) color="$C_ERROR" ;;
+    *) color="$C_INFO" ;;
+  esac
+  printf '[%s] %s%-7s%s %s\n' "$(date +%H:%M:%S)" "$color" "$level" "$C_RESET" "$*"
+}
+
+[ -f "$ACCOUNTS_FILE" ] || { log ERROR "Accounts file not found: $ACCOUNTS_FILE"; exit 1; }
+mkdir -p "$ROOT"
 
 # Return codes: 0 = built, 1 = failed, 2 = skipped (already built)
 # NOTE: this runs inside an if/|| context, so set -e is off in here;
@@ -34,22 +59,22 @@ process_account() {
     local existing
     existing=$(wc -c < "$site/index.html" | tr -d ' ')
     if [ "$existing" -ge "$MIN_SIZE" ]; then
-      log "$user: site already built, skipping (use FORCE=1 to rebuild)"
+      log INFO "$user: site already built, skipping (use FORCE=1 to rebuild)"
       return 2
     fi
   fi
 
   # 1. Scrape (run from the account folder so data/debug land there;
   #    skips automatically if profile_data.json already exists)
-  log "$user: scraping..."
+  log INFO "$user: scraping..."
   ( cd "$acct" && python3 "$REPO/scraper.py" "$user" --captions --auth "$REPO/auth.json" ) \
-    || { log "$user: scraper failed"; return 1; }
-  [ -f "$data/profile_data.json" ] || { log "$user: no profile_data.json"; return 1; }
+    || { log ERROR "$user: scraper failed"; return 1; }
+  [ -f "$data/profile_data.json" ] || { log ERROR "$user: no profile_data.json"; return 1; }
 
   # 2. Pre-build the site skeleton so agy doesn't spend tokens on boilerplate
-  cp -f "$data"/posts/web/*.webp "$site/assets/" || { log "$user: no images to copy"; return 1; }
+  cp -f "$data"/posts/web/*.webp "$site/assets/" || { log ERROR "$user: no images to copy"; return 1; }
   if [ -f "$data/pfp.jpg" ]; then
-    cp -f "$data/pfp.jpg" "$site/assets/pfp.jpg" || return 1
+    cp -f "$data/pfp.jpg" "$site/assets/pfp.jpg" || { log ERROR "$user: failed to copy profile image"; return 1; }
   fi
 
   cat > "$site/index.html" <<'HTML'
@@ -69,10 +94,10 @@ HTML
   : > "$site/style.css"
 
   # Fresh copy of the rules next to the data, so agy can read them from its workspace
-  cp -f "$REPO/GEMINI.md" "$acct/GEMINI.md" || return 1
+  cp -f "$REPO/GEMINI.md" "$acct/GEMINI.md" || { log ERROR "$user: failed to copy GEMINI.md"; return 1; }
 
   # 3. Let agy design the site
-  log "$user: building site with agy ($MODEL)..."
+  log INFO "$user: building site with agy ($MODEL)..."
   local code=0
   ( cd "$acct" && timeout 900 agy \
       -p "Read $acct/GEMINI.md and follow it exactly. This is a design mockup. Source data: $data/profile_data.json. Images are already in $site/assets/ (post_N.webp and pfp.jpg); do not copy anything. $site/index.html and $site/style.css already exist as skeletons; fill them in." \
@@ -81,17 +106,17 @@ HTML
     > "$agylog" 2>&1 || code=$?
 
   if [ "$code" -eq 124 ]; then
-    log "$user: agy timed out (see $agylog)"
+    log WARN "$user: agy timed out (see $agylog)"
   fi
 
   # 4. Success = index.html is bigger than the empty skeleton
   local size
   size=$(wc -c < "$site/index.html" | tr -d ' ')
   if [ "$size" -lt "$MIN_SIZE" ]; then
-    log "$user: agy did not fill in index.html (see $agylog)"
+    log ERROR "$user: agy did not fill in index.html (see $agylog)"
     return 1
   fi
-  log "$user: done -> $site/index.html ($size bytes)"
+  log SUCCESS "$user: done -> $site/index.html ($size bytes)"
   return 0
 }
 
@@ -101,13 +126,13 @@ mapfile -t USERS < <(
     | grep -v '^$' || true
 )
 total=${#USERS[@]}
-[ "$total" -gt 0 ] || { echo "No accounts found in $ACCOUNTS_FILE"; exit 1; }
+[ "$total" -gt 0 ] || { log ERROR "No accounts found in $ACCOUNTS_FILE"; exit 1; }
 
 ok=(); failed=(); skipped=()
 i=0
 for user in "${USERS[@]}"; do
   i=$((i + 1))
-  log "=== [$i/$total] @$user ==="
+  log INFO "=== [$i/$total] @$user ==="
   rc=0
   process_account "$user" || rc=$?
   case "$rc" in
@@ -119,16 +144,16 @@ for user in "${USERS[@]}"; do
   # Polite random pause between accounts (not after the last, not after a skip)
   if [ "$i" -lt "$total" ] && [ "$rc" -ne 2 ]; then
     d=$((RANDOM % 41 + 20))
-    log "Waiting ${d}s before the next account..."
+    log INFO "Waiting ${d}s before the next account..."
     sleep "$d"
   fi
 done
 
 echo
 echo "================ Summary ================"
-echo "Built:   ${#ok[@]}  ${ok[*]:-}"
-echo "Skipped: ${#skipped[@]}  ${skipped[*]:-}"
-echo "Failed:  ${#failed[@]}  ${failed[*]:-}"
+printf '%sBuilt:%s   %d  %s\n' "$C_SUCCESS" "$C_RESET" "${#ok[@]}" "${ok[*]:-}"
+printf '%sSkipped:%s %d  %s\n' "$C_WARN" "$C_RESET" "${#skipped[@]}" "${skipped[*]:-}"
+printf '%sFailed:%s  %d  %s\n' "$C_ERROR" "$C_RESET" "${#failed[@]}" "${failed[*]:-}"
 echo "Output:  $ROOT/<username>/site/index.html"
 
 [ "${#failed[@]}" -eq 0 ] || exit 1
