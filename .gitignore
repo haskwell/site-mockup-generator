@@ -18,3 +18,4 @@ website/assets/*_data/
 .idea/
 .vscode/
 .pytest_cache/
+debug/
