@@ -34,7 +34,11 @@ def update_sheet(record: dict[str, Any], credentials: Path) -> tuple[str, int]:
     if not credentials.is_file():
         raise RuntimeError(f"credentials file not found: {credentials}")
 
-    scopes = ["https://www.googleapis.com/auth/spreadsheets"]
+    # gspread uses Drive to resolve the spreadsheet by title, then Sheets to edit it.
+    scopes = [
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive.readonly",
+    ]
     auth = Credentials.from_service_account_file(str(credentials), scopes=scopes)
     client = gspread.authorize(auth)
     worksheet = client.open("websites").sheet1

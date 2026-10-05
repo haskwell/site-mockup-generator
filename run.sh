@@ -11,6 +11,10 @@ ROOT="${WEBSITES_ROOT:-/home/frost/websites}"
 ACCOUNTS_FILE="${1:-$REPO/config/accounts.txt}"
 MODEL="gemini-3.8-flash-medium"
 MIN_SIZE=600   # bytes; an unfilled skeleton index.html is smaller than this
+PYTHON_BIN="${PIPELINE_PYTHON:-python3}"
+if [[ -z "${PIPELINE_PYTHON:-}" && -x "$REPO/.venv/bin/python" ]]; then
+  PYTHON_BIN="$REPO/.venv/bin/python"
+fi
 
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
   C_INFO=$'\033[36m'
@@ -41,6 +45,9 @@ log() {
 
 [ -f "$ACCOUNTS_FILE" ] || { log ERROR "Accounts file not found: $ACCOUNTS_FILE"; exit 1; }
 mkdir -p "$ROOT"
+if [ ! -f "$REPO/config/auth.json" ]; then
+  log WARN "config/auth.json not found; Instagram scraping will run without a saved login session"
+fi
 
 # Return codes: 0 = built, 1 = failed, 2 = skipped (already built)
 # NOTE: this runs inside an if/|| context, so set -e is off in here;
@@ -67,18 +74,16 @@ process_account() {
   # 1. Scrape (run from the account folder so data/debug land there;
   #    skips automatically if profile_data.json already exists)
   log INFO "$user: scraping..."
-  ( cd "$acct" && python3 "$REPO/src/scraper.py" "$user" --captions --auth "$REPO/config/auth.json" ) \
+  ( cd "$acct" && "$PYTHON_BIN" "$REPO/src/scraper.py" "$user" --captions --auth "$REPO/config/auth.json" ) \
     || { log ERROR "$user: scraper failed"; return 1; }
   [ -f "$data/profile_data.json" ] || { log ERROR "$user: no profile_data.json"; return 1; }
 
   # 1b. Extract name, handle, contact details and followers into a compact JSON file
-  python3 "$REPO/src/profile_summary.py" "$data/profile_data.json" "$data/business_data.json" \
+  "$PYTHON_BIN" "$REPO/src/profile_summary.py" "$data/profile_data.json" "$data/business_data.json" \
     || { log ERROR "$user: profile summary extraction failed"; return 1; }
 
   # 1c. Add or update the business in the shared Google Sheet before site generation.
-  local sheet_python="python3"
-  [ ! -x "$REPO/.venv/bin/python" ] || sheet_python="$REPO/.venv/bin/python"
-  "$sheet_python" "$REPO/src/update_sheet.py" "$data/business_data.json" \
+  "$PYTHON_BIN" "$REPO/src/update_sheet.py" "$data/business_data.json" \
     || { log ERROR "$user: Google Sheets update failed; see the error above"; return 1; }
 
   # 2. Pre-build the site skeleton so agy doesn't spend tokens on boilerplate
