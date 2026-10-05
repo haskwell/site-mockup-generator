@@ -78,4 +78,4 @@ Design for a 390px-wide phone first and ensure it remains usable at 360px. Keep 
 
 ## Finish
 
-Do not verify or run anything. Print a four-line summary only: palette, fonts, the defining design move, and anything omitted because the source data did not support it.
+Do not verify or run anything. Print a five-line summary only: chosen archetype (use its exact heading from `DESIGN.md`), palette, fonts, the defining design move, and anything omitted because the source data did not support it.
