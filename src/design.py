@@ -33,6 +33,13 @@ SHARED_RULES = """\
   one deliberate full-bleed or art-directed hero image; crop that image only
   when the crop serves the composition and its subject remains clear. Do not
   force every gallery image into the same crop or size.
+- Optional stock: at most one remotely linked stock image may be used as
+  decoration when the selected direction has a specific need (cover/hero,
+  restrained atmosphere behind typography, or a deliberate section transition)
+  and neither supplied photos nor CSS can serve. Never use it as a post, product
+  example, portfolio item, or claim about the business. Use a reputable source
+  that permits display; honor any required attribution. If no fitting image is
+  available, omit it. Remote images require an internet connection.
 - Captions: show a post caption only when it is non-empty and evergreen.
   Otherwise show nothing under the image. Never invent text.
 - Logo: pfp.jpg only small (40 to 64px). Never use it as a large image.
@@ -72,11 +79,11 @@ DESIGNS = [
     {
         "name": "Full-Bleed Campaign",
         "suits": "businesses with one striking, high-quality hero photo",
-        "signature": "A cinematic, edge-to-edge opening image owns the first viewport. The business name is set very large over or directly against the image, with a restrained contrast treatment. This is a deliberate campaign cover, not a small image in a padded hero.",
+        "signature": "A cinematic, edge-to-edge opening image owns the first viewport. Prefer a supplied account photo if it suits the composition; only if it does not, one remote stock photo may serve as a purely decorative backdrop. Set the business name very large over or directly against it with a restrained contrast treatment. Never present stock as the business's work.",
         "mood": "Confident, immersive, high-impact.",
         "colour": "Build the palette from the hero photo. Let the image supply most color; use a solid readable text treatment and one restrained supporting color below.",
         "type": "A high-contrast display serif such as Bodoni Moda for the name, paired with a neutral sans such as DM Sans for utility text.",
-        "opening": "A compact transparent or solid header sits over the hero. The hero image runs full viewport width and roughly 75–90svh tall, with the name and actual bio placed as a carefully composed overlay. Do not add generic promotional copy.",
+        "opening": "A compact transparent or solid header sits over the hero. The hero image runs full viewport width and roughly 75–90svh tall, with the name and actual bio placed as a carefully composed overlay. Use an account image if suitable; otherwise a single remote stock image may be used only as decoration, never as a claimed product or business scene. Do not add generic promotional copy.",
         "gallery": "After the hero, use a clean, deliberate sequence of medium-sized images with consistent alignment and generous gaps. Keep this gallery quiet so the opening image remains the signature.",
         "order": "Overlay header, full-bleed campaign hero, image sequence, how to order, footer.",
         "details": "Use a subtle text shadow or solid backing only if needed for legibility. No decorative collage, stickers, or unrelated overlap.",

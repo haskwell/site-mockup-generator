@@ -50,6 +50,15 @@ Do not run shell commands, browsers, servers, linters, tests, or screenshots. Bu
 - Use `pfp.jpg` only as a small logo (about 40–64px), near the wordmark or in the footer. Never enlarge it into a hero. If missing, use a text wordmark.
 - Do not apply a universal image-width cap that defeats an intentionally full-bleed composition.
 
+### Optional decorative stock image
+
+- A remote stock image is optional, not a default requirement. Use at most one per mockup, and only when the selected design has a specific decorative need that supplied Instagram photos or a CSS treatment cannot serve.
+- Appropriate uses are a full-bleed cover/hero backdrop, a restrained atmospheric image behind or around typography, or a deliberate image-based transition between sections.
+- Do not use stock imagery to pad the post gallery, imply the business's products, people, premises, ingredients, methods, or location, or add generic lifestyle scenes. The supplied Instagram images remain the business's actual work.
+- Choose a reputable source that permits the intended display and provides a direct, stable image URL. Link the image remotely; do not download or copy it into `site/assets/`.
+- Treat the image as decoration only: no caption, credit presented as business copy, or factual claim. Use an empty alt attribute or CSS background when decorative, and preserve text contrast.
+- Remote images require an internet connection and may stop working if the source changes or removes the URL. If no suitable, clearly decorative image is available, omit it.
+
 ## Visual execution
 
 - Make the selected direction obvious in the first viewport and carry its defining visual move through the page.
