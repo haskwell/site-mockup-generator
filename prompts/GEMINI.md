@@ -28,7 +28,8 @@ It does **not** need to work:
 
 - `<username>_data/profile_data.json` — the only source of facts.
 - Images are **already copied** to `site/assets/` as `post_<post_number>.webp` (matching `posts[].post_number`) and `pfp.jpg` (may be missing). Do not copy, move or convert anything.
-- Look at a handful of images (3 to 5, not all) to pick the palette and mood.
+- Look at 3 to 5 images to understand the actual subject matter, composition, palette, and visual tone. Do not treat image-recognition alt text as visual evidence.
+- `DESIGN.md` is a menu of structurally different archetypes, not a preselected theme. Choose exactly one after reviewing the profile and images, then build the site to that archetype in this same call. Do not make another model call, rotate by account order, or blend archetypes. Fit the layout to the actual business rather than choosing based only on industry.
 
 ## Output
 
@@ -54,19 +55,19 @@ It does **not** need to work:
 
 ## Image rules
 
-- Images are at most 640px on the long side. **Never display one wider than ~500px** (or full-bleed). Big visual moments must come from typography, color and space, not stretched photos.
+- Images are at most 640px on the long side. **Never display one wider than ~500px** (or full-bleed when the chosen archetype specifically calls for it). Big visual moments can come from typography, color and space, not stretched photos.
 - Do not crop everything to uniform squares. Respect each image's aspect ratio; vary size and placement to create rhythm.
 - Add `loading="lazy"`, explicit `width`/`height`, and a short `alt`.
 - **Logo:** `pfp.jpg` is the business's logo. Use it only small: next to the name in the header and again in the footer, about 40 to 64px, optionally cropped to a circle. Never large. The favicon is already linked in `index.html` (`assets/pfp.jpg`); leave that line alone. If `pfp.jpg` is missing, use a text wordmark instead.
 
 ## Design direction
 
-The goal: it looks like a considered, premium brand site made by a human designer, something a small business owner would be excited to pay for. Commit to **one bold, specific, signature design idea** (a distinctive layout move, type treatment, or way of presenting the photos) and carry it through the whole page.
+The selected `DESIGN.md` archetype determines the page's composition. Its defining layout move must be apparent in both the opening and the work section. Implement its specific hierarchy, image scale/placement, and page rhythm; do not fall back to a generic hero followed by a uniform card grid.
 
 **Banned:**
 
 - Purple, blue-purple or any gradients; gradient text; glow effects; glassmorphism
-- A row of three equal feature cards; any generic "features" grid
+- A row of three equal feature cards; generic feature grids or repeated boxed-card layouts
 - Borders or boxes around every section or image; heavy drop shadows
 - Emoji as icons or decoration; stock-style icon sets
 - Generic hero copy ("Welcome to…", "Elevate your…", "Get started")
@@ -75,21 +76,13 @@ The goal: it looks like a considered, premium brand site made by a human designe
 
 **Do:**
 
-- Generous whitespace: large section padding, comfortable line height, narrow text columns (about 60 characters).
-- A restrained palette taken from the photos: a warm or neutral background, near-black text, **one** accent color. Put the hex codes in a CSS `:root` block.
-- Type does the heavy lifting: one expressive serif or display face for headings plus one clean sans for body. Use strong size contrast (very large headline, small quiet details).
-- Asymmetric, editorial layout: staggered gallery with images at differing sizes and offsets, overlapping text and image where it helps, a collage feel rather than a grid of equals.
-- Separate sections with spacing and type size, not lines and boxes.
+- Make the selected archetype's layout—not merely its palette—the most obvious design decision. Avoid using the same centered header, boxed masthead, equal gallery cards, and three-step order section by default.
+- Derive the palette from the actual images and brand context. A warm neutral base and single accent are options, not mandatory; use a stronger or darker palette when the photos support it and maintain readable contrast.
+- Let typography support the archetype: at most two font families, clear size contrast, and comfortable line length.
+- Use whitespace, image scale, alignment, and section rhythm to create character. Organize photos according to the selected archetype rather than applying the same staggered gallery to every business.
+- Include only sections and details supported by the source. Their order may change to fit the selected archetype; preserve a clear business identity and easy-to-find contact/order path.
 - Subtle motion only (gentle fade/translate on scroll, hover states). Respect `prefers-reduced-motion`.
-- Mobile first: write the base CSS for a phone, then use `min-width` media queries to enhance. The phone layout must look intentional, not like a shrunken desktop page.
-
-## Suggested page structure
-
-1. Header: name wordmark and a quiet link to Instagram / WhatsApp.
-2. Opening: the account name large, with the bio's tagline. No filler copy.
-3. Gallery: all usable posts, editorial layout, reels marked and linked.
-4. How to order: location, payment, policies and the order link, from the bio only.
-5. Footer: Instagram link and handle, nothing else.
+- Mobile first: write the base CSS for a phone, then use `min-width` media queries to enhance. Preserve the archetype's signature feature on mobile.
 
 ## When finished
 
