@@ -1,0 +1,20 @@
+# Local Python environment and bytecode
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+
+# Local credentials
+.env
+.env.*
+!.env.example
+
+# Scraper output and downloaded Instagram media
+*_data/
+website/assets/*_data/
+
+# Local tooling and OS files
+.DS_Store
+.idea/
+.vscode/
+.pytest_cache/
