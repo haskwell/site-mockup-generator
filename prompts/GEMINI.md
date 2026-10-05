@@ -1,96 +1,71 @@
-# Project: Instagram account → website MOCKUP
+# Project: Instagram account → website mockup
 
-You are running unattended. Never ask questions. Make decisions yourself, write the files, then finish.
+You are running unattended. Make decisions yourself, write the files, then finish.
 
-## READ FIRST: this is only a mockup
+## Purpose
 
-This site is a **sales mockup**. We will show it to the business owner as a sample of a website they could buy. Nothing here goes live.
+Create a polished sales mockup that makes this business look like a real, distinctive brand. This is a visual design task, not a generic landing-page exercise. Give the selected design direction a strong, visible presence in the finished page.
 
-Priorities, in order:
+Priority order:
 
-1. **A unique, memorable, genuinely designed look.** This is the entire point. It must not look like an AI template.
-2. **Responsive, mobile-first.** The owner will most likely open it on their phone. Design for a 390px-wide screen first, then enhance for desktop. No horizontal scrolling. Comfortable tap targets.
-3. Everything else is last.
+1. Follow the specific composition in `DESIGN.md`.
+2. Make the result feel professionally art-directed and suited to the business.
+3. Make the layout work beautifully on a phone.
+4. Keep the facts accurate and the page lightweight.
 
-It does **not** need to work:
+`DESIGN.md` defines this page's composition: its hero, image arrangement, alignment, section rhythm, and visual character. Implement those choices. Do not replace them with a familiar default hero, a staggered editorial collage, or a generic portfolio template. The rules in this file control factual accuracy, responsiveness, and output constraints; they do not override the selected visual direction.
 
-- Buttons and links may be dummies (`href="#"`). A plain Instagram or WhatsApp link is fine but not required to be tested.
-- No forms, no backend, no cart, no booking logic, no analytics, no SEO work, no accessibility audits beyond sensible alt text.
-- Minimal JavaScript. A tiny scroll-reveal or similar flourish is fine. Do not build functionality.
+## Scope
 
-**Do not waste effort or tokens on:**
+This is a static mockup, not a working store. No forms, cart, backend, booking logic, analytics, or elaborate JavaScript. Links may be simple, but use real Instagram or WhatsApp destinations when available.
 
-- Running shell commands, servers, linters, browsers, tests or screenshots. Do not run anything.
-- Making the site "operational", handling edge cases, or verifying behavior.
-- Re-reading or rewriting files over and over. Plan the design, write each file once, finish.
+Do not run shell commands, browsers, servers, linters, tests, or screenshots. Build `site/index.html` and `site/style.css` from the supplied data and assets, then finish.
 
-## Inputs
+## Inputs and output
 
-- `<username>_data/profile_data.json` — the only source of facts.
-- Images are **already copied** to `site/assets/` as `post_<post_number>.webp` (matching `posts[].post_number`) and `pfp.jpg` (may be missing). Do not copy, move or convert anything.
-- Look at a handful of images (3 to 5, not all) to pick the palette and mood.
+- `<username>_data/profile_data.json` is the only source of business facts.
+- Images are already in `site/assets/` as `post_<post_number>.webp` and optionally `pfp.jpg`. Do not copy, move, or convert them.
+- Look at 3–5 images to understand the products, palette, and mood.
+- Fill in the existing `site/index.html` and `site/style.css`. Add `site/script.js` only if a tiny visual effect truly needs it.
+- Use plain HTML and CSS, no frameworks, build steps, or CDN scripts. Google Fonts via `<link>` are allowed. Use relative asset paths.
 
-## Output
+## Content accuracy
 
-`site/index.html` and `site/style.css` already exist as empty skeletons (with the viewport meta tag set). Fill them in. Add `site/script.js` only if you truly need it. Plain HTML/CSS, no frameworks, no build step, no CDN scripts. Google Fonts via `<link>` is allowed, with system fallbacks. Use relative paths so the page works by opening `index.html`.
+- Use the bio in the owner's own words, fixing line breaks only.
+- Captions are usually empty. Use a caption only if it is present, evergreen, and reproduced verbatim. Ignore stale dates, sales, closures, and order-resumption announcements.
+- `posts[].alt_text` is machine-generated and unreliable. Never use it as visible copy. Write brief image alt text only when it can be accurately inferred from the image.
+- Do not display likes, comments, following count, or post count. Follower count may appear once, quietly.
+- Do not invent prices, products, flavors, menus, reviews, testimonials, years in business, address, policies, or statistics.
+- Include payment, location, policies, and ordering details only when explicitly present in the bio, and keep their wording faithful.
+- If a phone number in the bio or an evergreen caption is explicitly for WhatsApp/orders, link to `https://wa.me/<international digits>` using the country implied by the bio. Otherwise link to the Instagram profile. Never invent a number.
+- Link to `https://www.instagram.com/<handle>/` in the header or footer.
+- A post with `kind == "reel"` is a cover image, not a playable video. Add a small play marker and link it to that post's URL.
 
-## Field meanings in profile_data.json
+## Image handling
 
-- `bio` — the owner's own words. Use as written (fix line breaks only).
-- `posts[].caption` — the owner's own words, but **empty for most posts. That is normal.** Never invent a caption.
-- `posts[].alt_text` — auto-generated by image recognition ("May be an image of…", garbled OCR). **Never show it as visible text.** At most, write your own short plain `alt` after seeing the image.
-- `posts[].date`, `stats_raw` — metadata. **Do not display likes or comments.**
-- `posts[].kind` — `reel` means the image is only a cover frame of a video. Mark it with a small play marker (CSS/SVG) and link it to `url`. Do not pretend it plays inline.
-- `posts[].width/height` — use for aspect-ratio-aware layout.
-- `followers` — may be shown once, quietly (e.g. "39K on Instagram"). Do not show following or post count.
+- Use the real supplied post images. Respect their aspect ratios by default; don't force the gallery into uniform squares.
+- Follow `DESIGN.md` for image scale and placement. Full-bleed, edge-to-edge, paired, grid, portrait, or single-column arrangements are all valid when the selected direction calls for them.
+- A deliberate hero crop is allowed when the direction requires it. Preserve the subject's focal area; do not apply that crop treatment to every gallery image.
+- Provide `loading="lazy"`, explicit `width` and `height`, and concise accurate alt text on images.
+- Use `pfp.jpg` only as a small logo (about 40–64px), near the wordmark or in the footer. Never enlarge it into a hero. If missing, use a text wordmark.
+- Do not apply a universal image-width cap that defeats an intentionally full-bleed composition.
 
-## Content rules (strict)
+## Visual execution
 
-- Use only facts present in the JSON. Do **not** invent: prices, product names, flavors, menus, reviews, testimonials, years in business, an address, an "About us" story, or statistics.
-- Use a caption verbatim only if non-empty and not time-sensitive. **Ignore captions about breaks, closures, sales, dates or "orders resume…"** since they go stale. Evergreen lines may be used sparingly.
-- If the bio or a caption has a phone number marked for WhatsApp/orders, add an "Order on WhatsApp" link (`https://wa.me/<digits in international format>`; convert a leading 0 using the country implied by the bio's location). If there is none, link to the Instagram profile instead. Never invent a number.
-- Payment methods, location and policies (refunds etc.) from the bio belong in a plain "How to order" section, shown as stated, small but readable.
-- Link to the Instagram profile (`https://www.instagram.com/<handle>/`) in the header or footer.
+- Make the selected direction obvious in the first viewport and carry its defining visual move through the page.
+- Match type, color, scale, spacing, and image treatment to that direction and to the actual profile imagery. A warm-neutral palette, serif headline, single accent, asymmetry, or generous whitespace can be useful choices, but none is mandatory unless the selected direction calls for it.
+- Strong color fields, dark backgrounds, close-set grids, centered layouts, full-bleed imagery, borders, frames, and overlapping elements may be used when they are intentional parts of the selected direction. Do not add them merely as decoration.
+- Avoid generic filler copy, default centered hero templates, fake features, fake social proof, stock icon sets, emoji decoration, and gradients.
+- Keep text contrast readable. Use restrained motion only and respect `prefers-reduced-motion`.
 
-## Image rules
+## Page content
 
-- Images are at most 640px on the long side. **Never display one wider than ~500px** (or full-bleed). Big visual moments must come from typography, color and space, not stretched photos.
-- Do not crop everything to uniform squares. Respect each image's aspect ratio; vary size and placement to create rhythm.
-- Add `loading="lazy"`, explicit `width`/`height`, and a short `alt`.
-- **Logo:** `pfp.jpg` is the business's logo. Use it only small: next to the name in the header and again in the footer, about 40 to 64px, optionally cropped to a circle. Never large. The favicon is already linked in `index.html` (`assets/pfp.jpg`); leave that line alone. If `pfp.jpg` is missing, use a text wordmark instead.
+Include the business identity and bio, supplied post images, an appropriate order/contact path, and a clear Instagram link. A distinct “How to order” section is useful when the profile contains actual ordering details, but do not invent content to fill it. Do not add filler sections.
 
-## Design direction
+## Mobile
 
-The goal: it looks like a considered, premium brand site made by a human designer, something a small business owner would be excited to pay for. Commit to **one bold, specific, signature design idea** (a distinctive layout move, type treatment, or way of presenting the photos) and carry it through the whole page.
+Design for a 390px-wide phone first and ensure it remains usable at 360px. Keep body text readable and tap targets comfortable. No horizontal page scrolling. Adapt the selected composition rather than collapsing every design into the same stacked template. Use `svh` or `dvh`, not `vh`, for full-height sections.
 
-**Banned:**
+## Finish
 
-- Purple, blue-purple or any gradients; gradient text; glow effects; glassmorphism
-- A row of three equal feature cards; any generic "features" grid
-- Borders or boxes around every section or image; heavy drop shadows
-- Emoji as icons or decoration; stock-style icon sets
-- Generic hero copy ("Welcome to…", "Elevate your…", "Get started")
-- Testimonials, "Why choose us", newsletter signup, fake stats
-- Centering everything
-
-**Do:**
-
-- Generous whitespace: large section padding, comfortable line height, narrow text columns (about 60 characters).
-- A restrained palette taken from the photos: a warm or neutral background, near-black text, **one** accent color. Put the hex codes in a CSS `:root` block.
-- Type does the heavy lifting: one expressive serif or display face for headings plus one clean sans for body. Use strong size contrast (very large headline, small quiet details).
-- Asymmetric, editorial layout: staggered gallery with images at differing sizes and offsets, overlapping text and image where it helps, a collage feel rather than a grid of equals.
-- Separate sections with spacing and type size, not lines and boxes.
-- Subtle motion only (gentle fade/translate on scroll, hover states). Respect `prefers-reduced-motion`.
-- Mobile first: write the base CSS for a phone, then use `min-width` media queries to enhance. The phone layout must look intentional, not like a shrunken desktop page.
-
-## Suggested page structure
-
-1. Header: name wordmark and a quiet link to Instagram / WhatsApp.
-2. Opening: the account name large, with the bio's tagline. No filler copy.
-3. Gallery: all usable posts, editorial layout, reels marked and linked.
-4. How to order: location, payment, policies and the order link, from the bio only.
-5. Footer: Instagram link and handle, nothing else.
-
-## When finished
-
-Do not verify or run anything. Print a 4-line summary only: palette, fonts, the signature design idea, and anything you chose not to include and why.
+Do not verify or run anything. Print a four-line summary only: palette, fonts, the defining design move, and anything omitted because the source data did not support it.
