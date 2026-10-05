@@ -257,15 +257,22 @@ def date_from_alt(alt: str) -> str:
     return m.group(1) if m else ""
 
 
-def fetch_post_meta(page: Page, shortcode: str, kind: str) -> Optional[Dict[str, str]]:
+def fetch_post_meta(
+    page: Page, shortcode: str, kind: str, label: str = ""
+) -> Optional[Dict[str, str]]:
     """Open a single post page and read its meta description. None if login wall."""
     path = "reel" if kind == "reel" else "p"
+    post_url = f"https://www.instagram.com/{path}/{shortcode}/"
+    logger.info(
+        "%sOpening %s: %s", label, "reel" if kind == "reel" else "post", post_url
+    )
     try:
-        page.goto(f"https://www.instagram.com/{path}/{shortcode}/", timeout=30000)
+        page.goto(post_url, timeout=30000)
     except Exception as e:
-        logger.warning("Navigation warning for %s: %s", shortcode, e)
+        logger.warning("%sNavigation warning for %s: %s", label, shortcode, e)
     dismiss_instagram_modals(page)
     if is_login_wall(page):
+        logger.warning("%sRedirected to login wall: %s", label, page.url)
         return None
     desc = page.evaluate(
         """() => document.querySelector('meta[property="og:description"]')?.content || ''"""
@@ -361,16 +368,38 @@ def scrape_profile(
 
             # Optional: real captions + dates from each post page.
             if fetch_captions and items:
+                total = len(items)
+                logger.info(
+                    "Fetching captions: opening %d post page(s) one by one...", total
+                )
                 post_page = context.new_page()
-                for item in items:
-                    result = fetch_post_meta(post_page, item["shortcode"], item["kind"])
+                for n, item in enumerate(items, 1):
+                    label = f"[{n}/{total}] "
+                    result = fetch_post_meta(
+                        post_page, item["shortcode"], item["kind"], label
+                    )
                     if result is None:
                         logger.warning(
-                            "Hit login wall fetching captions; stopping early."
+                            "Hit login wall fetching captions; stopping early (%d/%d done).",
+                            n - 1,
+                            total,
                         )
                         break
                     item.update(result)
-                    time.sleep(random.uniform(2.0, 4.0))
+                    cap = result.get("caption", "")
+                    logger.info(
+                        "%sGot date=%s, stats=%s, caption=%s",
+                        label,
+                        result.get("date") or "-",
+                        result.get("stats_raw") or "-",
+                        f"{len(cap)} chars" if cap else "none",
+                    )
+                    if n < total:
+                        delay = random.uniform(2.0, 4.0)
+                        logger.info(
+                            "%sWaiting %.1fs before the next post...", label, delay
+                        )
+                        time.sleep(delay)
                 post_page.close()
 
             browser.close()
