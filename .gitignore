@@ -8,6 +8,11 @@ __pycache__/
 .env
 .env.*
 !.env.example
+config/.env
+config/.env.*
+!config/.env.example
+config/auth.json
+config/creds.json
 
 # Scraper output and downloaded Instagram media
 *_data/

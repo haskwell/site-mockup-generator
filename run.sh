@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Usage: ./run.sh [accounts_file]      (default: accounts.txt next to this script)
+# Usage: ./run.sh [accounts_file]      (default: config/accounts.txt)
 #   FORCE=1 ./run.sh   rebuild the site even if one already exists (reuses scraped data)
 #
 # accounts.txt: one Instagram username per line. Blank lines, "# comments" and a
@@ -8,7 +8,7 @@ set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")" && pwd)"
 ROOT="${WEBSITES_ROOT:-/home/frost/websites}"
-ACCOUNTS_FILE="${1:-$REPO/accounts.txt}"
+ACCOUNTS_FILE="${1:-$REPO/config/accounts.txt}"
 MODEL="gemini-3.8-flash-medium"
 MIN_SIZE=600   # bytes; an unfilled skeleton index.html is smaller than this
 
@@ -67,17 +67,13 @@ process_account() {
   # 1. Scrape (run from the account folder so data/debug land there;
   #    skips automatically if profile_data.json already exists)
   log INFO "$user: scraping..."
-  ( cd "$acct" && python3 "$REPO/scraper.py" "$user" --captions --auth "$REPO/auth.json" ) \
+  ( cd "$acct" && python3 "$REPO/src/scraper.py" "$user" --captions --auth "$REPO/config/auth.json" ) \
     || { log ERROR "$user: scraper failed"; return 1; }
   [ -f "$data/profile_data.json" ] || { log ERROR "$user: no profile_data.json"; return 1; }
 
   # 1b. Extract name, handle, contact details and followers into a compact JSON file
-  python3 "$REPO/profile_summary.py" "$data/profile_data.json" "$data/business_data.json" \
+  python3 "$REPO/src/profile_summary.py" "$data/profile_data.json" "$data/business_data.json" \
     || { log ERROR "$user: profile summary extraction failed"; return 1; }
-
-  # 1c. Add this business's generated summary to the Google Sheet
-  python3 "$REPO/add_leads.py" "$data/business_data.json" --credentials "$REPO/creds.json" \
-    || { log ERROR "$user: Google Sheets lead update failed"; return 1; }
 
   # 2. Pre-build the site skeleton so agy doesn't spend tokens on boilerplate
   cp -f "$data"/posts/web/*.webp "$site/assets/" || { log ERROR "$user: no images to copy"; return 1; }
@@ -102,7 +98,7 @@ HTML
   : > "$site/style.css"
 
   # Fresh copy of the rules next to the data, so agy can read them from its workspace
-  cp -f "$REPO/GEMINI.md" "$acct/GEMINI.md" || { log ERROR "$user: failed to copy GEMINI.md"; return 1; }
+  cp -f "$REPO/prompts/GEMINI.md" "$acct/GEMINI.md" || { log ERROR "$user: failed to copy GEMINI.md"; return 1; }
 
   # 3. Let agy design the site
   log INFO "$user: building site with agy ($MODEL)..."

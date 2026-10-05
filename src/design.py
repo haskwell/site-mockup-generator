@@ -2,10 +2,10 @@
 """Pick one design direction at random and write it to DESIGN.md.
 
 Usage:
-    python pick_design.py                 # writes ./DESIGN.md
-    python pick_design.py path/to/DESIGN.md
+    python tools/design.py                 # writes ./DESIGN.md
+    python tools/design.py path/to/DESIGN.md
 
-Every design is written to sit inside the rules in GEMINI.md: one accent
+Every design is written to sit inside the rules in prompts/GEMINI.md: one accent
 colour, a warm or neutral background, near-black text, two type families,
 staggered (not uniform) galleries, images never wider than ~500px, no frames
 or boxes around every image, no heavy shadows, no centred-everything layouts,
@@ -17,14 +17,14 @@ import sys
 from pathlib import Path
 
 PRECEDENCE = (
-    "GEMINI.md wins on any conflict. This file only chooses the visual "
-    "direction. It is the one signature design idea GEMINI.md asks for, so "
+    "prompts/GEMINI.md wins on any conflict. This file only chooses the visual "
+    "direction. It is the one signature design idea prompts/GEMINI.md asks for, so "
     "use it instead of inventing another. It never adds facts, captions, "
     "an About story, prices or copy."
 )
 
 SHARED_RULES = """\
-- Colour: follow GEMINI.md. A warm or neutral background, near-black text and
+- Colour: follow prompts/GEMINI.md. A warm or neutral background, near-black text and
   ONE accent taken from 3 to 5 of the photos. Tints of that single accent are
   fine. Put the hex codes in :root. The design below only decides how the
   colour is used.
@@ -44,7 +44,7 @@ SHARED_RULES = """\
 """
 
 MOBILE_RULES = """\
-Design the phone layout first (390px, and nothing breaks at 360px). GEMINI.md
+Design the phone layout first (390px, and nothing breaks at 360px). prompts/GEMINI.md
 already requires mobile-first CSS, no horizontal scrolling and comfortable tap
 targets. In addition:
 - Body text at least 16px. Buttons and links at least 44px tall to tap.
