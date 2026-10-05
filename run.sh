@@ -49,6 +49,30 @@ if [ ! -f "$REPO/config/auth.json" ]; then
   log WARN "config/auth.json not found; Instagram scraping will run without a saved login session"
 fi
 
+# Build the per-account DESIGN.md: shared guardrails + ONE direction.
+# Directions rotate by the account's position in the accounts file, so
+# neighbouring accounts always look different (a username hash clusters).
+# Override with  ARCHETYPE="Colour Blocks" ./run.sh  to force one, e.g. when testing.
+write_design_file() {
+  local user="$1" out="$2" src="$REPO/prompts/DESIGN.md"
+  local titles=() title idx
+  mapfile -t titles < <(grep '^## ' "$src" | grep -v '^## Shared guardrails' | sed 's/^## //')
+  [ "${#titles[@]}" -gt 0 ] || return 1
+  if [ -n "${ARCHETYPE:-}" ]; then
+    title="$ARCHETYPE"
+  else
+    idx=$(( (${ACCOUNT_INDEX:-1} - 1) % ${#titles[@]} ))
+    title="${titles[$idx]}"
+  fi
+  grep -qxF "## $title" "$src" || { log ERROR "$user: unknown direction: $title"; return 1; }
+  awk -v want="## $title" '
+    BEGIN { keep = 1 }
+    /^## / { keep = ($0 == want || $0 == "## Shared guardrails") }
+    keep { print }
+  ' "$src" > "$out" || return 1
+  log INFO "$user: assigned direction -> $title"
+}
+
 # Return codes: 0 = built, 1 = failed, 2 = skipped (already built)
 # NOTE: this runs inside an if/|| context, so set -e is off in here;
 # every step checks its own result with "|| return 1".
@@ -111,15 +135,15 @@ HTML
   # Fresh copy of the rules next to the data, so agy can read them from its workspace
   cp -f "$REPO/prompts/GEMINI.md" "$acct/GEMINI.md" || { log ERROR "$user: failed to copy GEMINI.md"; return 1; }
 
-  # Copy the archetype menu; agy chooses one during the site build.
-  cp -f "$REPO/prompts/DESIGN.md" "$acct/DESIGN.md" \
-    || { log ERROR "$user: failed to copy DESIGN.md"; return 1; }
+  # Shared guardrails + the single direction assigned to this account.
+  write_design_file "$user" "$acct/DESIGN.md" \
+    || { log ERROR "$user: failed to write DESIGN.md"; return 1; }
 
   # 3. Let agy design the site
   log INFO "$user: building site with agy ($MODEL)..."
   local code=0
   ( cd "$acct" && timeout 900 agy \
-      -p "Read $acct/GEMINI.md and follow its content rules. Read $acct/DESIGN.md, inspect the profile and 3 to 5 photos, choose exactly one best-fitting archetype, and implement it in this same call. Do not blend archetypes or use account-order rotation. This is a design mockup. Source data: $data/profile_data.json. Images are already in $site/assets/ (post_N.webp and pfp.jpg); do not copy anything. $site/index.html and $site/style.css already exist as skeletons; fill them in." \
+      -p "Refer to GEMINI.md and DESIGN.md." \
       --model "$MODEL" \
       --dangerously-skip-permissions ) \
     > "$agylog" 2>&1 || code=$?
@@ -153,6 +177,7 @@ for user in "${USERS[@]}"; do
   i=$((i + 1))
   log INFO "=== [$i/$total] @$user ==="
   rc=0
+  ACCOUNT_INDEX=$i
   process_account "$user" || rc=$?
   case "$rc" in
     0) ok+=("$user") ;;

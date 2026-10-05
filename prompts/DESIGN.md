@@ -1,103 +1,98 @@
-# DESIGN MENU
+# DESIGN DIRECTIONS
 
-This is a set of genuinely different layout systems, not a sequence. Choose one for this business from its profile and photos, then implement that direction in the site.
+This file holds the shared guardrails and the design direction assigned to this business. Build that direction. If more than one direction appears below, choose the single best fit from the profile and photos and build only that one; do not blend them.
 
 ## Shared guardrails
 
-- Treat this file as a menu: first inspect the account profile and 3 to 5 supplied
-  photos, then choose exactly ONE archetype that fits the actual visual material
-  and business. Do not rotate by account order, choose arbitrarily, or blend
-  archetypes. Follow the chosen composition rather than only borrowing its colors.
-- Choose based on visible photo qualities, the business's real offer, and the bio's
-  tone. A business category alone is not enough. If none fits perfectly, choose
-  the closest and adapt its layout without inventing facts.
-- Build the chosen design directly; this is not a request to generate another
-  brief or make another model call. Do not write the selection rationale into the
-  customer-facing site.
-- Facts and customer-facing wording must come only from profile_data.json. Never
-  invent products, prices, menus, reviews, testimonials, policies, or business
-  history. Use only non-empty evergreen captions verbatim.
-- Use up to two font families. Choose a palette with intentional contrast, informed
-  by the supplied photos; the background need not always be warm cream and the
-  accent need not always be brown.
-- Preserve image aspect ratios by default. A deliberate full-bleed hero crop is
-  allowed only when the subject remains clear. Do not force all images into one
-  crop or size. Keep images at or below about 500px wide unless full-bleed is part
-  of the selected design.
-- Use pfp.jpg only as a small logo (40 to 64px), never as a large image. With
-  fewer than 8 usable posts, give the available photos room rather than adding
-  filler. Mark reels with a small play marker linked to the source post.
-- Preserve mobile usability: design for 390px first and ensure it works at 360px;
-  body text at least 16px, tap targets at least 44px, no horizontal scrolling,
-  hover never required, and repeat a contact link after the work/gallery when the
-  desktop layout keeps contact persistently visible.
+- **A direction is a structure, not a color scheme.** It fixes the opening composition, section sequence, image scale, alignment, and signature move. Palette, fonts, and tone come from this business's own photos and bio. If the direction feels awkward for the business, keep its structure and adapt it; never fall back to a centered hero followed by a photo grid.
+- **Size images by role and by resolution.** Check `posts[].width` and `posts[].height`. An image whose long side is about 900px or more may run full-width on mobile and large on desktop. Smaller images stay under about 600 CSS px and get their scale from the color field and type around them. Never apply one cap to everything, and never show equal-size tiles.
+- **Three different section layouts at minimum.** If two sections look alike, change one.
+- **Fonts and color.** Up to two font families. Palette of 4 to 6 colors sampled from the photos. The background need not be light, and the accent need not be warm.
+- **Few photos.** With fewer than 5 usable photos, use them all and give each room. Do not pad.
+- **Contact.** An order or contact action is visible in the first viewport and repeated after the work. Where a layout keeps contact persistent on desktop, bring it back after the work on mobile.
+- **Mobile.** Design for 390px first. Body text at least 16px, tap targets at least 44px, no horizontal scrolling, hover never required.
+- **Facts.** Wording comes only from `profile_data.json`, as `GEMINI.md` describes. Never write the reasoning behind the design into the page.
 
 ## Cover Photograph
 
-**Best fit:** One or more photos have a strong, clear subject that can carry the first screen; useful for visually rich food, flowers, or products.
+**Best fit:** One photo has a strong, clear subject that can carry the first screen.
 
-**Composition:** Open with one chosen photo as the dominant visual, paired with a compact business wordmark, the real bio, and one clear contact action. Treat it like a designed cover, not a centered hero card. Let the next section begin with a contrasting text or image scale; do not repeat the hero treatment for every photo.
+**Composition:** The first screen is split. The chosen photo fills roughly 60% of the width on desktop and the top 55svh on mobile. Beside or below it, on a solid color picked from that photo, sit the business name set large, the descriptor line, and the order button. Below the cover, the work runs as alternating wide and narrow rows, each row led by one large photo and a plain type label. No grid.
 
-**Page sequence:** Photo-led cover, concise business/contact details, curated work images, supported ordering information, footer. The cover may precede the name-led content.
+**Signature move:** The color pulled from the cover photo carries through the page as section backgrounds and rules.
 
-**Mobile:** Keep the photo and name/action together in the first view without placing text over a busy subject. Stack the remaining content in a deliberate sequence.
+**Sections:** Cover, work rows, about, how to order, footer.
 
-## Oversized Broadsheet
+**Mobile:** Photo, name, and order button all visible together in the first view. Never place text over a busy part of the photo.
 
-**Best fit:** The business name is visually distinctive or the images are bold enough to sit beside a large typographic gesture.
+## Oversized Wordmark
 
-**Composition:** Make the name the graphic anchor: set it very large and left-aligned, allow intentional line breaks, and use a single strong color field or typographic panel. Place one photo as an offset interruption to that field. Avoid a conventional centered hero, pills, and a repeated card grid.
+**Best fit:** A short or distinctive business name, and bold, high-contrast photos.
 
-**Page sequence:** Typographic opening, one image interruption, loose image sequence, compact contact/details area, footer. Put the contact action where it reads naturally in the opening and repeat it near the end.
+**Composition:** The business name is set enormous, left-aligned, broken across lines on purpose, on a single strong color field that fills the first viewport. One photo overlaps the edge of that field as an offset interruption. After it comes a loose sequence of three or four images at different widths, hanging alternately from the left and right edges. The bio sits in a short block of large text.
 
-**Mobile:** Scale and wrap the oversized name deliberately; keep the color/typographic anchor visible without clipping or horizontal overflow. Place the image after or beside the headline, never as a tiny desktop remnant.
+**Signature move:** The name as the graphic anchor, and the photo breaking out of the color field.
+
+**Sections:** Wordmark field with order action, interrupting photo, loose image sequence, about, how to order, footer.
+
+**Mobile:** Scale the name so it wraps cleanly without clipping. The photo comes right after the headline, never as a small remnant.
 
 ## Lookbook Spreads
 
-**Best fit:** There are several strong photos with varied orientations or related visual subjects that benefit from editorial pairing.
+**Best fit:** Six or more strong photos with varied orientations or related subjects.
 
-**Composition:** Arrange the work as a sequence of unequal spreads: one leading image, one smaller supporting image, generous negative space, and a short source-supported caption only when available. Alternate the dominant side between spreads. Avoid equal-size cards and do not imply a complete catalog.
+**Composition:** The work is a sequence of unequal spreads. Each has a leading image at about 65% width, a smaller supporting image at about 30% offset vertically, and generous negative space. The dominant side alternates from spread to spread. The header is a quiet small wordmark with the descriptor and a short order link.
 
-**Page sequence:** Quiet wordmark and bio, short contact action, alternating image spreads, supported ordering information as a closing note, footer.
+**Signature move:** The alternating scale and offset of the paired images.
 
-**Mobile:** Turn each spread into a vertical pairing with the dominant photo first and the smaller photo offset below; retain the changes in scale and spacing.
+**Sections:** Quiet masthead, spreads, about, ordering details as a closing note, footer.
+
+**Mobile:** Each spread becomes a vertical pair, with the dominant photo first and the smaller one offset below. Keep the difference in scale.
 
 ## Studio Sidecar
 
-**Best fit:** The business has a concise identity and the photos should remain the main event while contact information stays easy to find.
+**Best fit:** A concise identity where the photos should stay the main event while contact stays easy to find.
 
-**Composition:** On wide screens, create a narrow, visually distinct identity/contact rail beside a larger work area. The work area is a freely composed sequence, not a feed of boxed cards. Use the rail's typography, background, or alignment as the signature anchor; do not add a generic navigation dashboard.
+**Composition:** At 1024px and wider, a fixed rail takes about 30% of the width on the left, on a contrasting background. It holds the wordmark, descriptor, bio, order button, and Instagram link. The right side is a freely composed work area of mixed-width images grouped under plain type labels, not boxed cards.
 
-**Page sequence:** Persistent identity/contact sidecar alongside work; place any source-supported ordering details after the work. The layout need not have a separate conventional hero.
+**Signature move:** The rail's type, background, and alignment make the identity unmistakable.
 
-**Mobile:** Collapse the sidecar into a compact opening masthead with the primary contact action. Bring that action back after the work because the rail is no longer persistent.
+**Sections:** Rail and work area together, ordering details after the work, footer.
+
+**Mobile:** The rail collapses into a compact masthead with the order action. Repeat that action after the work.
 
 ## Editorial Feature
 
-**Best fit:** The bio has a useful short phrase or the account's visual tone feels personal, refined, or story-led.
+**Best fit:** A refined, personal, or story-led account, or a bio with a short phrase that stands well on its own.
 
-**Composition:** Use a magazine-like opening: an expressive, oversized headline with a narrow offset text column and a small wordmark. Run the images through one off-center column, alternating full-column and narrower placements. Do not invent a narrative; the account's own bio is the only story copy.
+**Composition:** A magazine-style opening: an oversized, left-aligned headline (the business name, or a short phrase from the bio if it works alone), a narrow offset text column, and a small wordmark. Images run down one off-center column, alternating between full-column and narrower placements, with large gaps between them.
 
-**Page sequence:** Editorial headline and actual bio, first image with generous separation, offset image sequence, supported order details, footer.
+**Signature move:** The off-center column and the oversized headline against the narrow text.
 
-**Mobile:** Keep the headline large and left-aligned, the bio in a readable narrow measure, and images alternating in width/offset down one column.
+**Sections:** Editorial headline and bio, first image with generous separation, offset image sequence, order details, footer.
+
+**Mobile:** Keep the headline large and left-aligned, the bio in a narrow readable measure, and the images alternating in width and offset.
 
 ## Tactile Cut-and-Paste
 
-**Best fit:** Photos have a handmade, playful, colorful, or market-stall quality that suits a deliberately physical collage.
+**Best fit:** Colorful, playful, handmade, or market-stall photos.
 
-**Composition:** Build a controlled paper collage from the business name, a few photo cutouts, and one accent label treatment. Vary image scale and angle sparingly; keep subjects legible and do not put frames, tape, shadows, and labels on every image. Carry one collage gesture into the work section, then let the layout breathe.
+**Composition:** A restrained paper collage. The business name sits on a cut-paper label, with two or three photos as cutouts at slight angles (3 degrees at most) with straight or torn-looking edges made from CSS. Use one accent color. The collage gesture appears in the opening and once more in the work section, then the layout breathes. Not every image gets a frame, tape, or shadow.
 
-**Page sequence:** Collage opening with name and contact, separated image groupings, plain supported ordering details, footer.
+**Signature move:** The cut-paper name label and the cutout photos.
 
-**Mobile:** Use a single staggered column; limit overlap and rotation so the page remains readable and no photo is obscured. Keep the collage's signature gesture, not all desktop overlaps.
+**Sections:** Collage opening with order action, separated image groups, plain ordering details, footer.
 
-## Image Index
+**Mobile:** One staggered column with little overlap, so no photo is covered. Keep the signature gesture, not every desktop overlap.
 
-**Best fit:** The account has many usable posts or a broad portfolio where a clean, graphic organizing device helps visitors browse.
+## Colour Blocks
 
-**Composition:** Give each selected photo a clear place in a numbered, typographic index. Use the numbers as the graphic signature and vary image widths/alignment; never turn the index into identical bordered product cards. Only label an item with a real evergreen caption or supported name from the source.
+**Best fit:** Photos that fall into two to four visible types (for example cakes, cupcakes, boxes) or distinct color families.
 
-**Page sequence:** Compact identity and contact, numbered work sequence, supported ordering details after the index, footer.
+**Composition:** Every type gets its own full-width band. Each band's background is a color sampled from that type's photos. Inside it, a large plain type label and one to three large images at different scales. The bands change direction: image left, image right, stacked. The opening is a band too, holding the name and order button. The last band is the darkest and holds contact and the footer.
 
-**Mobile:** Keep numerals small enough not to cover subjects; vary alignment and image widths in one column, and retain generous gaps between entries.
+**Signature move:** The sequence of full-width color bands, each belonging to its own photos.
+
+**Sections:** Opening band, one band per visible type, about band, order and contact band.
+
+**Mobile:** Bands stack edge to edge and keep their individual colors. If the photos do not separate into types, group them by color instead and do not invent labels.
