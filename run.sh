@@ -75,6 +75,12 @@ process_account() {
   python3 "$REPO/src/profile_summary.py" "$data/profile_data.json" "$data/business_data.json" \
     || { log ERROR "$user: profile summary extraction failed"; return 1; }
 
+  # 1c. Add or update the business in the shared Google Sheet before site generation.
+  local sheet_python="python3"
+  [ ! -x "$REPO/.venv/bin/python" ] || sheet_python="$REPO/.venv/bin/python"
+  "$sheet_python" "$REPO/src/update_sheet.py" "$data/business_data.json" \
+    || { log ERROR "$user: Google Sheets update failed; see the error above"; return 1; }
+
   # 2. Pre-build the site skeleton so agy doesn't spend tokens on boilerplate
   cp -f "$data"/posts/web/*.webp "$site/assets/" || { log ERROR "$user: no images to copy"; return 1; }
   if [ -f "$data/pfp.jpg" ]; then
