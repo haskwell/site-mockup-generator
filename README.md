@@ -3,6 +3,13 @@
 Scrapes each Instagram account, creates a compact business summary JSON, and
 uses `agy` to build a static site mockup under `WEBSITES_ROOT`.
 
+Each account's single `agy` call chooses one visual archetype from a curated
+menu after inspecting the account profile and a few downloaded photos, then
+builds the site in that direction. The archetype menu is a Markdown file copied
+into each account folder; it does not add another model call. This replaces the
+old sequential design rotation, so the selected layout can fit the actual
+business and imagery.
+
 ## Run
 
 ```bash
@@ -10,15 +17,16 @@ uses `agy` to build a static site mockup under `WEBSITES_ROOT`.
 ```
 
 Pass an alternate account list with `./run.sh path/to/accounts.txt`. The default
-list is `config/accounts.txt`. Use `FORCE=1 ./run.sh` to rebuild existing sites.
+list is `config/accounts.txt`. Use `FORCE=1` to rebuild existing sites (reuses
+scraped data and lets `agy` choose an archetype again).
 
 ## Project layout
 
 ```text
 config/                 Account list
-prompts/GEMINI.md       Design instructions copied into each business folder
-src/                    Scraper, summary, sheet update, and design generators
-                        design.py writes a rotating DESIGN.md into each business folder
+prompts/GEMINI.md       Shared content and design instructions copied per account
+prompts/DESIGN.md       Curated archetype menu copied per account
+src/                    Scraper, summary, and sheet update utilities
 run.sh                  Per-account workflow and site generation
 ```
 

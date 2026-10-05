@@ -8,12 +8,12 @@ Create a polished sales mockup that makes this business look like a real, distin
 
 Priority order:
 
-1. Follow the specific composition in `DESIGN.md`.
+1. Choose one direction from the `DESIGN.md` menu and follow its specific composition.
 2. Make the result feel professionally art-directed and suited to the business.
 3. Make the layout work beautifully on a phone.
 4. Keep the facts accurate and the page lightweight.
 
-`DESIGN.md` defines this page's composition: its hero, image arrangement, alignment, section rhythm, and visual character. Implement those choices. Do not replace them with a familiar default hero, a staggered editorial collage, or a generic portfolio template. The rules in this file control factual accuracy, responsiveness, and output constraints; they do not override the selected visual direction.
+`DESIGN.md` is a menu of distinct design directions, not a preselected theme. After reviewing the profile and 3–5 photos, choose exactly one direction that fits this business and implement its hero, image arrangement, alignment, section rhythm, and visual character. Do not rotate by account order, blend directions, or replace the chosen composition with a familiar default hero or generic portfolio template. The rules in this file control factual accuracy, responsiveness, and output constraints; they do not override the selected visual direction.
 
 ## Scope
 
@@ -26,6 +26,7 @@ Do not run shell commands, browsers, servers, linters, tests, or screenshots. Bu
 - `<username>_data/profile_data.json` is the only source of business facts.
 - Images are already in `site/assets/` as `post_<post_number>.webp` and optionally `pfp.jpg`. Do not copy, move, or convert them.
 - Look at 3–5 images to understand the products, palette, and mood.
+- `DESIGN.md` contains several alternatives. Choose the best fit based on the actual profile and visible image content, then build that design in this same call; do not make another model call.
 - Fill in the existing `site/index.html` and `site/style.css`. Add `site/script.js` only if a tiny visual effect truly needs it.
 - Use plain HTML and CSS, no frameworks, build steps, or CDN scripts. Google Fonts via `<link>` are allowed. Use relative asset paths.
 
