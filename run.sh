@@ -71,6 +71,14 @@ process_account() {
     || { log ERROR "$user: scraper failed"; return 1; }
   [ -f "$data/profile_data.json" ] || { log ERROR "$user: no profile_data.json"; return 1; }
 
+  # 1b. Extract name, handle, contact details and followers into a compact JSON file
+  python3 "$REPO/profile_summary.py" "$data/profile_data.json" "$data/business_data.json" \
+    || { log ERROR "$user: profile summary extraction failed"; return 1; }
+
+  # 1c. Add this business's generated summary to the Google Sheet
+  python3 "$REPO/add_leads.py" "$data/business_data.json" --credentials "$REPO/creds.json" \
+    || { log ERROR "$user: Google Sheets lead update failed"; return 1; }
+
   # 2. Pre-build the site skeleton so agy doesn't spend tokens on boilerplate
   cp -f "$data"/posts/web/*.webp "$site/assets/" || { log ERROR "$user: no images to copy"; return 1; }
   if [ -f "$data/pfp.jpg" ]; then

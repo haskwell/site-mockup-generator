@@ -19,3 +19,5 @@ website/assets/*_data/
 .vscode/
 .pytest_cache/
 debug/
+
+creds.json
