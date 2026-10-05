@@ -64,8 +64,8 @@ Do not run shell commands, browsers, servers, linters, tests, or screenshots. Bu
 - Make the selected direction obvious in the first viewport and carry its defining visual move through the page.
 - Match type, color, scale, spacing, and image treatment to that direction and to the actual profile imagery. A warm-neutral palette, serif headline, single accent, asymmetry, or generous whitespace can be useful choices, but none is mandatory unless the selected direction calls for it.
 - Strong color fields, dark backgrounds, close-set grids, centered layouts, full-bleed imagery, borders, frames, and overlapping elements may be used when they are intentional parts of the selected direction. Do not add them merely as decoration.
-- Avoid generic filler copy, default centered hero templates, fake features, fake social proof, stock icon sets, emoji decoration, and gradients.
-- Keep text contrast readable. Use restrained motion only and respect `prefers-reduced-motion`.
+- Avoid familiar AI-generated tropes: purple gradients, emoji used as icons, generic centered heroes or feature-card rows, and arbitrary decorative animations.
+- Keep text contrast readable. Motion must serve the chosen design, stay subtle, and respect `prefers-reduced-motion`.
 
 ## Page content
 
