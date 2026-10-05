@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cycle through twelve distinct visual directions and write one to DESIGN.md.
+"""Cycle through distinct visual directions for small, image-led businesses.
 
 Usage:
     python src/design.py                   # writes ./DESIGN.md
@@ -98,20 +98,6 @@ DESIGNS = [
         "phone": "Stack text panel then hero image. Keep the split concept through a strong background transition and generous separation, not by squeezing both columns.",
     },
     {
-        "name": "Structured Contact Sheet",
-        "suits": "accounts with many similarly strong product or portfolio photos",
-        "signature": "A disciplined, modular contact sheet: images align to a consistent grid and gutters. The visual identity comes from the grid's precision, not staggered offsets.",
-        "mood": "Graphic, orderly, contemporary.",
-        "colour": "Neutral ground and high-contrast type, with one small photo-derived accent used for labels or links.",
-        "type": "A sturdy grotesk sans for the oversized name and a restrained sans for supporting information.",
-        "opening": "A compact header with a strong wordmark leads directly into a brief bio line and a compact grid. No oversized hero image or floating images.",
-        "gallery": "Use a consistent two- or three-column grid with equal gutters and natural image ratios. The first image may span two columns as a deliberate anchor; keep the remaining grid aligned and regular.",
-        "order": "Wordmark header, compact introduction, structured image grid, how to order, footer.",
-        "details": "Use small index labels or a single bold accent, not borders around every cell. Align text and imagery to the same grid.",
-        "motion": "No scroll animation; use a restrained hover change for linked reels.",
-        "phone": "One column for narrow phones and two only when each image remains comfortably visible. Preserve the consistent gutters and alignment.",
-    },
-    {
         "name": "Vertical Image Runway",
         "suits": "food, floristry, objects, and visually tactile work",
         "signature": "A long, uninterrupted runway of large images, one per row. The page feels like a focused visual procession rather than a thumbnail gallery.",
@@ -208,20 +194,6 @@ DESIGNS = [
         "details": "Make the large color fields the primary graphic device. Use clean edges and avoid cards, shadows, and extra decorative shapes.",
         "motion": "No animation; keep the color transitions and photography direct.",
         "phone": "Preserve the full-width bands as stacked color and image sections. Scale the name to fit without shrinking into a small heading.",
-    },
-    {
-        "name": "Catalog Index",
-        "suits": "accounts with many posts or an archive-like body of work",
-        "signature": "Make the page read as a compact archival register: each post becomes a numbered row with a small thumbnail in a fixed image column and the sequence number in a separate gutter. The images support the index instead of dominating it.",
-        "mood": "Informative, graphic, assured.",
-        "colour": "Use a neutral background and dark text. Numbers and small index labels use a strong accent chosen from the work.",
-        "type": "A distinctive serif or display face for the name and numerals, paired with a compact sans for metadata.",
-        "opening": "Place the business name and real bio above a clearly labeled index. Use a small index key and restrained type rather than a large hero image.",
-        "gallery": "List every post as a compact horizontal register row: two-digit sequence number, small natural-ratio thumbnail, then only an evergreen caption if present. Maintain fixed columns and fine row separators; do not enlarge or stagger images.",
-        "order": "Header, catalog masthead, compact numbered register, how to order, footer.",
-        "details": "Use tabular numerals, small thumbnails, and repeated row spacing to establish the archival system. Keep the page information-dense but legible.",
-        "motion": "Keep the index static; subtle link hover only.",
-        "phone": "Keep the register rows compact with the number in a narrow gutter and the thumbnail beside it. Preserve sequence without shrinking text below a readable size.",
     },
     {
         "name": "Sticky Studio Rail",
