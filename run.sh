@@ -111,11 +111,15 @@ HTML
   # Fresh copy of the rules next to the data, so agy can read them from its workspace
   cp -f "$REPO/prompts/GEMINI.md" "$acct/GEMINI.md" || { log ERROR "$user: failed to copy GEMINI.md"; return 1; }
 
+  # Choose a visual direction for this account before agy builds the site
+  "$PYTHON_BIN" "$REPO/src/design.py" "$acct/DESIGN.md" \
+    || { log ERROR "$user: design direction generation failed"; return 1; }
+
   # 3. Let agy design the site
   log INFO "$user: building site with agy ($MODEL)..."
   local code=0
   ( cd "$acct" && timeout 900 agy \
-      -p "Read $acct/GEMINI.md and follow it exactly. This is a design mockup. Source data: $data/profile_data.json. Images are already in $site/assets/ (post_N.webp and pfp.jpg); do not copy anything. $site/index.html and $site/style.css already exist as skeletons; fill them in." \
+      -p "Read $acct/GEMINI.md and follow it exactly. Also read $acct/DESIGN.md and use it as the visual direction, subject to GEMINI.md. This is a design mockup. Source data: $data/profile_data.json. Images are already in $site/assets/ (post_N.webp and pfp.jpg); do not copy anything. $site/index.html and $site/style.css already exist as skeletons; fill them in." \
       --model "$MODEL" \
       --dangerously-skip-permissions ) \
     > "$agylog" 2>&1 || code=$?

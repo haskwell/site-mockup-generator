@@ -17,7 +17,7 @@ list is `config/accounts.txt`. Use `FORCE=1 ./run.sh` to rebuild existing sites.
 ```text
 config/                 Account list
 prompts/GEMINI.md       Design instructions copied into each business folder
-src/                    Scraper, summary generator, and logging configuration
-tools/design.py         Optional design direction generator
+src/                    Scraper, summary, sheet update, and design generators
+                        design.py writes a rotating DESIGN.md into each business folder
 run.sh                  Per-account workflow and site generation
 ```

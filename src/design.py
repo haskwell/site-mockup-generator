@@ -1,9 +1,9 @@
 #!/usr/bin/env python3
-"""Pick one design direction at random and write it to DESIGN.md.
+"""Cycle through the design directions and write the next one to DESIGN.md.
 
 Usage:
-    python tools/design.py                 # writes ./DESIGN.md
-    python tools/design.py path/to/DESIGN.md
+    python src/design.py                   # writes ./DESIGN.md
+    python src/design.py path/to/DESIGN.md
 
 Every design is written to sit inside the rules in prompts/GEMINI.md: one accent
 colour, a warm or neutral background, near-black text, two type families,
@@ -12,9 +12,10 @@ or boxes around every image, no heavy shadows, no centred-everything layouts,
 and no invented captions or copy.
 """
 
-import random
 import sys
 from pathlib import Path
+
+STATE_FILE = Path(__file__).with_name(".design_index")
 
 PRECEDENCE = (
     "prompts/GEMINI.md wins on any conflict. This file only chooses the visual "
@@ -78,7 +79,7 @@ DESIGNS = [
         "mood": "Friendly, homely, generous.",
         "colour": "Warm cream background, deep brown-black text. The accent is the warmest tone in the photos, used on key words in the headline and on the order link.",
         "type": "Fraunces for headings, Nunito Sans for body. Fallbacks: Georgia, system-ui.",
-        "opening": "Left-aligned name at very large size, bio tagline beneath in a narrow column, small pfp beside the name.",
+        "opening": "Left-aligned name at very large size with a small pfp beside it, the italic bio tagline beneath in a narrow column, and the order link under the bio. The first image starts separately below.",
         "gallery": "Zig-zag column. On phones image widths vary between about 60% and 100% with left or right offsets. On desktop widths vary between about 280px and 500px, with some images pulled up beside the text.",
         "order": "Header, opening, gallery, how to order, footer.",
         "details": "12px image corner radius. The accent underlines the order link.",
@@ -92,7 +93,7 @@ DESIGNS = [
         "mood": "Quiet, spacious, confident.",
         "colour": "Near-white with a slight warm tint, near-black text. The accent appears only on links and the order link.",
         "type": "Instrument Serif for headings, Inter for body.",
-        "opening": "Name very large in a light weight, bio in a small narrow column offset to the right of or below the name.",
+        "opening": "Name very large in a light weight, left-aligned, with a small pfp at the far edge. The bio sits in a small narrow column offset to the right of or below the name, with the order link beside it. Leave generous space before the gallery.",
         "gallery": "Loose 12-column placement: images span 3 to 7 columns with uneven vertical offsets and wide gaps. On phones, a single column where widths alternate between 65% and 100% with a left or right offset.",
         "order": "Header, opening, gallery, how to order, footer.",
         "details": "No radius, no frames, no shadows. Tiny type for secondary details.",
@@ -106,7 +107,7 @@ DESIGNS = [
         "mood": "Refined, intimate, unhurried.",
         "colour": "A slightly deeper stone or taupe background taken from the photos' neutrals, near-black text. The accent is used for index numbers and links.",
         "type": "Cormorant Garamond in a light weight for headings, Montserrat in small sizes for body.",
-        "opening": "Name large and left-aligned in the light serif, bio set small beneath and offset, small pfp beside the name.",
+        "opening": "Compact vertical masthead: small pfp above the large left-aligned light-serif name, the bio set small beneath and offset, and a small order link. The first image sits alone below.",
         "gallery": "One image at a time, alternating between the left third and right third of the page. Small numerals (01, 02...) beside each image. Large empty space above and below each one.",
         "order": "Header, opening, gallery, how to order, footer.",
         "details": "No frames. A thin accent underline only on links.",
@@ -120,7 +121,7 @@ DESIGNS = [
         "mood": "Playful, soft, cheerful.",
         "colour": "Very pale tint of the accent as the main background, with a slightly stronger tint for colour fields. The full-strength accent is used on the order button only. Text stays near-black.",
         "type": "Fredoka for headings, Nunito Sans for body.",
-        "opening": "A tinted field running to the screen edges holds the large name and bio. Small pfp overlaps the field's lower edge.",
+        "opening": "A pale tinted field running to the screen edges holds the large name (wrapping over two lines on phones), the bio and the accent order pill. A small pfp overlaps the field's lower edge.",
         "gallery": "Staggered two columns with the second column dropped lower. Each image has an arch top via border-radius (for example 999px 999px 12px 12px) and keeps its aspect ratio. Widths vary between columns.",
         "order": "Header, opening field, gallery, how to order on a tinted field, footer.",
         "details": "Pill-shaped order button. No outlines.",
@@ -134,7 +135,7 @@ DESIGNS = [
         "mood": "Handmade, tactile, warm.",
         "colour": "Kraft-paper beige background, ink-brown near-black text. The accent is a stamp-like tone from the photos, used on the tag and tape strips.",
         "type": "Zilla Slab for headings, Source Sans 3 for body.",
-        "opening": "The name on a tag-shaped label (clip-path or notched corner) at the top left, bio set beside or below it in a narrow column.",
+        "opening": "The name on a notched, tag-shaped label (clip-path or notched corner) at the top left, with a small pfp on the tag. The bio sits beside or below it in a narrow column, followed by a dashed-underline order link. The gallery starts below without overlap.",
         "gallery": "Scattered column: images of different widths, rotated 1 to 2 degrees in alternating directions, and a small accent tape strip (CSS pseudo-element) on roughly every third image. No frames, no shadows.",
         "order": "Header with tag, gallery, how to order, footer.",
         "details": "Dashed underline on the order link. Tape strips are the only decoration.",
@@ -148,7 +149,7 @@ DESIGNS = [
         "mood": "Calm, confident, story-led.",
         "colour": "Warm white, near-black text. The accent colours the drop cap and links only.",
         "type": "DM Serif Display for headings, Source Sans 3 for body at 18px with 1.7 line height.",
-        "opening": "Very large name as the headline. The bio follows as the article text with a drop cap, in a column of about 60 characters.",
+        "opening": "Very large name as the headline, with a small pfp in the margin. The bio follows as the article text with a drop cap, in a column of about 60 characters, then a quiet order link. The first image is offset below.",
         "gallery": "A single column no wider than 480px. Images alternate between full column width and about 70% width with an indent. On desktop the column sits right of centre with the headline in the wide left margin. If the bio contains a short line that works as a pull quote, set it large between images (bio words only).",
         "order": "Header, headline and bio, gallery, how to order as a closing note, footer.",
         "details": "No frames, no cards. Plenty of leading.",
@@ -162,7 +163,7 @@ DESIGNS = [
         "mood": "Loose, personal, energetic.",
         "colour": "Pale paper background, near-black text. Every sticker label uses the single accent.",
         "type": "Anton for headings, DM Sans for body.",
-        "opening": "Condensed name set huge and left-aligned, with 2 or 3 photos overlapping its edges at small angles. Bio on a sticker-style label.",
+        "opening": "Condensed name set huge and left-aligned, with 2 or 3 photos overlapping its edges at small angles. A small pfp and the bio sit on accent sticker-style labels.",
         "gallery": "Overlapping scatter: widths vary between 40% and 90%, rotation up to 3 degrees, negative margins so images tuck under each other. Each image stays at least 85% visible. No shadows.",
         "order": "Header, collage opening, gallery, how to order on a sticker label, footer.",
         "details": "Sticker labels with a small radius. Reels get a play marker on a sticker.",
@@ -176,7 +177,7 @@ DESIGNS = [
         "mood": "Polished, product-focused, editorial.",
         "colour": "Neutral light background, near-black text. The accent, taken from the strongest photo, is used for spread numbers and links.",
         "type": "Bodoni Moda for headings, Jost for body.",
-        "opening": "Name in large tracked uppercase across the top, bio beneath, with the best image offset to the right of the name (max 500px).",
+        "opening": "Lookbook cover: small pfp, then the name in large tracked uppercase across the top, with the bio and order link beneath as compact metadata. The best image sits offset to the right of the name (max 500px). The first spread begins below.",
         "gallery": "Repeating spreads: one large image (up to 500px) and two small ones (about 200px) overlapping its corner or sitting beside it. Alternate the large image from left to right on each spread. Page numbers like 01 / 05 in the accent.",
         "order": "Header, opening, spreads, how to order, footer.",
         "details": "Small tracked uppercase labels. No frames.",
@@ -190,7 +191,7 @@ DESIGNS = [
         "mood": "Cheerful, confident, market-poster bold.",
         "colour": "Neutral light background. The accent fills the opening block at full strength, with near-black or white text chosen for contrast.",
         "type": "Archivo Black for headings, Work Sans for body.",
-        "opening": "A full-bleed accent block at the top holds the name at an enormous size. The first image overlaps the block's lower edge. Bio below the block in a narrow column.",
+        "opening": "A full-bleed accent block at the top holds the name at an enormous size, with a small pfp beside it. The first image overlaps the block's lower edge. The bio and order link sit below the block in a narrow column.",
         "gallery": "Staggered placement with large size jumps (about 200px to 500px), alternating sides, some images pulled upward to overlap the previous one's space.",
         "order": "Header, colour block opening, gallery, how to order, footer.",
         "details": "Flat accent buttons with no shadows or outlines.",
@@ -204,7 +205,7 @@ DESIGNS = [
         "mood": "Calm, natural, slow-made.",
         "colour": "Light warm background, deep earthy near-black text. The accent is a muted natural tone from the photos, with a pale tint for the blob.",
         "type": "Cormorant Garamond with italic emphasis for headings, Lato for body.",
-        "opening": "Name and bio on the left over a large soft blob (CSS border-radius or inline SVG), small pfp beside the name.",
+        "opening": "Name and bio on the left over a large soft blob (CSS border-radius or inline SVG), with a small pfp beside the name and the order link below. The gallery follows separately.",
         "gallery": "Staggered two columns with the second column dropped by roughly 8 to 15vw. Each image gets a different border-radius (for example 32px 8px 32px 8px, or 48px) but keeps its aspect ratio.",
         "order": "Header, opening, gallery, how to order, footer.",
         "details": "Nothing sharp. Links get a soft accent highlight behind the text.",
@@ -218,7 +219,7 @@ DESIGNS = [
         "mood": "Structured, calm, focused on the work.",
         "colour": "Neutral light main area, near-black text. The side panel uses a pale tint of the accent. The full accent is used for the order link.",
         "type": "Young Serif for headings, Public Sans for body.",
-        "opening": "No separate hero. The panel holds the name (large), bio, small pfp, Instagram link and order link.",
+        "opening": "No separate hero. The persistent left panel stacks a small pfp, the large name, the bio, the Instagram link and the order link. On phones it becomes a compact masthead above the gallery.",
         "gallery": "A feed with a mix of single images and offset pairs, widths between 220px and 500px, aligned to varying positions in the right area.",
         "order": "Panel (name, bio, order link), image feed, how to order after the feed, footer.",
         "details": "The panel is separated by colour only, with no divider line.",
@@ -232,7 +233,7 @@ DESIGNS = [
         "mood": "Organised, characterful, graphic.",
         "colour": "Warm light background, near-black text. The accent colours the numerals and links.",
         "type": "Playfair Display for headings and the numerals, DM Sans for body.",
-        "opening": "Name large and left-aligned with the bio beneath, followed by a short line pointing to the order link.",
+        "opening": "Catalogue masthead: the name large and left-aligned with a small pfp, the bio beneath, a short line pointing to the order link, and one oversized opening numeral. The gallery begins at item 01.",
         "gallery": "Images at different widths pinned alternately to the left and right edges. A big numeral (01, 02...) in the heading face overlaps a corner of each image. Reels carry a play marker beside the numeral.",
         "order": "Header, opening, indexed gallery, how to order, footer.",
         "details": "No captions unless a post has an evergreen caption of its own.",
@@ -262,9 +263,15 @@ def render(design: dict) -> str:
 
 def main() -> None:
     out = Path(sys.argv[1]) if len(sys.argv) > 1 else Path("DESIGN.md")
-    design = random.choice(DESIGNS)
+    try:
+        index = int(STATE_FILE.read_text(encoding="utf-8").strip()) % len(DESIGNS)
+    except (OSError, ValueError):
+        index = 0
+
+    design = DESIGNS[index]
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(render(design), encoding="utf-8")
+    STATE_FILE.write_text(f"{(index + 1) % len(DESIGNS)}\n", encoding="utf-8")
     print(f"Selected design: {design['name']} -> {out}")
 
 
