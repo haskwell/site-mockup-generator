@@ -7,6 +7,10 @@
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")" && pwd)"
+LOG_DIR="$REPO/logs"
+mkdir -p "$LOG_DIR"
+SESSION_LOG="$LOG_DIR/$(date '+%Y-%m-%d_%H-%M-%S')_run_$$.log"
+exec > >(tee "$SESSION_LOG") 2>&1
 ROOT="${WEBSITES_ROOT:-/home/frost/websites}"
 ACCOUNTS_FILE="${1:-$REPO/config/accounts.txt}"
 MODEL="gemini-3.8-flash-medium"
@@ -40,7 +44,7 @@ log() {
     ERROR) color="$C_ERROR" ;;
     *) color="$C_INFO" ;;
   esac
-  printf '[%s] %s%-7s%s %s\n' "$(date +%H:%M:%S)" "$color" "$level" "$C_RESET" "$*"
+  printf '%s %-8s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$level" "$*"
 }
 
 [ -f "$ACCOUNTS_FILE" ] || { log ERROR "Accounts file not found: $ACCOUNTS_FILE"; exit 1; }
@@ -48,30 +52,6 @@ mkdir -p "$ROOT"
 if [ ! -f "$REPO/config/auth.json" ]; then
   log WARN "config/auth.json not found; Instagram scraping will run without a saved login session"
 fi
-
-# Build the per-account DESIGN.md: shared guardrails + ONE direction.
-# Directions rotate by the account's position in the accounts file, so
-# neighbouring accounts always look different (a username hash clusters).
-# Override with  ARCHETYPE="Colour Blocks" ./run.sh  to force one, e.g. when testing.
-write_design_file() {
-  local user="$1" out="$2" src="$REPO/prompts/DESIGN.md"
-  local titles=() title idx
-  mapfile -t titles < <(grep '^## ' "$src" | grep -v '^## Shared guardrails' | sed 's/^## //')
-  [ "${#titles[@]}" -gt 0 ] || return 1
-  if [ -n "${ARCHETYPE:-}" ]; then
-    title="$ARCHETYPE"
-  else
-    idx=$(( (${ACCOUNT_INDEX:-1} - 1) % ${#titles[@]} ))
-    title="${titles[$idx]}"
-  fi
-  grep -qxF "## $title" "$src" || { log ERROR "$user: unknown direction: $title"; return 1; }
-  awk -v want="## $title" '
-    BEGIN { keep = 1 }
-    /^## / { keep = ($0 == want || $0 == "## Shared guardrails") }
-    keep { print }
-  ' "$src" > "$out" || return 1
-  log INFO "$user: assigned direction -> $title"
-}
 
 # Return codes: 0 = built, 1 = failed, 2 = skipped (already built)
 # NOTE: this runs inside an if/|| context, so set -e is off in here;
@@ -84,6 +64,7 @@ process_account() {
   local agylog="$acct/logs/agy_$(date +%F_%H%M).log"
 
   mkdir -p "$acct/logs" "$site/assets" || return 1
+  cp -f "$REPO/prompts/SKILL.md" "$acct/SKILL.md" || { log ERROR "$user: failed to copy SKILL.md"; return 1; }
 
   # Skip accounts that already have a finished site
   if [ "${FORCE:-0}" != "1" ] && [ -f "$site/index.html" ]; then
@@ -132,21 +113,25 @@ process_account() {
 HTML
   : > "$site/style.css"
 
-  # Fresh copy of the rules next to the data, so agy can read them from its workspace
+  # Copy the generation instructions next to the data, so agy can read them from its workspace.
   cp -f "$REPO/prompts/GEMINI.md" "$acct/GEMINI.md" || { log ERROR "$user: failed to copy GEMINI.md"; return 1; }
 
-  # Shared guardrails + the single direction assigned to this account.
-  write_design_file "$user" "$acct/DESIGN.md" \
-    || { log ERROR "$user: failed to write DESIGN.md"; return 1; }
+  # Generate a deterministic design direction and make it available with the site files.
+  "$PYTHON_BIN" "$REPO/src/design.py" "$user" --output "$acct/DESIGN.md" \
+    || { log ERROR "$user: design direction generation failed"; return 1; }
+  cp -f "$acct/DESIGN.md" "$site/DESIGN.md" \
+    || { log ERROR "$user: failed to copy DESIGN.md into the site directory"; return 1; }
 
   # 3. Let agy design the site
   log INFO "$user: building site with agy ($MODEL)..."
   local code=0
   ( cd "$acct" && timeout 900 agy \
-      -p "Refer to GEMINI.md and DESIGN.md." \
+      -p "Read GEMINI.md, DESIGN.md and SKILL.md, then build the site. DESIGN.md is binding." \
       --model "$MODEL" \
       --dangerously-skip-permissions ) \
-    > "$agylog" 2>&1 || code=$?
+    2>&1 | tee "$agylog" | while IFS= read -r line; do
+      printf '%s INFO     %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$line"
+    done || code=$?
 
   if [ "$code" -eq 124 ]; then
     log WARN "$user: agy timed out (see $agylog)"
@@ -177,7 +162,6 @@ for user in "${USERS[@]}"; do
   i=$((i + 1))
   log INFO "=== [$i/$total] @$user ==="
   rc=0
-  ACCOUNT_INDEX=$i
   process_account "$user" || rc=$?
   case "$rc" in
     0) ok+=("$user") ;;

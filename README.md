@@ -3,12 +3,11 @@
 Scrapes each Instagram account, creates a compact business summary JSON, and
 uses `agy` to build a static site mockup under `WEBSITES_ROOT`.
 
-Each account gets one design direction from the menu in `prompts/DESIGN.md`,
-assigned by its position in the accounts file (so neighbouring accounts always
-differ). Only the shared guardrails and that one direction are copied into the
-account folder. The single `agy` call curates 5 to 8 photos and builds a
-website, not a mirror of the Instagram profile. Force a direction while
-testing with `ARCHETYPE="Colour Blocks" FORCE=1 ./run.sh`.
+The shared generation instructions and design skill are copied into each
+account folder for the single `agy` call. A deterministic design direction is
+generated as `DESIGN.md` and copied into the website directory before `agy`
+runs. It curates 5 to 8 photos and builds a website, not a mirror of the
+Instagram profile.
 
 ## Run
 
@@ -20,14 +19,36 @@ Pass an alternate account list with `./run.sh path/to/accounts.txt`. The default
 list is `config/accounts.txt`. Use `FORCE=1` to rebuild existing sites (reuses
 scraped data and rebuilds with the same assigned direction).
 
+## Revise existing sites
+
+Add revision instructions under an account heading in `REVISIONS.md`, then run:
+
+```bash
+./revisions.sh
+```
+
+Only sections with non-blank instructions are sent to `agy`. The account names
+must match entries in `config/accounts.txt`; blank sections are skipped. The
+script runs `agy` from each account directory, where it can access the existing
+`site/` and generation context. It does not scrape profiles or regenerate site
+files before the revision. Set `WEBSITES_ROOT` to use a different websites
+directory. Each `run.sh` or `revisions.sh` invocation writes its terminal
+output to a separate timestamped log in `logs/`, such as
+`2026-10-06_14-32-10_run_12345.log` or
+`2026-10-06_15-05-42_revisions_12346.log`. Python files run manually log to the
+terminal only. The scripts also keep detailed `agy` output in per-account
+`logs/` directories.
+
 ## Project layout
 
 ```text
 config/                 Account list
-prompts/GEMINI.md       Shared content and design instructions copied per account
-prompts/DESIGN.md       Shared guardrails + design directions (one is copied per account)
-src/                    Scraper, summary, and sheet update utilities
+REVISIONS.md            Per-site revision requests for revisions.sh
+prompts/GEMINI.md       Shared project, content, and output instructions copied per account
+prompts/SKILL.md        Shared design guidance copied per account
+src/                    Scraper, summary, design, and sheet update utilities
 run.sh                  Per-account workflow and site generation
+revisions.sh            Apply non-empty revision sections with agy
 ```
 
 ## Optional decorative imagery

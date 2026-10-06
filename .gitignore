@@ -27,3 +27,5 @@ website/assets/*_data/
 debug/
 
 creds.json
+
+logs/

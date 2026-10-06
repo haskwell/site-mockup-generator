@@ -1,105 +1,66 @@
-# Project: Instagram account → business website mockup
+# Instagram account → small business website mockup
 
-You are running unattended. Make decisions yourself, write the files, then finish.
+Unattended. Write `site/index.html` and `site/style.css` (add `site/script.js` only if needed), then finish. Don't run commands, browsers, or screenshots.
 
 ## Goal
 
-Build a one-page website mockup that the business owner would believe is their real site. It must read as a **website**, never as an Instagram profile in nicer clothes. Instagram is only the source of facts and photos.
+A one-page site the owner would believe is real and would say "that's us, and it looks incredible" about. A stranger should want what this business offers within the first viewport. This is a sales demo, so aim for real peaks, not tasteful and forgettable.
 
-Priorities, in order:
+Priority order when instructions conflict: the accuracy rules below, then `DESIGN.md`, then this file, then `SKILL.md`. Use `SKILL.md` for craft (execution quality, polish, detail), not for choosing a different direction. Where it pushes toward restraint, ambition wins, but never at the expense of `DESIGN.md`.
 
-1. Build the design direction assigned in `DESIGN.md`. Its composition is the page's identity.
-2. Make it read as a website: sections with different jobs and a clear way to order.
-3. Keep every fact accurate.
-4. Make it work beautifully on a 390px phone.
-5. Keep it lightweight: plain static HTML and CSS.
+## Inputs
 
-## Website, not profile
+- `DESIGN.md` is the fixed design direction for this site (see Design direction).
+- `<username>_data/profile_data.json` is the only source of facts.
+- Images are in `site/assets/` as `post_<n>.webp` (maybe `pfp.jpg`); don't move or convert them. `posts[].width/height` give pixel sizes. Look at a few first.
+- Static HTML/CSS, no frameworks. Google Fonts via `<link>` is fine. Modern CSS and inline SVG are welcome.
 
-An Instagram profile is an avatar, a name, a bio, some counts, and a grid of equal pictures. A website has a headline, sections that each do a different job, and an obvious next step. Build the second thing.
+## Design direction
 
-- **Opening.** Headline is the business name. Under it, one plain line saying what they make, using words from the bio or things clearly visible in the photos (for example "Cakes and cupcakes"). Add a city only if the bio states one. Do not open with the bio.
-- **Curate.** Use 5 to 8 photos in total: the sharpest, best lit, most varied ones. Leave the rest unused. Never show every scraped post and never lay photos out as a grid of same-size tiles.
-- **Give each photo a role.** Lead image, supporting image, or detail, each at a different scale.
-- **Sections.** Include only what the data supports, each with its own layout:
-  - Opening with the order action.
-  - Work, grouped by what the photos visibly show. Use plain type labels such as "Cakes" or "Cupcakes" only for things you can clearly see. No flavors, sizes, or claims.
-  - About, containing the bio.
-  - How to order, only when the bio contains real ordering details.
-  - Footer with the Instagram link.
-- **Navigation.** A slim header with the wordmark and at most three anchor links. On mobile, add a sticky bottom bar with one order button (WhatsApp if a number exists, otherwise Instagram).
-- **Leave out the Instagram tells:** follower count, post/like/comment counts, round avatar, story-style circles, reel play markers, "follow" buttons, caption cards, an `@handle` as a heading, and Instagram colors or gradients. The handle appears only in the footer and contact link.
-- **Reels.** A post with `kind == "reel"` is only a cover image. Prefer non-reel photos; if you use one, treat it as a normal image.
+`DESIGN.md` lists fixed design constraints for this site. They are binding: follow every line. They win over your own taste and over any default in `SKILL.md`. Do not substitute a direction of your own.
 
-## Scope
+Work out what this business makes or does and let its materials, textures, and vocabulary shape how you fit into those constraints: palette sampled from the photos, one signature motif drawn from the trade. A candle maker, a hair stylist, and a bakery should never look alike, even under similar constraints.
 
-Static mockup, not a working store. No forms, cart, backend, booking logic, analytics, or elaborate JavaScript. Links may be simple but must be real: Instagram or WhatsApp when available.
+Anything `DESIGN.md` doesn't list is yours to decide. Make those choices deliberately to suit the direction instead of falling back on common patterns, and keep them consistent with the listed constraints.
 
-Do not run shell commands, browsers, servers, linters, tests, or screenshots. Build `site/index.html` and `site/style.css` from the supplied data and assets, then finish.
+If a constraint clashes badly with this business, adapt only that one axis and name it in your final summary. Don't drop constraints because they feel risky or hard.
 
-## Inputs and output
+Some axes in `DESIGN.md` concern text (copy voice, headline style). Because visible text is limited by the accuracy rules, they apply only to the descriptor line, headline treatment of the business name, and functional labels (buttons, nav). Never invent claims, copy, or facts to satisfy them.
 
-- `<username>_data/profile_data.json` is the only source of business facts.
-- Images are already in `site/assets/` as `post_<n>.webp`, and optionally `pfp.jpg`. Do not copy, move, or convert them.
-- Look at 3 to 5 images first to understand products, palette, and mood. `posts[].width` and `posts[].height` give each file's pixel size.
-- `DESIGN.md` holds shared guardrails and the assigned design direction. Build that direction in this same call.
-- Fill in the existing `site/index.html` and `site/style.css`. Add `site/script.js` only if a tiny visual effect truly needs it.
-- Plain HTML and CSS: no frameworks, build steps, or CDN scripts. Google Fonts via `<link>` are allowed. Use relative asset paths.
+The order or contact action should be a designed centerpiece and easy to reach on mobile. Whatever the direction, the site must work and read well on a phone.
 
-## Content accuracy
+When `SKILL.md` asks for a design plan or an anti-default review, build the plan inside the constraints in `DESIGN.md`. The review applies only to axes `DESIGN.md` leaves free; never revise a listed constraint because it resembles a common default. `SKILL.md`'s guidance on writing copy does not apply here; the accuracy rules govern all text.
 
-- **Bio:** keep the owner's wording. Fix line breaks. Decorative emoji and hashtag strings may be dropped.
-- **Captions** are usually empty. Use one only if it is present, evergreen, and reproduced verbatim. Ignore stale dates, sales, closures, and order-resumption notices.
-- **`posts[].alt_text`** is machine-generated and unreliable. Never use it as visible copy. Write short alt text only for what you can see.
-- Do not invent prices, products, flavors, menus, reviews, testimonials, years in business, addresses, policies, or statistics.
-- Include payment, location, policy, and ordering details only when they are explicitly in the bio, with faithful wording.
-- If a phone number in the bio or an evergreen caption is explicitly for WhatsApp or orders, link to `https://wa.me/<international digits>` using the country the bio implies. Otherwise link to the Instagram profile. Never invent a number.
-- Link to `https://www.instagram.com/<handle>/` in the footer.
-- Do not write marketing claims ("handcrafted", "freshly baked", "made with love") unless they are in the bio. The only written content is the bio, verbatim captions, the descriptor line, and plain functional labels.
+## It must be a website, not a profile
 
-## Images
+- The business name is the headline, with one plain line saying what they do (from the bio or clearly visible in photos). Don't open with the bio.
+- Several sections, each doing a different job with its own layout. Use 5 to 8 photos at varied scales. Same-size tile grids only if `DESIGN.md` explicitly calls for one.
+- Leave out Instagram tells: counts, round avatar, story circles, play markers, follow buttons, caption cards, `@handle` as a heading, Instagram colors. The handle appears only in the footer and contact link (`https://www.instagram.com/<handle>/`).
 
-- Use the real supplied images. Respect aspect ratios by default; do not force squares.
-- Scale by role and by source resolution. Do not display an image much wider than its file's pixel width, because it will blur. `DESIGN.md` explains how to size images.
-- A deliberate crop is allowed when the direction calls for it. Use `object-fit` with an `object-position` that keeps the subject. Do not crop every image.
-- Every `<img>` gets explicit `width` and `height` and short accurate alt text. Use `loading="lazy"` on everything except the first visible image.
-- Use `pfp.jpg` only if it is clearly a logo rather than a photo, at 40 to 64px, never in a circle and never as a hero. Otherwise use a text wordmark.
-- Do not apply a universal image-width cap.
+## Accuracy (hard rules)
 
-### Optional decorative stock image
+- Keep the bio's wording; drop decorative emoji and hashtags. Use captions only if evergreen and verbatim.
+- Never use `alt_text` as visible copy. Write alt text only for what you can see.
+- Don't invent prices, products, services, menus, reviews, credentials, years, addresses, policies, or stats. Include ordering, payment, and location details only if explicit in the bio.
+- Link to WhatsApp (`https://wa.me/<digits>`) only if a number is explicitly for orders or WhatsApp; otherwise link to Instagram.
+- No marketing claims unless they're in the bio. Visible text is limited to the bio, verbatim captions, the descriptor line, and plain functional labels.
+- Some posts may be graphics containing text (a menu, price list, ordering rules). If one clearly looks evergreen, you may use its text verbatim as a source of facts, equal to the bio. Skip anything dated, promotional, or unclear, and don't use that graphic as a photo in the gallery.
 
-At most one remote stock image, and only when the direction needs a decorative backdrop or transition that the supplied photos and CSS cannot give. It must not suggest the business's products, people, premises, or work. It gets an empty alt (or is a CSS background), no caption, and text over it must stay readable. Use a reputable source with a direct, stable URL and honor its attribution requirements. If nothing suitable exists, omit it.
+## Mobile quality check
 
-## Plan before you build
-
-Before writing code, decide silently (do not write this into any file):
-
-- **Palette:** 4 to 6 hex values sampled from this business's photos, not defaults.
-- **Type:** at most two families with distinct roles and real fallback stacks.
-- **Layout:** one sentence per section, plus alignment.
-
-Then check the plan against these common generated-page defaults and change anything that matches without a reason: a cream background with a serif and a terracotta accent; near-black with one acid accent; identical rounded cards with the same soft shadow; gradient washes; a tracked all-caps label above every heading; middle-dot meta strings; arrows appended to links; one headline word in a different color or italic; fade-up animation on every section; emoji as icons; purple gradients.
-
-## Visual execution
-
-- Spend boldness in one place: the direction's defining move, visible in the first viewport. Keep the rest quiet and disciplined.
-- Typography carries personality. Use scale, weight, and spacing deliberately.
-- Structural devices (numbers, rules, borders, labels) must encode something real about the content. Number things only if they are truly a sequence.
-- Motion is optional. If used, make it one subtle moment that serves the design, and respect `prefers-reduced-motion`.
-- Text contrast must be readable everywhere, including over images.
-
-## Mobile
-
-Design for 390px first and keep it usable at 360px. Body text at least 16px, tap targets at least 44px, no horizontal scrolling, no hover dependence. Adapt the direction's composition rather than collapsing everything into one stacked template. Use `svh` or `dvh`, never `vh`, for full-height sections.
-
-## Silent check before finishing
-
-- Could the page be described as "a header and a grid of photos"? If so, rework it.
-- Are there at least three sections with visibly different layouts?
-- Does it use 5 to 8 photos, at varied scales, with none shown as a same-size tile grid?
-- Is any Instagram tell left in (counts, avatar, play markers, `@handle` heading)?
-- Is every visible fact traceable to `profile_data.json`?
+- Review the layout at narrow phone widths, including around 320–390 CSS pixels.
+- Make sure there is no horizontal page overflow and every section fits within the viewport.
+- Check that navigation, logos, headings, cards, and order/contact actions stay visible and usable.
+- Make hover effects optional enhancements: provide an equivalent tap or focus interaction where the action matters.
+- Keep body text readable and check text/background contrast.
+- Avoid fixed-width elements and fixed or sticky controls that can be clipped on small screens.
+- Before finishing, recheck the narrow layout after the final CSS changes.
 
 ## Finish
 
-Do not verify or run anything. Print a five-line summary only: direction used (exact heading from `DESIGN.md`), palette, fonts, the defining design move, and anything omitted because the source data did not support it.
+Before finishing, check two things:
+
+1. Describe your first viewport in one sentence. If it would fit any other business in the same trade, redo it.
+2. Walk through every line of `DESIGN.md` and confirm the site follows it. Fix any miss.
+
+Then print six lines only: concept, palette, fonts, defining move, axes adapted from `DESIGN.md` (or "none"), anything omitted for lack of data.
