@@ -3,9 +3,12 @@
 
 import argparse
 import json
-import sys
 from pathlib import Path
 from typing import Any
+
+from logging_config import get_logger
+
+logger = get_logger("update_sheet")
 
 
 def load_business(path: Path) -> dict[str, Any]:
@@ -81,20 +84,21 @@ def main() -> int:
 
     try:
         record = load_business(args.summary_json)
+        logger.info("Updating Google Sheet from %s", args.summary_json)
         action, row_or_serial = update_sheet(record, args.credentials)
     except Exception as exc:
-        print(f"ERROR: Google Sheets update failed: {exc}", file=sys.stderr)
+        logger.exception("Google Sheets update failed: %s", exc)
         return 1
 
-    print(
+    logger.info(
         f"Business: {record.get('name', '')} | @{str(record.get('handle', '')).lstrip('@')} | "
         f"phone: {record.get('phone', '')} | area: {record.get('area', '')} | "
         f"followers: {record.get('followers', '')}"
     )
     if action == "added":
-        print(f"Google Sheet: added row (serial number {row_or_serial})")
+        logger.info("Google Sheet: added row (serial number %s)", row_or_serial)
     else:
-        print(f"Google Sheet: updated existing row {row_or_serial}")
+        logger.info("Google Sheet: updated existing row %s", row_or_serial)
     return 0
 
 

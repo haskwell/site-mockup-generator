@@ -7,6 +7,10 @@ import re
 from pathlib import Path
 from typing import Any
 
+from logging_config import get_logger
+
+logger = get_logger("profile_summary")
+
 
 PAKISTANI_CITIES = (
     "Karachi", "Lahore", "Islamabad", "Rawalpindi", "Faisalabad",
@@ -52,6 +56,7 @@ def main() -> None:
     parser.add_argument("output_json", type=Path)
     args = parser.parse_args()
 
+    logger.info("Extracting business summary from %s", args.profile_json)
     with args.profile_json.open(encoding="utf-8") as source:
         profile: dict[str, Any] = json.load(source)
     bio = str(profile.get("bio") or "")
@@ -66,6 +71,7 @@ def main() -> None:
     with args.output_json.open("w", encoding="utf-8") as output:
         json.dump(result, output, indent=2, ensure_ascii=False)
         output.write("\n")
+    logger.info("Saved business summary to %s", args.output_json)
 
 
 if __name__ == "__main__":
