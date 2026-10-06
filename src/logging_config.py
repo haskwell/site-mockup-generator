@@ -1,9 +1,8 @@
-"""Shared timestamped console and file logging for the profile pipeline."""
+"""Shared timestamped console logging for the profile pipeline."""
 
 import logging
 import os
 import sys
-from pathlib import Path
 
 _LOG_FORMAT = "%(asctime)s %(levelname)-8s %(name)s: %(message)s"
 _DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
@@ -15,7 +14,6 @@ _LEVEL_COLORS = {
     logging.CRITICAL: "\033[1;31m",
 }
 _RESET = "\033[0m"
-_LOG_PATH = Path(__file__).resolve().parents[1] / "logs" / "pipeline.log"
 _CONFIGURED = False
 
 
@@ -36,12 +34,10 @@ class _ColorFormatter(logging.Formatter):
 
 
 def get_logger(name: str) -> logging.Logger:
-    """Return a consistently formatted logger writing to console and pipeline.log."""
+    """Return a consistently formatted console logger."""
     global _CONFIGURED
     logger = logging.getLogger(f"profile_pipeline.{name}")
     if not _CONFIGURED:
-        _LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
-        formatter = logging.Formatter(_LOG_FORMAT, datefmt=_DATE_FORMAT)
         console = logging.StreamHandler(sys.stdout)
         console.setFormatter(
             _ColorFormatter(_LOG_FORMAT, _DATE_FORMAT,
@@ -50,11 +46,6 @@ def get_logger(name: str) -> logging.Logger:
         root = logging.getLogger("profile_pipeline")
         root.setLevel(logging.INFO)
         root.addHandler(console)
-        # run.sh captures its complete stdout/stderr stream into this same file.
-        if not os.environ.get("PIPELINE_LOG_CAPTURED"):
-            file_handler = logging.FileHandler(_LOG_PATH, encoding="utf-8")
-            file_handler.setFormatter(formatter)
-            root.addHandler(file_handler)
         _CONFIGURED = True
     logger.setLevel(logging.INFO)
     logger.propagate = True
