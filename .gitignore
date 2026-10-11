@@ -15,6 +15,7 @@ config/.env.*
 config/auth.json
 config/creds.json
 config/accounts.txt
+config/accounts.csv
 
 # Scraper output and downloaded Instagram media
 *_data/

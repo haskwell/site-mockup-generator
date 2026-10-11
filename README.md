@@ -21,18 +21,23 @@ scraped data and rebuilds with the same assigned direction).
 
 ## Revise existing sites
 
-Add revision instructions under an account heading in `REVISIONS.md`, then run:
+After `run.sh` finishes, it clears `REVISIONS.md` and adds a heading for each
+built or already-existing site. Add revision instructions under the relevant
+headings, then run:
 
 ```bash
 ./revisions.sh
 ```
 
-Only sections with non-blank instructions are sent to `agy`. The account names
+Running `run.sh` replaces all existing content in `REVISIONS.md`, so save any
+revision requests you still need before starting a new run. Only sections with
+non-blank instructions are sent to `agy`. The account names
 must match entries in `config/accounts.txt`; blank sections are skipped. The
 script runs `agy` from each account directory, where it can access the existing
 `site/` and generation context. It does not scrape profiles or regenerate site
-files before the revision. Set `WEBSITES_ROOT` to use a different websites
-directory. Each `run.sh` or `revisions.sh` invocation writes its terminal
+files before the revision. By default, both scripts use
+`/home/frost/websites/YYYY-MM-DD`, creating a separate root for each day. Set
+`WEBSITES_ROOT` to use a different directory. Each `run.sh` or `revisions.sh` invocation writes its terminal
 output to a separate timestamped log in `logs/`, such as
 `2026-10-06_14-32-10_run_12345.log` or
 `2026-10-06_15-05-42_revisions_12346.log`. Python files run manually log to the

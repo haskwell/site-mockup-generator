@@ -11,7 +11,7 @@ LOG_DIR="$REPO/logs"
 mkdir -p "$LOG_DIR"
 SESSION_LOG="$LOG_DIR/$(date '+%Y-%m-%d_%H-%M-%S')_run_$$.log"
 exec > >(tee "$SESSION_LOG") 2>&1
-ROOT="${WEBSITES_ROOT:-/home/frost/websites}"
+ROOT="${WEBSITES_ROOT:-/home/frost/websites/$(date '+%Y-%m-%d')}"
 ACCOUNTS_FILE="${1:-$REPO/config/accounts.txt}"
 MODEL="gemini-3.8-flash-medium"
 MIN_SIZE=600   # bytes; an unfilled skeleton index.html is smaller than this
@@ -176,6 +176,14 @@ for user in "${USERS[@]}"; do
     sleep "$d"
   fi
 done
+
+# Prepare a fresh revision queue for sites that are ready after this run.
+# This intentionally replaces any existing revision requests.
+: > "$REPO/REVISIONS.md"
+for user in "${ok[@]}" "${skipped[@]}"; do
+  printf '# %s\n\n' "$user" >> "$REPO/REVISIONS.md"
+done
+log INFO "Prepared $REPO/REVISIONS.md with headings for built and skipped sites"
 
 echo
 echo "================ Summary ================"

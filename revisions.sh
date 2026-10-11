@@ -8,7 +8,7 @@ mkdir -p "$LOG_DIR"
 SESSION_LOG="$LOG_DIR/$(date '+%Y-%m-%d_%H-%M-%S')_revisions_$$.log"
 exec > >(tee "$SESSION_LOG") 2>&1
 
-ROOT="${WEBSITES_ROOT:-/home/frost/websites}"
+ROOT="${WEBSITES_ROOT:-/home/frost/websites/$(date '+%Y-%m-%d')}"
 REVISIONS_FILE="$REPO/REVISIONS.md"
 ACCOUNTS_FILE="$REPO/config/accounts.txt"
 MODEL="gemini-3.8-flash-medium"
