@@ -50,11 +50,9 @@ When `SKILL.md` asks for a design plan or an anti-default review, build the plan
 
 - Review the layout at narrow phone widths, including around 320–390 CSS pixels.
 - Make sure there is no horizontal page overflow and every section fits within the viewport.
-- Check that navigation, logos, headings, cards, and order/contact actions stay visible and usable.
+- Check that navigation, logos, headings, cards, and order/contact actions stay visible and usable, with no horizontal or vertical overflow.
 - Make hover effects optional enhancements: provide an equivalent tap or focus interaction where the action matters.
-- Keep body text readable and check text/background contrast.
 - Avoid fixed-width elements and fixed or sticky controls that can be clipped on small screens.
-- Before finishing, recheck the narrow layout after the final CSS changes.
 
 ## Finish
 
