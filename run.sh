@@ -10,17 +10,8 @@ REPO="$(cd "$(dirname "$0")" && pwd)"
 LOG_DIR="$REPO/logs"
 mkdir -p "$LOG_DIR"
 SESSION_LOG="$LOG_DIR/$(date '+%Y-%m-%d_%H-%M-%S')_run_$$.log"
-exec > >(tee "$SESSION_LOG") 2>&1
-ROOT="${WEBSITES_ROOT:-/home/frost/websites/$(date '+%Y-%m-%d')}"
-ACCOUNTS_FILE="${1:-$REPO/config/accounts.txt}"
-MODEL="gemini-3.8-flash-medium"
-MIN_SIZE=600   # bytes; an unfilled skeleton index.html is smaller than this
-PYTHON_BIN="${PIPELINE_PYTHON:-python3}"
-if [[ -z "${PIPELINE_PYTHON:-}" && -x "$REPO/.venv/bin/python" ]]; then
-  PYTHON_BIN="$REPO/.venv/bin/python"
-fi
-
-if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
+exec 3>&1
+if [[ -t 3 && -z "${NO_COLOR:-}" ]]; then
   C_INFO=$'\033[36m'
   C_SUCCESS=$'\033[32m'
   C_WARN=$'\033[33m'
@@ -33,6 +24,15 @@ else
   C_ERROR=''
   C_RESET=''
 fi
+exec > >(tee >(sed -u $'s/\033\\[[0-9;]*m//g' >> "$SESSION_LOG")) 2>&1
+ROOT="${WEBSITES_ROOT:-/home/frost/websites/$(date '+%Y-%m-%d')}"
+ACCOUNTS_FILE="${1:-$REPO/config/accounts.txt}"
+MODEL="gemini-3.8-flash-medium"
+MIN_SIZE=600   # bytes; an unfilled skeleton index.html is smaller than this
+PYTHON_BIN="${PIPELINE_PYTHON:-python3}"
+if [[ -z "${PIPELINE_PYTHON:-}" && -x "$REPO/.venv/bin/python" ]]; then
+  PYTHON_BIN="$REPO/.venv/bin/python"
+fi
 
 log() {
   local level="$1"
@@ -44,7 +44,7 @@ log() {
     ERROR) color="$C_ERROR" ;;
     *) color="$C_INFO" ;;
   esac
-  printf '%s %-8s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$level" "$*"
+  printf '%s %s%-8s%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$color" "$level" "$C_RESET" "$*"
 }
 
 [ -f "$ACCOUNTS_FILE" ] || { log ERROR "Accounts file not found: $ACCOUNTS_FILE"; exit 1; }
@@ -134,7 +134,11 @@ HTML
     done || code=$?
 
   if [ "$code" -eq 124 ]; then
-    log WARN "$user: agy timed out (see $agylog)"
+    log ERROR "$user: agy timed out after 900s; build failed (see $agylog)"
+    return 1
+  elif [ "$code" -ne 0 ]; then
+    log ERROR "$user: agy exited with status $code; build failed (see $agylog)"
+    return 1
   fi
 
   # 4. Success = index.html is bigger than the empty skeleton
@@ -179,11 +183,11 @@ done
 
 # Prepare a fresh revision queue for sites that are ready after this run.
 # This intentionally replaces any existing revision requests.
-: > "$REPO/REVISIONS.md"
+: > "$REPO/config/REVISIONS.md"
 for user in "${ok[@]}" "${skipped[@]}"; do
-  printf '# %s\n\n' "$user" >> "$REPO/REVISIONS.md"
+  printf '# %s\n\n' "$user" >> "$REPO/config/REVISIONS.md"
 done
-log INFO "Prepared $REPO/REVISIONS.md with headings for built and skipped sites"
+log INFO "Prepared $REPO/config/REVISIONS.md with headings for built and skipped sites"
 
 echo
 echo "================ Summary ================"

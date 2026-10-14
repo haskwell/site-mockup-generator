@@ -21,7 +21,7 @@ scraped data and rebuilds with the same assigned direction).
 
 ## Revise existing sites
 
-After `run.sh` finishes, it clears `REVISIONS.md` and adds a heading for each
+After `run.sh` finishes, it clears `config/REVISIONS.md` and adds a heading for each
 built or already-existing site. Add revision instructions under the relevant
 headings, then run:
 
@@ -29,7 +29,7 @@ headings, then run:
 ./revisions.sh
 ```
 
-Running `run.sh` replaces all existing content in `REVISIONS.md`, so save any
+Running `run.sh` replaces all existing content in `config/REVISIONS.md`, so save any
 revision requests you still need before starting a new run. Only sections with
 non-blank instructions are sent to `agy`. The account names
 must match entries in `config/accounts.txt`; blank sections are skipped. The
@@ -48,7 +48,7 @@ terminal only. The scripts also keep detailed `agy` output in per-account
 
 ```text
 config/                 Account list
-REVISIONS.md            Per-site revision requests for revisions.sh
+config/REVISIONS.md     Per-site revision requests for revisions.sh
 prompts/GEMINI.md       Shared project, content, and output instructions copied per account
 prompts/SKILL.md        Shared design guidance copied per account
 src/                    Scraper, summary, design, and sheet update utilities

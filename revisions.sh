@@ -1,33 +1,63 @@
 #!/usr/bin/env bash
-# Apply non-empty sections from REVISIONS.md to their existing generated sites.
+# Apply non-empty sections from config/REVISIONS.md to their existing generated sites.
 set -euo pipefail
 
 REPO="$(cd "$(dirname "$0")" && pwd)"
 LOG_DIR="$REPO/logs"
 mkdir -p "$LOG_DIR"
 SESSION_LOG="$LOG_DIR/$(date '+%Y-%m-%d_%H-%M-%S')_revisions_$$.log"
-exec > >(tee "$SESSION_LOG") 2>&1
+exec 3>&1
+if [[ -t 3 && -z "${NO_COLOR:-}" ]]; then
+  C_INFO=$'\033[36m'
+  C_SUCCESS=$'\033[32m'
+  C_WARN=$'\033[33m'
+  C_ERROR=$'\033[31m'
+  C_RESET=$'\033[0m'
+else
+  C_INFO=''
+  C_SUCCESS=''
+  C_WARN=''
+  C_ERROR=''
+  C_RESET=''
+fi
+exec > >(tee >(sed -u $'s/\033\\[[0-9;]*m//g' >> "$SESSION_LOG")) 2>&1
 
-ROOT="${WEBSITES_ROOT:-/home/frost/websites/$(date '+%Y-%m-%d')}"
-REVISIONS_FILE="$REPO/REVISIONS.md"
+read -rp "Enter date (YYYY-MM-DD): " WEBSITE_DATE
+if [[ ! "$WEBSITE_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+  printf '%sERROR    Date must use YYYY-MM-DD format.%s\n' "$C_ERROR" "$C_RESET"
+  exit 1
+fi
+
+ROOT="${WEBSITES_ROOT:-/home/frost/websites/$WEBSITE_DATE}"
+if [[ ! -d "$ROOT" ]]; then
+  printf '%sERROR    Websites directory not found: %s%s\n' "$C_ERROR" "$ROOT" "$C_RESET"
+  exit 1
+fi
+REVISIONS_FILE="$REPO/config/REVISIONS.md"
 ACCOUNTS_FILE="$REPO/config/accounts.txt"
 MODEL="gemini-3.8-flash-medium"
 TIMEOUT_SECONDS=900
 MIN_SIZE=600
 
 if [[ ! -f "$REVISIONS_FILE" ]]; then
-  printf 'ERROR    Revisions file not found: %s\n' "$REVISIONS_FILE"
+  printf '%sERROR    Revisions file not found: %s%s\n' "$C_ERROR" "$REVISIONS_FILE" "$C_RESET"
   exit 1
 fi
 if [[ ! -f "$ACCOUNTS_FILE" ]]; then
-  printf 'ERROR    Accounts file not found: %s\n' "$ACCOUNTS_FILE"
+  printf '%sERROR    Accounts file not found: %s%s\n' "$C_ERROR" "$ACCOUNTS_FILE" "$C_RESET"
   exit 1
 fi
 
 log() {
   local level="$1"
   shift
-  printf '%s %-8s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$level" "$*"
+  local color="$C_INFO"
+  case "$level" in
+    SUCCESS) color="$C_SUCCESS" ;;
+    WARN) color="$C_WARN" ;;
+    ERROR) color="$C_ERROR" ;;
+  esac
+  printf '%s %s%-8s%s %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$color" "$level" "$C_RESET" "$*"
 }
 
 is_account() {
@@ -92,9 +122,10 @@ process_revision() {
   fi
 
   if [[ "$code" -eq 124 ]]; then
-    log WARN "$user: agy timed out after ${TIMEOUT_SECONDS}s (see $agylog)"
+    log ERROR "$user: agy timed out after ${TIMEOUT_SECONDS}s; revision failed (see $agylog)"
+    return 1
   elif [[ "$code" -ne 0 ]]; then
-    log ERROR "$user: agy exited with status $code (see $agylog)"
+    log ERROR "$user: agy exited with status $code; revision failed (see $agylog)"
     return 1
   fi
 
