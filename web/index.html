@@ -13,9 +13,9 @@
         --line: #30313a;
         --muted: #9698a5;
         --text: #f3f2f7;
-        --accent: #d9ff73;
-        --purple: #bba6ff;
-        --red: #ff877c;
+        --accent: var(--theme-accent, #d9ff73);
+        --purple: var(--theme-purple, #bba6ff);
+        --red: var(--theme-red, #ff877c);
         --shadow: 0 18px 55px #0005;
         --top: #141519e8;
         --input: #121318;
@@ -23,7 +23,7 @@
         --table-head: #191a1f;
         --table-line: #292a31;
         --hover: #ffffff08;
-        --selection: #d9ff7312;
+        --selection: color-mix(in srgb, var(--accent) 9%, transparent);
         --chip: #ffffff0b;
         --widths: #111216;
         --width-active: #373842;
@@ -42,9 +42,9 @@
         --line: #d9dbe3;
         --muted: #686b78;
         --text: #20212a;
-        --accent: #719900;
-        --purple: #7557c7;
-        --red: #c83d35;
+        --accent: var(--theme-accent, #719900);
+        --purple: var(--theme-purple, #7557c7);
+        --red: var(--theme-red, #c83d35);
         --shadow: 0 18px 55px #26304a16;
         --top: #fffffff0;
         --input: #ffffff;
@@ -52,7 +52,7 @@
         --table-head: #f7f7fa;
         --table-line: #e7e8ed;
         --hover: #20212a08;
-        --selection: #71990018;
+        --selection: color-mix(in srgb, var(--accent) 10%, transparent);
         --chip: #20212a0a;
         --widths: #eceef2;
         --width-active: #d8dbe3;
@@ -62,6 +62,33 @@
         --log: #f7f7fa;
         --log-text: #424550;
         --revision-text: #424550;
+      }
+      :root[data-palette="ocean"] { --theme-accent:#55d6d0; --theme-purple:#7eafff; --theme-red:#ef6f91; }
+      :root[data-palette="ocean"][data-theme="dark"] {
+        --bg:#0d171d; --panel:#14232b; --panel2:#1b3039; --line:#2b4650; --muted:#91aab3; --text:#e5f3f5; --top:#12212aee; --input:#101e25;
+        --run:linear-gradient(120deg,#1b3540,#14232b 70%); --table-head:#14232b; --table-line:#263c44; --hover:#d9ffff09; --selection:#55d6d01b; --chip:#d9ffff0b; --widths:#101e25; --width-active:#31505b; --frame:#263f49; --dialog:#14232b; --dialog-line:#2b4650; --log:#101e25; --log-text:#c1d3d8; --revision-text:#c1d3d8;
+      }
+      :root[data-palette="ocean"][data-theme="light"] {
+        --bg:#edf7f8; --panel:#fff; --panel2:#e6f2f4; --line:#c5dfe3; --muted:#55727a; --text:#18343b; --top:#fffffff0; --input:#fff;
+        --run:linear-gradient(120deg,#fff,#e6f2f4 70%); --table-head:#f4fbfc; --table-line:#d8e9eb; --hover:#18343b08; --selection:#168d891a; --chip:#18343b0a; --widths:#e2eff1; --width-active:#c8e0e4; --frame:#d5e9ec; --dialog:#fff; --dialog-line:#c5dfe3; --log:#f4fbfc; --log-text:#36545c; --revision-text:#36545c;
+      }
+      :root[data-palette="plum"] { --theme-accent:#c7a0ff; --theme-purple:#dfb8ff; --theme-red:#ff8eaa; }
+      :root[data-palette="plum"][data-theme="dark"] {
+        --bg:#17121d; --panel:#211a2a; --panel2:#2d2338; --line:#453653; --muted:#b1a2bf; --text:#f4edf9; --top:#201827ee; --input:#1c1624;
+        --run:linear-gradient(120deg,#33253f,#211a2a 70%); --table-head:#211a2a; --table-line:#392e44; --hover:#fff8ff09; --selection:#c7a0ff1c; --chip:#fff8ff0b; --widths:#1c1624; --width-active:#4a385a; --frame:#382a43; --dialog:#211a2a; --dialog-line:#453653; --log:#1c1624; --log-text:#d2c5dc; --revision-text:#d2c5dc;
+      }
+      :root[data-palette="plum"][data-theme="light"] {
+        --bg:#f6f1fa; --panel:#fff; --panel2:#f0e9f6; --line:#dfd1e9; --muted:#756580; --text:#30233a; --top:#fffffff0; --input:#fff;
+        --run:linear-gradient(120deg,#fff,#f0e9f6 70%); --table-head:#faf7fc; --table-line:#e9e1ef; --hover:#30233a08; --selection:#9660ce18; --chip:#30233a0a; --widths:#eee7f3; --width-active:#ded0e9; --frame:#e9e0ef; --dialog:#fff; --dialog-line:#dfd1e9; --log:#faf7fc; --log-text:#51445d; --revision-text:#51445d;
+      }
+      :root[data-palette="ember"] { --theme-accent:#ffae68; --theme-purple:#e29bdb; --theme-red:#ed665d; }
+      :root[data-palette="ember"][data-theme="dark"] {
+        --bg:#1b1412; --panel:#281d19; --panel2:#382720; --line:#523a2d; --muted:#b9a095; --text:#fff1e6; --top:#251a16ee; --input:#211815;
+        --run:linear-gradient(120deg,#402a20,#281d19 70%); --table-head:#281d19; --table-line:#473127; --hover:#fff5ec09; --selection:#ffae681b; --chip:#fff5ec0b; --widths:#211815; --width-active:#5a3b2c; --frame:#49352b; --dialog:#281d19; --dialog-line:#523a2d; --log:#211815; --log-text:#dbc9bc; --revision-text:#dbc9bc;
+      }
+      :root[data-palette="ember"][data-theme="light"] {
+        --bg:#fbf3ed; --panel:#fff; --panel2:#f5e9df; --line:#e8d3c1; --muted:#806758; --text:#3d281d; --top:#fffffff0; --input:#fff;
+        --run:linear-gradient(120deg,#fff,#f5e9df 70%); --table-head:#fcf8f4; --table-line:#efe2d7; --hover:#3d281d08; --selection:#cf733019; --chip:#3d281d0a; --widths:#f2e6dc; --width-active:#e7d2c0; --frame:#eee0d3; --dialog:#fff; --dialog-line:#e8d3c1; --log:#fcf8f4; --log-text:#634a3b; --revision-text:#634a3b;
       }
       * {
         box-sizing: border-box;
@@ -1032,7 +1059,12 @@
         <h2>Workspace settings</h2>
         <div class="settingsgrid">
           <label class="field">Websites root<input id="sroot" /></label
-          ><label class="field"
+          ><label class="field">Color theme<select id="spalette">
+            <option value="studio">Studio Lime</option>
+            <option value="ocean">Ocean</option>
+            <option value="plum">Plum</option>
+            <option value="ember">Ember</option>
+          </select></label><label class="field"
             >Batch date<input id="sdate" type="date" /></label
           ><label class="field">agy model<input id="smodel" /></label
           ><label class="field"
@@ -1126,11 +1158,20 @@
         if (toggle) toggle.checked = light;
         localStorage.setItem("studio-theme", light ? "light" : "dark");
       }
+      function setPalette(palette) {
+        const valid = ["studio", "ocean", "plum", "ember"].includes(palette)
+          ? palette
+          : "studio";
+        document.documentElement.dataset.palette = valid;
+        localStorage.setItem("studio-palette", valid);
+      }
       const savedTheme = localStorage.getItem("studio-theme");
       setTheme(savedTheme === "light" ? "light" : "dark");
+      setPalette(localStorage.getItem("studio-palette") || "studio");
       $("#themeToggle").addEventListener("change", (event) =>
         setTheme(event.target.checked ? "light" : "dark"),
       );
+      $("#spalette").addEventListener("change", (event) => setPalette(event.target.value));
       const api = async (url, opt = {}) => {
         let r = await fetch(url, {
           headers: { "Content-Type": "application/json" },
@@ -1438,6 +1479,7 @@
       };
       function openSettings() {
         let s = state.settings;
+        $("#spalette").value = localStorage.getItem("studio-palette") || "studio";
         $("#sroot").value = s.websites_root;
         $("#sdate").value = state.batch;
         $("#smodel").value = s.model;
@@ -1457,6 +1499,7 @@
         $("#settingsmodal").classList.remove("open");
       }
       async function saveSettings() {
+        setPalette($("#spalette").value);
         let values = {
           websites_root: $("#sroot").value,
           model: $("#smodel").value,
