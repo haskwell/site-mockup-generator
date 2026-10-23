@@ -3,7 +3,6 @@
 venv/
 __pycache__/
 *.py[cod]
-src/.design_index
 
 # Local credentials
 .env
@@ -29,3 +28,4 @@ website/assets/*_data/
 debug/
 
 logs/
+dashboard.sqlite3

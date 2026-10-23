@@ -24,18 +24,23 @@ PAKISTANI_CITIES = (
 # Match international and domestic Pakistani mobile/landline forms.
 PHONE_RE = re.compile(
     r"(?<!\d)(?:\+?92|0092)[\s().-]*(?:0[\s().-]*)?"
-    r"(?:3\d{2}[\s().-]*\d{7}|\d{2,3}[\s().-]*\d{6,7})"
+    r"(?:3\d{2}[\s().-]*\d{7}|\d{2,3}[\s().-]*\d{6,8})"
     r"(?!\d)|(?<!\d)03\d{2}[\s().-]*\d{7}(?!\d)"
+    r"|(?<!\d)0\d{2,3}[\s().-]*\d{6,8}(?!\d)"
 )
 
 
 def extract_phone(text: str) -> str:
-    match = PHONE_RE.search(text)
-    if not match:
+    matches = list(PHONE_RE.finditer(text))
+    if not matches:
         return ""
-    value = match.group(0).strip()
-    # Normalize separators only; preserve the number's original country prefix.
-    return re.sub(r"[\s().-]", "", value)
+    # Return every distinct number so bios with multiple contact lines survive.
+    values = []
+    for match in matches:
+        value = re.sub(r"[\s().-]", "", match.group(0).strip())
+        if value not in values:
+            values.append(value)
+    return " / ".join(values)
 
 
 def extract_area(text: str) -> str:
@@ -43,11 +48,14 @@ def extract_area(text: str) -> str:
         r"(?<![\w])(" + "|".join(re.escape(city) for city in sorted(PAKISTANI_CITIES, key=len, reverse=True)) + r")(?![\w])",
         re.IGNORECASE,
     )
-    match = city_pattern.search(text)
-    if not match:
-        return ""
-    city = match.group(1)
-    return next((known for known in PAKISTANI_CITIES if known.casefold() == city.casefold()), city)
+    matches = city_pattern.finditer(text)
+    found = []
+    for match in matches:
+        city = match.group(1)
+        canonical = next((known for known in PAKISTANI_CITIES if known.casefold() == city.casefold()), city)
+        if canonical not in found:
+            found.append(canonical)
+    return " & ".join(found)
 
 
 def main() -> None:

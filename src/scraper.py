@@ -275,9 +275,14 @@ def fetch_post_meta(
         logger.warning("%sRedirected to login wall: %s", label, page.url)
         return None
     desc = page.evaluate(
-        """() => document.querySelector('meta[property="og:description"]')?.content || ''"""
+        """() => ({
+            description: document.querySelector('meta[property="og:description"]')?.content || '',
+            image: document.querySelector('meta[property="og:image"]')?.content || ''
+        })"""
     )
-    return parse_og_description(desc)
+    result = parse_og_description(desc.get("description", ""))
+    result["image"] = desc.get("image", "")
+    return result
 
 
 # --------------------------------------------------------------------------
@@ -318,6 +323,8 @@ def scrape_profile(
             ctx_kwargs: Dict[str, Any] = {
                 "user_agent": USER_AGENT,
                 "viewport": {"width": 1280, "height": 800},
+                "locale": "en-US",
+                "extra_http_headers": {"Accept-Language": "en-US,en;q=0.9"},
             }
             if auth_path and os.path.exists(auth_path):
                 ctx_kwargs["storage_state"] = auth_path
@@ -338,10 +345,14 @@ def scrape_profile(
                 pass
             dismiss_instagram_modals(page)
 
-            if is_login_wall(page):
-                logger.error(
-                    "Redirected to login wall. Try --auth with a saved session."
-                )
+            login_wall = is_login_wall(page)
+            if login_wall:
+                raise RuntimeError("LOGIN_WALL: redirected to Instagram login; stopping retries to avoid repeated requests")
+            page_text = page.locator("body").inner_text(timeout=5000).casefold()
+            if "this account is private" in page_text or "account is private" in page_text:
+                raise RuntimeError("PRIVATE_ACCOUNT: Instagram reports this profile is private")
+            if "sorry, this page isn't available" in page_text or "page may have been removed" in page_text:
+                raise RuntimeError("ACCOUNT_UNAVAILABLE: Instagram says this profile is unavailable")
 
             meta = page.evaluate("""() => ({
                 ogImage: document.querySelector('meta[property="og:image"]')?.content || "",
@@ -367,6 +378,7 @@ def scrape_profile(
             logger.info("Collected %d post(s).", len(items))
 
             # Optional: real captions + dates from each post page.
+            captions_completed = False
             if fetch_captions and items:
                 total = len(items)
                 logger.info(
@@ -386,6 +398,8 @@ def scrape_profile(
                         )
                         break
                     item.update(result)
+                    if result.get("image", "").startswith("https://"):
+                        item["src"] = result["image"]
                     cap = result.get("caption", "")
                     logger.info(
                         "%sGot date=%s, stats=%s, caption=%s",
@@ -400,7 +414,11 @@ def scrape_profile(
                             "%sWaiting %.1fs before the next post...", label, delay
                         )
                         time.sleep(delay)
+                else:
+                    captions_completed = True
                 post_page.close()
+            elif fetch_captions:
+                captions_completed = False
 
             browser.close()
 
@@ -461,7 +479,7 @@ def scrape_profile(
             "following": stat("Following"),
             "post_count": stat("Posts"),
             "pfp_path": pfp_rel if os.path.join(staging, pfp_rel) in ok else "",
-            "captions_are_real": fetch_captions,
+            "captions_are_real": captions_completed,
             "posts": posts,
         }
 
@@ -547,6 +565,8 @@ def main() -> None:
                 break
         except Exception as e:
             logger.error("Attempt %d/%d failed: %s", attempt, args.attempts, e)
+            if any(marker in str(e) for marker in ("LOGIN_WALL:", "PRIVATE_ACCOUNT:", "ACCOUNT_UNAVAILABLE:")):
+                break
         if attempt < args.attempts:
             wait = 5 * attempt
             logger.info("Retrying in %ds...", wait)

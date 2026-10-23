@@ -1,6 +1,6 @@
 # Instagram account → small business website mockup
 
-Unattended. Write `site/index.html` and `site/style.css` (add `site/script.js` only if needed), then finish. Don't run commands, browsers, or screenshots.
+Write `site/index.html` and `site/style.css` (add `site/script.js` only if needed), then finish. Do not run shell commands. If browser inspection is available, use it; otherwise do not claim a browser-based check was performed. Keep the layout responsive by construction and finish with the requested summary.
 
 ## Goal
 
@@ -45,10 +45,11 @@ When `SKILL.md` asks for a design plan or an anti-default review, build the plan
 - Link to WhatsApp (`https://wa.me/<digits>`) only if a number is explicitly for orders or WhatsApp; otherwise link to Instagram.
 - No marketing claims unless they're in the bio. Visible text is limited to the bio, verbatim captions, the descriptor line, and plain functional labels.
 - Some posts may be graphics containing text (a menu, price list, ordering rules). If one clearly looks evergreen, you may use its text verbatim as a source of facts, equal to the bio. Skip anything dated, promotional, or unclear, and don't use that graphic as a photo in the gallery.
+- Preserve the source language and script of bio text. For Urdu, Arabic, or other right-to-left copy, set the relevant text direction with `dir="rtl"` (or a narrowly scoped RTL element) while keeping Latin contact details readable.
 
 ## Mobile quality check
 
-- Review the layout at narrow phone widths, including around 320–390 CSS pixels.
+- Design for narrow phone widths, including around 320–390 CSS pixels. Do not claim browser verification unless you actually performed it.
 - Make sure there is no horizontal page overflow and every section fits within the viewport.
 - Check that navigation, logos, headings, cards, and order/contact actions stay visible and usable, with no horizontal or vertical overflow.
 - Make hover effects optional enhancements: provide an equivalent tap or focus interaction where the action matters.

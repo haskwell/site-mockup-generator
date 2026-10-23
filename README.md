@@ -1,68 +1,72 @@
 # Instagram Site Mockup Generator
 
-Scrapes each Instagram account, creates a compact business summary JSON, and
-uses `agy` to build a static site mockup under `WEBSITES_ROOT`.
+Scrapes Instagram profile data, creates a business summary, and uses `agy` to
+build a static site under `WEBSITES_ROOT`.
 
-The shared generation instructions and design skill are copied into each
-account folder for the single `agy` call. A deterministic design direction is
-generated as `DESIGN.md` and copied into the website directory before `agy`
-runs. It curates 5 to 8 photos and builds a website, not a mirror of the
-Instagram profile.
-
-## Run
+## Setup
 
 ```bash
-./run.sh
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install -r requirements.txt
+playwright install chromium
 ```
 
-Pass an alternate account list with `./run.sh path/to/accounts.txt`. The default
-list is `config/accounts.txt`. Use `FORCE=1` to rebuild existing sites (reuses
-scraped data and rebuilds with the same assigned direction).
+Install and authenticate `agy` separately. Put account handles or Instagram
+profile URLs, one per line, in `config/accounts.txt`. Optional saved browser
+state belongs in `config/auth.json`; Google Sheets credentials belong in
+`config/creds.json`. Both are ignored by git.
+
+## Build
+
+```bash
+python run.py [path/to/accounts.txt]
+```
+
+The default account list is `config/accounts.txt`. By default output goes to
+`~/websites/YYYY-MM-DD/<handle>/site/`. Set `WEBSITES_ROOT` to choose another
+root. `FORCE=1 python run.py` rebuilds existing sites and removes stale files
+from the deployed site directory. A copy of the previous site is kept under
+`<handle>/backups/` before a build or revision. Google Sheets updates happen
+after a successful build and are non-fatal.
+
+Run output, including scraper and summary messages, is written to a timestamped
+session log in `logs/`; full `agy` output is also stored per account.
+
+## Local dashboard
+
+Start the local-only dashboard with `python app.py` and open
+`http://127.0.0.1:8765`. It stores leads, outreach fields, live logs, and
+revision history in `dashboard.sqlite3`. Select a batch date, paste or import
+account handles, then run builds and review sites in the embedded preview.
+Google Sheets sync is optional and runs after a successful build. The dashboard
+does not bind to the network; keep the URL local because it can launch a
+Playwright login window and run local build tools.
 
 ## Revise existing sites
 
-After `run.sh` finishes, it clears `config/REVISIONS.md` and adds a heading for each
-built or already-existing site. Add revision instructions under the relevant
-headings, then run:
+`config/REVISIONS.md` uses one section per handle:
 
-```bash
-./revisions.sh
+```markdown
+# example_handle
+
+Make the contact button more prominent.
 ```
 
-Running `run.sh` replaces all existing content in `config/REVISIONS.md`, so save any
-revision requests you still need before starting a new run. Only sections with
-non-blank instructions are sent to `agy`. The account names
-must match entries in `config/accounts.txt`; blank sections are skipped. The
-script runs `agy` from each account directory, where it can access the existing
-`site/` and generation context. It does not scrape profiles or regenerate site
-files before the revision. By default, both scripts use
-`/home/frost/websites/YYYY-MM-DD`, creating a separate root for each day. Set
-`WEBSITES_ROOT` to use a different directory. Each `run.sh` or `revisions.sh` invocation writes its terminal
-output to a separate timestamped log in `logs/`, such as
-`2026-10-06_14-32-10_run_12345.log` or
-`2026-10-06_15-05-42_revisions_12346.log`. Python files run manually log to the
-terminal only. The scripts also keep detailed `agy` output in per-account
-`logs/` directories.
+Run `python revisions.py`, enter the output date (`YYYY-MM-DD`), and only
+non-empty sections for configured accounts are applied. Successfully applied
+sections are cleared; failed requests remain in the file. Existing notes are
+preserved when `run.py` refreshes the list of account headings.
 
 ## Project layout
 
 ```text
-config/                 Account list
-config/REVISIONS.md     Per-site revision requests for revisions.sh
-prompts/GEMINI.md       Shared project, content, and output instructions copied per account
-prompts/SKILL.md        Shared design guidance copied per account
-src/                    Scraper, summary, design, and sheet update utilities
-run.sh                  Per-account workflow and site generation
-revisions.sh            Apply non-empty revision sections with agy
+config/                 Account list, revision requests, local credentials
+prompts/GEMINI.md       Generation instructions
+prompts/SKILL.md        Design guidance
+src/                    Scraper, summary, design, and Sheets utility
+pipeline_common.py      Shared settings, logger, process and account helpers
+run.py                  Build workflow
+revisions.py            Revision workflow
+requirements.txt        Python dependencies
 ```
-
-## Optional decorative imagery
-
-Generated mockups use the business's Instagram photos as their actual product
-and portfolio images. A design may use one remotely linked stock image only when
-it needs a decorative hero, atmospheric backdrop, or image-based section
-transition that the account photos or CSS cannot provide. Stock imagery must
-not be presented as the business's products, people, premises, or work. Remote
-images need an internet connection and may become unavailable if the source
-changes or removes the image; any source attribution requirements must be
-honored.

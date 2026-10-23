@@ -25,7 +25,7 @@ def load_business(path: Path) -> dict[str, Any]:
     return record
 
 
-def update_sheet(record: dict[str, Any], credentials: Path) -> tuple[str, int]:
+def update_sheet(record: dict[str, Any], credentials: Path, sheet_name: str = "websites") -> tuple[str, int]:
     try:
         import gspread
         from google.oauth2.service_account import Credentials
@@ -44,7 +44,7 @@ def update_sheet(record: dict[str, Any], credentials: Path) -> tuple[str, int]:
     ]
     auth = Credentials.from_service_account_file(str(credentials), scopes=scopes)
     client = gspread.authorize(auth)
-    worksheet = client.open("websites").sheet1
+    worksheet = client.open(sheet_name).sheet1
 
     handle = str(record["handle"]).strip().lstrip("@").casefold()
     rows = worksheet.get("A:F")
@@ -65,11 +65,12 @@ def update_sheet(record: dict[str, Any], credentials: Path) -> tuple[str, int]:
         record.get("followers", ""),
     ]
     if matching_row is not None:
-        worksheet.update(range_name=f"B{matching_row}:F{matching_row}", values=[values])
+        # RAW prevents phone numbers being coerced to numbers or formulas.
+        worksheet.update(range_name=f"B{matching_row}:F{matching_row}", values=[values], value_input_option="RAW")
         return "updated", matching_row
 
     serial = highest_serial + 1
-    worksheet.append_row([serial, *values], value_input_option="USER_ENTERED")
+    worksheet.append_row([serial, *values], value_input_option="RAW")
     return "added", serial
 
 
@@ -80,12 +81,13 @@ def main() -> int:
         "--credentials", type=Path,
         default=Path(__file__).resolve().parents[1] / "config" / "creds.json",
     )
+    parser.add_argument("--sheet-name", default="websites")
     args = parser.parse_args()
 
     try:
         record = load_business(args.summary_json)
         logger.info("Updating Google Sheet from %s", args.summary_json)
-        action, row_or_serial = update_sheet(record, args.credentials)
+        action, row_or_serial = update_sheet(record, args.credentials, args.sheet_name)
     except Exception as exc:
         logger.exception("Google Sheets update failed: %s", exc)
         return 1

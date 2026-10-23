@@ -3,92 +3,108 @@
 
 from __future__ import annotations
 
-import datetime as dt
 import glob
 import os
 import random
 import re
 import shutil
-import subprocess
 import sys
 import time
 from pathlib import Path
+from pipeline_common import Logger, MODEL, MIN_SIZE, TIMEOUT_SECONDS, account_handle, run_streaming
 
 
 REPO = Path(__file__).resolve().parent
-MODEL = "gemini-3.8-flash-medium"
-MIN_SIZE = 600
 
 
-class Logger:
-    def __init__(self, path: Path):
-        self.file = path.open("a", encoding="utf-8")
-        self.color = sys.stdout.isatty() and not os.environ.get("NO_COLOR")
-        self.colors = {"INFO": "\033[36m", "SUCCESS": "\033[32m", "WARN": "\033[33m", "ERROR": "\033[31m"}
-
-    def log(self, level: str, message: str) -> None:
-        stamp = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        color = self.colors.get(level, self.colors["INFO"]) if self.color else ""
-        reset = "\033[0m" if self.color else ""
-        line = f"{stamp} {color}{level:<8}{reset} {message}"
-        print(line, flush=True)
-        self.file.write(re.sub(r"\033\[[0-9;]*m", "", line) + "\n")
-        self.file.flush()
-
-    def close(self) -> None:
-        self.file.close()
+def parse_revision_sections(content: str, accounts: set[str]) -> dict[str, str]:
+    sections: dict[str, list[str]] = {}
+    current: str | None = None
+    for line in content.splitlines():
+        match = re.match(r"^#[ \t]+(\S+)\s*$", line)
+        if match:
+            candidate = match.group(1)
+            current = candidate if candidate in accounts else None
+            if current is not None:
+                sections.setdefault(current, [])
+        elif current is not None:
+            sections[current].append(line)
+    return {user: "\n".join(lines).strip() for user, lines in sections.items()}
 
 
-def command_output(command: list[str], cwd: Path, logger: Logger | None = None,
-                   agy_log: Path | None = None, timeout: int | None = None,
-                   prefix: str = "") -> tuple[int, bool]:
-    """Run a command, forwarding output and optionally recording detailed output."""
+def validate_site(site: Path) -> list[str]:
+    from html.parser import HTMLParser
+    index = site / "index.html"
+    if not index.is_file() or index.stat().st_size < MIN_SIZE:
+        return [f"index.html missing or smaller than {MIN_SIZE} bytes"]
+    class Checker(HTMLParser):
+        def __init__(self):
+            super().__init__(convert_charrefs=True)
+            self.refs: list[str] = []
+            self.errors: list[str] = []
+            self.tags: set[str] = set()
+        def handle_starttag(self, tag, attrs):
+            attrs = dict(attrs)
+            if tag in {"html", "head", "body"}:
+                self.tags.add(tag)
+            if tag in {"img", "script", "source"} and attrs.get("src"):
+                self.refs.append(attrs["src"])
+            if tag == "img" and attrs.get("srcset"):
+                self.refs.extend(candidate.strip().split()[0] for candidate in attrs["srcset"].split(",") if candidate.strip())
+            if tag == "video" and attrs.get("poster"):
+                self.refs.append(attrs["poster"])
+            if tag == "link" and attrs.get("href") and attrs.get("rel") in {"stylesheet", "icon"}:
+                self.refs.append(attrs["href"])
+        def error(self, message):
+            self.errors.append(message)
+    checker = Checker()
     try:
-        process = subprocess.Popen(command, cwd=cwd, stdout=subprocess.PIPE,
-                                   stderr=subprocess.STDOUT, text=True, errors="replace")
-        log_file = agy_log.open("w", encoding="utf-8") if agy_log else None
-        try:
-            try:
-                output, _ = process.communicate(timeout=timeout)
-                timed_out = False
-            except subprocess.TimeoutExpired:
-                process.kill()
-                output, _ = process.communicate()
-                timed_out = True
-            for line in output.splitlines():
-                if log_file:
-                    log_file.write(line + "\n")
-                    log_file.flush()
-                if logger:
-                    logger.log("INFO", prefix + line)
-                else:
-                    print(line, flush=True)
-            return (124 if timed_out else process.returncode), timed_out
-        finally:
-            if log_file:
-                log_file.close()
-    except OSError as exc:
-        if logger:
-            logger.log("ERROR", f"Could not run {command[0]}: {exc}")
-        else:
-            print(f"ERROR: Could not run {command[0]}: {exc}", file=sys.stderr)
-        return 127, False
+        html = index.read_text(encoding="utf-8")
+        if "<!doctype html>" not in html.casefold():
+            checker.errors.append("HTML5 doctype is missing")
+        checker.feed(html)
+        checker.close()
+    except Exception as exc:
+        return [f"invalid HTML: {exc}"]
+    errors = checker.errors
+    errors.extend(f"required document tag <{tag}> is missing" for tag in {"html", "head", "body"} - checker.tags)
+    for ref in checker.refs:
+        if ref.startswith(("https://", "http://", "data:", "#")):
+            continue
+        target = (site / ref.split("?", 1)[0].split("#", 1)[0]).resolve()
+        if not target.is_relative_to(site.resolve()) or not target.is_file():
+            errors.append(f"missing or unsafe referenced file: {ref}")
+    return errors
 
 
 def parse_users(path: Path) -> list[str]:
-    users = []
+    users, seen = [], set()
     for line in path.read_text(encoding="utf-8").splitlines():
-        username = line.split("#", 1)[0].replace("\r", "").lstrip(" \t\n\v\f@").rstrip()
-        if username:
+        raw = line.split("#", 1)[0].strip()
+        if not raw:
+            continue
+        try:
+            username = account_handle(raw)
+        except ValueError as exc:
+            print(f"Skipping account entry {raw!r}: {exc}", file=sys.stderr)
+            continue
+        if username.casefold() not in seen:
             users.append(username)
+            seen.add(username.casefold())
     return users
 
 
-def process_account(user: str, root: Path, python: str, force: bool, logger: Logger) -> int:
+def process_account(user: str, root: Path, python: str, force: bool, logger: Logger,
+                    *, emit=None, options: dict | None = None, cancel_event=None) -> int:
+    options = options or {}
+    def status(value: str, line: str = ""):
+        if emit:
+            emit(user, value, line)
+    status("scraping", "Starting profile scrape")
     account = root / user
     data = account / f"{user}_data"
     site = account / "site"
-    agy_log = account / "logs" / f"agy_{dt.datetime.now():%Y-%m-%d_%H%M}.log"
+    import datetime as dt
     try:
         (account / "logs").mkdir(parents=True, exist_ok=True)
         (site / "assets").mkdir(parents=True, exist_ok=True)
@@ -98,30 +114,52 @@ def process_account(user: str, root: Path, python: str, force: bool, logger: Log
         return 1
 
     index = site / "index.html"
-    if not force and index.is_file() and index.stat().st_size >= MIN_SIZE:
+    if not force and not options.get("scrape_only") and index.is_file() and index.stat().st_size >= MIN_SIZE:
         logger.log("INFO", f"{user}: site already built, skipping (use FORCE=1 to rebuild)")
         return 2
 
+    backup = account / "backups" / f"site_before_build_{dt.datetime.now():%Y%m%d_%H%M%S}"
+    if site.exists():
+        backup.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copytree(site, backup)
+    agy_log = account / "logs" / f"agy_{dt.datetime.now():%Y-%m-%d_%H%M}.log"
+
     python_bin = os.environ.get("PIPELINE_PYTHON") or python
     logger.log("INFO", f"{user}: scraping...")
-    rc, _ = command_output([python_bin, str(REPO / "src/scraper.py"), user, "--captions", "--auth", str(REPO / "config/auth.json")], account)
+    scraper_command = [python_bin, str(REPO / "src/scraper.py"), user,
+                       "--max-posts", str(options.get("max_posts", 18)),
+                       "--attempts", str(options.get("attempts", 3)),
+                       "--auth", str(options.get("auth_path", REPO / "config/auth.json"))]
+    if options.get("captions", True): scraper_command.append("--captions")
+    if options.get("headed", False): scraper_command.append("--headed")
+    if options.get("rescrape", False): scraper_command.append("--force")
+    rc, _ = run_streaming(scraper_command, account, logger, cancel_event=cancel_event)
     if rc:
+        status("failed", "Scraper failed or was cancelled")
         logger.log("ERROR", f"{user}: scraper failed")
         return 1
+    if options.get("scrape_only"):
+        status("done", "Scrape complete")
+        return 0
     if not (data / "profile_data.json").is_file():
         logger.log("ERROR", f"{user}: no profile_data.json")
         return 1
-    steps = [
-        ([python_bin, str(REPO / "src/profile_summary.py"), str(data / "profile_data.json"), str(data / "business_data.json")], "profile summary extraction failed"),
-        ([python_bin, str(REPO / "src/update_sheet.py"), str(data / "business_data.json")], "Google Sheets update failed; see the error above"),
-    ]
+    steps = [] if options.get("preserve_summary") and (data / "business_data.json").is_file() else [([python_bin, str(REPO / "src/profile_summary.py"), str(data / "profile_data.json"), str(data / "business_data.json")], "profile summary extraction failed")]
     for command, error in steps:
-        rc, _ = command_output(command, REPO)
+        rc, _ = run_streaming(command, REPO, logger, cancel_event=cancel_event)
         if rc:
+            status("failed", error)
             logger.log("ERROR", f"{user}: {error}")
             return 1
     try:
+        if force and site.exists():
+            shutil.rmtree(site)
+        (site / "assets").mkdir(parents=True, exist_ok=True)
         images = glob.glob(str(data / "posts/web/*.webp"))
+        selected = options.get("selected_photos")
+        if selected is not None:
+            allowed = {Path(name).name for name in selected}
+            images = [image for image in images if Path(image).name in allowed]
         if not images:
             raise FileNotFoundError("no images to copy")
         for image in images:
@@ -134,7 +172,6 @@ def process_account(user: str, root: Path, python: str, force: bool, logger: Log
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Mockup</title>
-  <link rel="icon" href="assets/pfp.jpg">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -145,44 +182,63 @@ def process_account(user: str, root: Path, python: str, force: bool, logger: Log
         shutil.copy2(REPO / "prompts/GEMINI.md", account / "GEMINI.md")
     except OSError as exc:
         logger.log("ERROR", f"{user}: failed to prepare site: {exc}")
+        restore_backup(site, backup)
         return 1
 
-    rc, _ = command_output([python_bin, str(REPO / "src/design.py"), user, "--output", str(account / "DESIGN.md")], REPO)
+    rc, _ = run_streaming([python_bin, str(REPO / "src/design.py"), user, "--output", str(account / "DESIGN.md")], REPO, logger, cancel_event=cancel_event)
     if rc:
         logger.log("ERROR", f"{user}: design direction generation failed")
+        restore_backup(site, backup)
         return 1
-    try:
-        shutil.copy2(account / "DESIGN.md", site / "DESIGN.md")
-    except OSError as exc:
-        logger.log("ERROR", f"{user}: failed to copy DESIGN.md into the site directory: {exc}")
-        return 1
+    # DESIGN.md stays beside the project instructions and is not deployed.
 
-    logger.log("INFO", f"{user}: building site with agy ({MODEL})...")
-    rc, timed_out = command_output(
+    model = options.get("model", MODEL)
+    logger.log("INFO", f"{user}: building site with agy ({model})...")
+    status("building", "Building site with agy")
+    rc, timed_out = run_streaming(
         ["agy", "-p", "Read GEMINI.md, DESIGN.md and SKILL.md, then build the site. DESIGN.md is binding.",
-         "--model", MODEL, "--dangerously-skip-permissions"],
-        account, logger, agy_log, 900)
+         "--model", model],
+        account, logger, agy_log, int(options.get("timeout", TIMEOUT_SECONDS)), cancel_event=cancel_event)
     if timed_out:
         logger.log("ERROR", f"{user}: agy timed out after 900s; build failed (see {agy_log})")
+        restore_backup(site, backup)
         return 1
     if rc:
         logger.log("ERROR", f"{user}: agy exited with status {rc}; build failed (see {agy_log})")
+        restore_backup(site, backup)
         return 1
-    size = index.stat().st_size if index.exists() else 0
-    if size < MIN_SIZE:
-        logger.log("ERROR", f"{user}: agy did not fill in index.html (see {agy_log})")
+    errors = validate_site(site)
+    if errors:
+        logger.log("ERROR", f"{user}: generated site failed validation: {'; '.join(errors)}")
+        if backup.exists():
+            restore_backup(site, backup)
         return 1
+    size = index.stat().st_size
     logger.log("SUCCESS", f"{user}: done -> {index} ({size} bytes)")
+    status("done", f"Built {index}")
+    sheet_command = [python_bin, str(REPO / "src/update_sheet.py"), str(data / "business_data.json"),
+                     "--credentials", str(options.get("credentials", REPO / "config/creds.json")),
+                     "--sheet-name", str(options.get("sheet_name", "websites"))]
+    rc, _ = run_streaming(sheet_command, REPO, logger) if options.get("sync_sheet", True) else (0, False)
+    if rc:
+        logger.log("WARN", f"{user}: Google Sheets update failed; site build succeeded")
     return 0
 
 
+def restore_backup(site: Path, backup: Path) -> None:
+    if backup.exists():
+        shutil.rmtree(site, ignore_errors=True)
+        shutil.copytree(backup, site)
+
+
 def main() -> int:
+    import datetime as dt
     log_dir = REPO / "logs"
     log_dir.mkdir(exist_ok=True)
     session_log = log_dir / f"{dt.datetime.now():%Y-%m-%d_%H-%M-%S}_run_{os.getpid()}.log"
     logger = Logger(session_log)
     try:
-        root = Path(os.environ.get("WEBSITES_ROOT", f"/home/frost/websites/{dt.date.today():%Y-%m-%d}"))
+        root = Path(os.environ.get("WEBSITES_ROOT", str(Path.home() / "websites" / f"{dt.date.today():%Y-%m-%d}")))
         accounts = Path(sys.argv[1]) if len(sys.argv) > 1 else REPO / "config/accounts.txt"
         if not accounts.is_file():
             logger.log("ERROR", f"Accounts file not found: {accounts}")
@@ -205,8 +261,12 @@ def main() -> int:
                 logger.log("INFO", f"Waiting {delay}s before the next account...")
                 time.sleep(delay)
         revisions = REPO / "config/REVISIONS.md"
-        revisions.write_text("".join(f"# {user}\n\n" for user in ok + skipped), encoding="utf-8")
-        logger.log("INFO", f"Prepared {revisions} with headings for built and skipped sites")
+        previous = revisions.read_text(encoding="utf-8") if revisions.exists() else ""
+        valid_users = set(users)
+        old_sections = parse_revision_sections(previous, valid_users)
+        headings = "".join(f"# {user}\n\n" for user in ok + skipped if user not in old_sections)
+        revisions.write_text(previous.rstrip() + ("\n\n" if previous.strip() and headings else "") + headings, encoding="utf-8")
+        logger.log("INFO", f"Preserved existing revision notes in {revisions}")
         print("\n================ Summary ================")
         print(f"Built:   {len(ok)}  {' '.join(ok)}")
         print(f"Skipped: {len(skipped)}  {' '.join(skipped)}")
