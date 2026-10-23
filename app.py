@@ -86,7 +86,7 @@ class SettingsBody(BaseModel): values:dict[str,Any]
 class LeadEdit(BaseModel): name:str=""; phone:str=""; area:str=""; followers:str=""; notes:str=""; stage:str="new"; follow_up:str=""; price:str=""
 class Revision(BaseModel): request:str
 class PhotoSelection(BaseModel): files:list[str]
-class BulkInput(BaseModel): handles:list[str]
+class BulkInput(BaseModel): handles:list[str]; mode:str="site"
 
 def parse_accounts(text):
     out=[]; seen=set()
@@ -289,11 +289,18 @@ def save_photos(handle:str,b:PhotoSelection,batch:str|None=None):
 
 @app.post("/api/lead/delete")
 def delete_leads(b:BulkInput,batch:str|None=None):
+    if b.mode not in {"site","folder"}:raise HTTPException(400,"mode must be 'site' or 'folder'")
     batch=clean_batch(batch or selected_batch);root=root_for(batch);removed=[]
+    with job_lock:
+        if active_job and any(handle in active_job.get("handles",[]) for handle in b.handles):
+            raise HTTPException(409,"Cannot delete a lead while it is in the build queue")
     for raw in b.handles:
         handle=clean_handle(raw);account=(root/handle).resolve()
         if not account.is_relative_to(root.resolve()):raise HTTPException(400,"Unsafe account path")
-        if account.exists():shutil.rmtree(account)
+        site=(account/"site").resolve()
+        if b.mode=="folder":
+            if account.exists():shutil.rmtree(account)
+        elif site.is_relative_to(account) and site.exists():shutil.rmtree(site)
         with connect() as d:
             d.execute("DELETE FROM leads WHERE batch=? AND handle=?",(batch,handle))
             d.execute("DELETE FROM revisions WHERE batch=? AND handle=?",(batch,handle))
