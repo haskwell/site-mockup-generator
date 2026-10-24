@@ -279,6 +279,20 @@ def lead(handle:str,batch:str|None=None):
     except Exception:selected=[Path(p.get("web_path","")).name for p in profile.get("posts",[])]
     return {"lead":dict(r),"profile":profile,"summary":summary,"revisions":rev,"design":design.read_text() if design.exists() else "","selected_photos":selected}
 
+@app.post("/api/lead/{handle}/recording")
+async def save_recording(handle:str,request:Request,batch:str|None=None,screen:str="desktop",extension:str="webm"):
+    handle=clean_handle(handle);batch=clean_batch(batch or selected_batch)
+    if screen not in {"phone","tablet","desktop"}:raise HTTPException(400,"Invalid screen size")
+    if extension not in {"mp4","webm"}:raise HTTPException(400,"Invalid recording format")
+    account=root_for(batch)/handle
+    if not (account/"site"/"index.html").is_file():raise HTTPException(404,"Site not found")
+    data=await request.body()
+    if not data:raise HTTPException(400,"Recording is empty")
+    recordings=account/"recordings";recordings.mkdir(parents=True,exist_ok=True)
+    path=recordings/f"{handle}-{screen}.{extension}"
+    path.write_bytes(data)
+    return {"path":str(path)}
+
 @app.put("/api/lead/{handle}/photos")
 def save_photos(handle:str,b:PhotoSelection,batch:str|None=None):
     handle=clean_handle(handle);batch=clean_batch(batch or selected_batch);account=root_for(batch)/handle;profile_path=account/f"{handle}_data"/"profile_data.json"

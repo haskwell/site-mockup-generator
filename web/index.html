@@ -2331,6 +2331,7 @@
             ].forEach((k) => ($("#f-" + k).value = l[k] || ""));
             $("#f-stage").value = stageOf(l);
           }
+          updateContactMenu();
           $("#f-qa").value = l.qa || "";
           $("#biotext").textContent =
             d.profile?.bio || "Profile data appears after scraping.";
@@ -2388,7 +2389,7 @@
             txt = "Record walkthrough";
             ico = "rec";
           } else if (st === "recorded") {
-            txt = "Copy pitch & open WhatsApp";
+            txt = hasPhone() ? "Copy pitch & open WhatsApp" : "Copy pitch & open Instagram";
             ico = "send";
           } else if (st === "sent") {
             txt = "Mark replied";
@@ -2403,6 +2404,15 @@
           }
         }
         b.innerHTML = lab(ico, txt);
+      }
+      function hasPhone() {
+        return !!String($("#f-phone").value || "").replace(/\D/g, "");
+      }
+      function updateContactMenu() {
+        const phone = hasPhone();
+        $("#m-wa").hidden = !phone;
+        $("#m-ig").hidden = phone;
+        $("#m-ig").innerHTML = lab("globe", "Open Instagram");
       }
       function drawPhotos() {
         const posts = S.ld.profile?.posts || [];
@@ -2479,6 +2489,7 @@
           const l = leadOf(S.sel);
           Object.assign(l, {
             name: $("#f-name").value,
+            phone: $("#f-phone").value,
             stage: $("#f-stage").value,
           });
           $("#ssub").textContent =
@@ -2487,6 +2498,7 @@
             S.ld.lead.stage = $("#f-stage").value;
             drawStrip();
             drawNext();
+            updateContactMenu();
           }
           render();
         } catch (e) {
@@ -2737,7 +2749,7 @@
         });
         P.chunks = [];
         P.rec.ondataavailable = (e) => e.data.size && P.chunks.push(e.data);
-        P.rec.onstop = () => {
+        P.rec.onstop = async () => {
           stream.getTracks().forEach((t) => t.stop());
           cancelAnimationFrame(P.raf);
           clearInterval(P.timer);
@@ -2748,10 +2760,17 @@
           const ext = type.includes("mp4") ? "mp4" : "webm";
           const a = document.createElement("a");
           a.href = URL.createObjectURL(new Blob(P.chunks, { type }));
-          a.download = `${S.sel || "site"}.${ext}`;
+          a.download = `${S.sel || "site"}-${P.device}.${ext}`;
           a.click();
           setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-          toast(`Recording saved as ${ext.toUpperCase()}`);
+          try {
+            const blob = new Blob(P.chunks, { type });
+            const qs = new URLSearchParams({ batch: S.st.batch, screen: P.device, extension: ext });
+            await api(`${leadUrl(S.sel)}/recording?${qs}`, { method: "POST", body: blob });
+            toast(`Recording saved to websites as ${S.sel}-${P.device}.${ext}`);
+          } catch (e) {
+            toast(`Download saved; website copy failed: ${e.message}`);
+          }
           const st = stageOf(S.ld?.lead || {});
           if (st === "new" || st === "built") setStage("recorded");
         };
@@ -3108,10 +3127,10 @@
           if (st === "new" || st === "built") return openPresent(true);
           if (st === "recorded") {
             await navigator.clipboard.writeText(pitch()).catch(() => {});
-            if (whatsapp()) {
-              await setStage("sent");
-              toast("Pitch copied · marked as sent");
-            }
+            if (hasPhone()) whatsapp();
+            else window.open(`https://www.instagram.com/${S.sel}/`, "_blank");
+            await setStage("sent");
+            toast("Pitch copied · marked as sent");
             return;
           }
           if (st === "sent") return setStage("replied");
