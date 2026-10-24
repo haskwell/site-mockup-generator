@@ -4,41 +4,45 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <title>Studio</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
     <style>
       :root {
         color-scheme: dark;
-        --base-canvas: #0e0f12;
-        --base-panel: #15171b;
-        --float: #1d1f25;
-        --line: #2a2d35;
-        --line2: #363a44;
-        --text: #eef0f4;
-        --muted: #a0a6b3;
-        --accent: #d9ff73;
-        --on-accent: #14170a;
+        --base-canvas: #111510;
+        --base-panel: #191f18;
+        --float: #222a20;
+        --line: #303a2e;
+        --line2: #43503f;
+        --text: #eef3e8;
+        --muted: #a3b09b;
+        --accent: #c9ed78;
+        --on-accent: #1a230e;
         --info: #8fa8ff;
         --danger: #ff7d72;
         --shadow: 0 20px 60px #0007;
         --hover: #ffffff0a;
-        --font:
-          Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
-        --display:
-          "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+        --font: "DM Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        --display: "Space Grotesk", "DM Sans", ui-sans-serif, system-ui, sans-serif;
         --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        --canvas: color-mix(in srgb, var(--accent) 3%, var(--base-canvas));
-        --panel: color-mix(in srgb, var(--accent) 2%, var(--base-panel));
+        --canvas: var(--base-canvas);
+        --panel: var(--base-panel);
         --r: 12px;
       }
       :root[data-theme="light"] {
         color-scheme: light;
-        --base-canvas: #f2f3f6;
-        --base-panel: #ffffff;
+        --base-canvas: #eef1e9;
+        --base-panel: #f8faF4;
         --float: #ffffff;
-        --line: #e1e3ea;
-        --line2: #cfd2dc;
-        --text: #1d2029;
-        --muted: #5b6171;
-        --accent: #5f8500;
+        --line: #d9dfd1;
+        --line2: #c3cdb8;
+        --text: #20281d;
+        --muted: #5d6957;
+        --accent: #52721a;
         --on-accent: #fff;
         --info: #4660d6;
         --danger: #c8382e;
@@ -46,28 +50,128 @@
         --hover: #1d20290a;
       }
       :root[data-palette="ocean"] {
-        --accent: #55d6d0;
-        --on-accent: #06201f;
+        --base-canvas: #0b1720;
+        --base-panel: #10232e;
+        --float: #17303d;
+        --line: #24404d;
+        --line2: #315867;
+        --text: #e5f4f6;
+        --muted: #91b4bd;
+        --accent: #65d9d2;
+        --on-accent: #082221;
+        --info: #8fc9ff;
       }
       :root[data-palette="ocean"][data-theme="light"] {
-        --accent: #0f8a86;
+        --base-canvas: #e5f1f3;
+        --base-panel: #f1f8f8;
+        --float: #ffffff;
+        --line: #cbdfe2;
+        --line2: #a9c9ce;
+        --text: #15313a;
+        --muted: #4f7580;
+        --accent: #087a79;
         --on-accent: #fff;
+        --info: #276bb3;
       }
       :root[data-palette="plum"] {
-        --accent: #c7a0ff;
-        --on-accent: #1b0d30;
+        --base-canvas: #18121f;
+        --base-panel: #21182c;
+        --float: #2d203b;
+        --line: #3c2d4d;
+        --line2: #57416c;
+        --text: #f4eafb;
+        --muted: #bca9ca;
+        --accent: #d0a8ff;
+        --on-accent: #241333;
+        --info: #9fc4ff;
       }
       :root[data-palette="plum"][data-theme="light"] {
-        --accent: #7a4bc9;
+        --base-canvas: #f0e9f5;
+        --base-panel: #faf6fc;
+        --float: #ffffff;
+        --line: #dfd1e9;
+        --line2: #cbb5dc;
+        --text: #352341;
+        --muted: #705a80;
+        --accent: #7545a5;
         --on-accent: #fff;
+        --info: #4269b5;
       }
       :root[data-palette="ember"] {
-        --accent: #ffae68;
-        --on-accent: #2b1503;
+        --base-canvas: #1c1410;
+        --base-panel: #291b14;
+        --float: #382419;
+        --line: #4b3021;
+        --line2: #69452e;
+        --text: #fff0e3;
+        --muted: #c4a18a;
+        --accent: #ffb56f;
+        --on-accent: #321a08;
+        --info: #91c8ff;
       }
       :root[data-palette="ember"][data-theme="light"] {
-        --accent: #c75f14;
+        --base-canvas: #f5e9dd;
+        --base-panel: #fff8f0;
+        --float: #fffdf9;
+        --line: #e8d2bf;
+        --line2: #d5b398;
+        --text: #40281a;
+        --muted: #80634f;
+        --accent: #b55316;
         --on-accent: #fff;
+        --info: #356ca7;
+      }
+      :root[data-palette="mono"] {
+        --base-canvas: #101010;
+        --base-panel: #191919;
+        --float: #242424;
+        --line: #303030;
+        --line2: #454545;
+        --text: #f5f5f5;
+        --muted: #a6a6a6;
+        --accent: #e5e5e5;
+        --on-accent: #111;
+        --info: #c7c7c7;
+        --danger: #d6d6d6;
+      }
+      :root[data-palette="mono"][data-theme="light"] {
+        --base-canvas: #ededed;
+        --base-panel: #f7f7f7;
+        --float: #fff;
+        --line: #d8d8d8;
+        --line2: #bdbdbd;
+        --text: #171717;
+        --muted: #626262;
+        --accent: #292929;
+        --on-accent: #fff;
+        --info: #4b4b4b;
+        --danger: #555;
+      }
+      :root[data-palette="red"] {
+        --base-canvas: #1b1012;
+        --base-panel: #271619;
+        --float: #351d21;
+        --line: #4a292f;
+        --line2: #663941;
+        --text: #fff0f0;
+        --muted: #c5a0a4;
+        --accent: #ff7b83;
+        --on-accent: #351014;
+        --info: #a6c9ff;
+        --danger: #ffaaa8;
+      }
+      :root[data-palette="red"][data-theme="light"] {
+        --base-canvas: #f5e8e9;
+        --base-panel: #fff7f7;
+        --float: #fffdfd;
+        --line: #e8ced0;
+        --line2: #d5afb3;
+        --text: #3c1c20;
+        --muted: #80595e;
+        --accent: #b62f3b;
+        --on-accent: #fff;
+        --info: #356ca7;
+        --danger: #a42b32;
       }
       * {
         box-sizing: border-box;
@@ -283,17 +387,20 @@
         border-radius: 99px;
         border: 1px solid var(--line);
         font-size: 12px;
+        line-height: 1;
         color: var(--muted);
         background: var(--panel);
         white-space: nowrap;
       }
       #jobtext {
+        display: block;
         flex: none;
-        line-height: 1.25;
+        line-height: 1;
       }
       .dot {
         width: 8px;
         height: 8px;
+        flex: none;
         border-radius: 50%;
         background: var(--muted);
       }
@@ -1847,7 +1954,7 @@
           `<span>${t === "light" ? "Dark" : "Light"}</span>`;
       }
       function setPalette(p) {
-        const v = ["studio", "ocean", "plum", "ember"].includes(p)
+        const v = ["studio", "ocean", "plum", "ember", "mono", "red"].includes(p)
           ? p
           : "studio";
         document.documentElement.dataset.palette = v;
@@ -1861,6 +1968,8 @@
           ocean: "#55d6d0",
           plum: "#c7a0ff",
           ember: "#ffae68",
+          mono: "#a6a6a6",
+          red: "#ff7b83",
         };
         $("#swatches").innerHTML = Object.entries(cols)
           .map(

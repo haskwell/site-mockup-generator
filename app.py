@@ -79,7 +79,8 @@ def emit(handle,status,line="",batch=None):
             except queue.Full:pass
     with connect() as d:
         d.execute("INSERT INTO logs(batch,handle,status,line) VALUES(?,?,?,?)",(item["batch"],handle,status,line))
-        if handle and status in {"queued","scraping","building","done","failed"}: d.execute("UPDATE leads SET status=?,error=?,updated_at=CURRENT_TIMESTAMP WHERE batch=? AND handle=?",(status,line if status=="failed" else "",item["batch"],handle))
+        if handle and status in {"queued","scraping","building","done","failed"}:
+            d.execute("UPDATE leads SET status=?,error=?,stage=CASE WHEN ?='done' AND stage='new' THEN 'built' ELSE stage END,updated_at=CURRENT_TIMESTAMP WHERE batch=? AND handle=?",(status,line if status=="failed" else "",status,item["batch"],handle))
 
 class Accounts(BaseModel): text:str; batch:str|None=None
 class Run(BaseModel): handles:list[str]=Field(default_factory=list); force:bool=False; rescrape:bool=False; scrape_only:bool=False
