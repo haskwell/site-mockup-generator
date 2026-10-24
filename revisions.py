@@ -101,7 +101,8 @@ def revise(user: str, revision: str, root: Path, accounts: set[str], logger: Log
               "Revision requests:\n" + revision)
     logger.log("INFO", f"{user}: revising site with agy ({model})...")
     report("building", "Applying revision")
-    code, timed_out = run_streaming([agy_bin, "-p", prompt, "--model", model],
+    code, timed_out = run_streaming([agy_bin, "-p", prompt, "--model", model,
+                                     "--dangerously-skip-permissions"],
                                     account, logger, agy_log, timeout, f"{user}: ")
     if timed_out:
         shutil.rmtree(account / "site", ignore_errors=True)

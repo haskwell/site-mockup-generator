@@ -203,7 +203,7 @@ def process_account(user: str, root: Path, python: str, force: bool, logger: Log
     status("building", "Building site with agy")
     rc, timed_out = run_streaming(
         [agy_bin, "-p", "Read GEMINI.md, DESIGN.md and SKILL.md, then build the site. DESIGN.md is binding.",
-         "--model", model],
+         "--model", model, "--dangerously-skip-permissions"],
         account, logger, agy_log, int(options.get("timeout", TIMEOUT_SECONDS)), cancel_event=cancel_event)
     if timed_out:
         logger.log("ERROR", f"{user}: agy timed out after 900s; build failed (see {agy_log})")
