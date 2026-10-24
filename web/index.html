@@ -252,12 +252,19 @@
       }
       .searchtrigger {
         width: 260px;
+        min-width: 0;
+        gap: 8px;
+        padding-right: 10px;
         justify-content: flex-start;
         color: var(--muted);
         background: var(--base-panel);
       }
+      .searchtrigger > span:nth-child(2) { min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+      #ic-search { flex:none; }
       .kbd {
         margin-left: auto;
+        flex: none;
+        white-space: nowrap;
         font: 11px var(--mono);
         border: 1px solid var(--line);
         border-radius: 5px;
@@ -270,6 +277,7 @@
       .pill {
         display: inline-flex;
         align-items: center;
+        flex: none;
         gap: 8px;
         padding: 6px 12px;
         border-radius: 99px;
@@ -277,6 +285,7 @@
         font-size: 12px;
         color: var(--muted);
         background: var(--panel);
+        white-space: nowrap;
       }
       .dot {
         width: 8px;
@@ -464,6 +473,8 @@
         align-items: center;
       }
       .avatar {
+        position: relative;
+        overflow: hidden;
         width: 38px;
         height: 38px;
         border-radius: 11px;
@@ -473,6 +484,7 @@
         color: #fff;
         flex: none;
       }
+      .avatar img { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
       .card .nm {
         font-weight: 650;
         white-space: nowrap;
@@ -673,6 +685,9 @@
       }
       .logbox {
         height: 190px;
+        min-height: 90px;
+        min-width: 180px;
+        resize: both;
         overflow: auto;
         background: var(--base-canvas);
         border: 1px solid var(--line);
@@ -681,6 +696,8 @@
         font: 11px/1.7 var(--mono);
         margin-top: 8px;
       }
+      .logtools { display:flex; justify-content:flex-end; gap:4px; margin-top:6px; }
+      .logtools button { min-width:30px; padding:3px 7px; }
       .logline {
         white-space: pre-wrap;
         overflow-wrap: anywhere;
@@ -1286,7 +1303,7 @@
           <h1 id="viewtitle">Pipeline</h1>
           <div class="spacer"></div>
           <button class="searchtrigger" data-act="palette">
-            <span id="ic-search"></span> Search or run a command
+            <span id="ic-search"></span><span>Search or run a command</span>
             <span class="kbd">Ctrl K</span>
           </button>
           <input
@@ -1394,6 +1411,11 @@
                 <summary>Show details</summary>
                 <div style="text-align: right">
                   <button class="sm ghost" data-act="clearLogs">Clear</button>
+                </div>
+                <div class="logtools" aria-label="Terminal text size">
+                  <button class="sm ghost" data-act="logZoom" data-d="-1" aria-label="Zoom out logs">A−</button>
+                  <button class="sm ghost" data-act="logZoom" data-d="0" aria-label="Reset log zoom">A</button>
+                  <button class="sm ghost" data-act="logZoom" data-d="1" aria-label="Zoom in logs">A+</button>
                 </div>
                 <div class="logbox" id="logs"></div>
               </details>
@@ -1657,6 +1679,8 @@
           </div>
           <div class="pane" id="pane-revisions" hidden>
             <div class="thread" id="history"></div>
+            <div class="muted" style="font-size:12px;margin:10px 0 4px">Revision output</div>
+            <div class="logbox" id="revisionlogs" aria-live="polite"></div>
             <textarea
               id="revision"
               rows="3"
@@ -1806,6 +1830,7 @@
         device: "desktop",
         job: { active: false, handles: [] },
         sideOpen: true,
+        logZoom: 11,
       };
 
       /* ---------- theme ---------- */
@@ -1879,6 +1904,7 @@
       }
       const initial = (l) =>
         ((l.name || l.handle || "?").trim()[0] || "?").toUpperCase();
+      const avatarHtml = (l, style = "") => `<div class="avatar" style="${style || `background:hsl(${hue(l.handle)} 45% 40%)`}">${esc(initial(l))}<img src="/media/${enc(S.st.batch)}/${enc(l.handle)}/pfp.jpg" alt="" onerror="this.remove()" /></div>`;
       const stageOf = (l) => (STAGES.includes(l.stage) ? l.stage : "new");
       function dlg(title, body, buttons) {
         return new Promise((res) => {
@@ -1934,9 +1960,15 @@
         const a = S.job.active;
         $("#jobpill").classList.toggle("run", !!a);
         $("#jobtext").textContent = a
-          ? `Running · ${(S.job.handles || []).length} queued`
+          ? S.job.batch_active
+            ? `Running · ${(S.job.handles || []).length} queued`
+            : `Revision${S.job.revision_pending > 1 ? "s" : ""} · ${S.job.revision_pending} queued`
           : "Ready";
-        $("#cancel").hidden = !a;
+        $("#cancel").hidden = !S.job.batch_active;
+        $("#b-rev").disabled = !!S.job.batch_active;
+        $("#revision").disabled = !!S.job.batch_active;
+        $$('[data-act="reapply"]').forEach((b) => b.disabled = !!S.job.batch_active);
+        $$('[data-act="run"]').forEach((b) => b.disabled = !!S.job.active);
       }
       const refreshSoon = debounce(() => refresh(false), 350);
 
@@ -2005,7 +2037,7 @@
             : "";
         return `<div class="card ${picked ? "picked" : ""}" draggable="true" data-act="open" data-h="${h}" tabindex="0">
     <div class="row">${S.selmode ? `<input type="checkbox" ${picked ? "checked" : ""} data-act="check" data-h="${h}" aria-label="Select ${h}" />` : ""}
-    <div class="avatar" style="background:hsl(${hue(l.handle)} 45% 40%)">${esc(initial(l))}</div>
+    ${avatarHtml(l)}
     <div style="min-width:0"><div class="nm">${esc(l.name || "@" + l.handle)}</div><div class="meta">@${h}${l.area ? " · " + esc(l.area) : ""}</div></div></div>
     <div class="foot"><span class="status ${esc(l.status)}">${esc(l.status || "queued")}</span><span class="spacer"></span>${l.phone ? esc(l.phone) : ""}</div>${fail}</div>`;
       }
@@ -2048,7 +2080,7 @@
               rows
                 .map(
                   (l) =>
-                    `<tr data-act="open" data-h="${esc(l.handle)}">${S.selmode ? `<td><input type="checkbox" ${S.checked.has(l.handle) ? "checked" : ""} data-act="check" data-h="${esc(l.handle)}"></td>` : ""}<td><div style="display:flex;gap:10px;align-items:center"><div class="avatar" style="width:32px;height:32px;font-size:13px;background:hsl(${hue(l.handle)} 45% 40%)">${esc(initial(l))}</div><div><div style="font-weight:650">${esc(l.name || "@" + l.handle)}</div><div class="muted" style="font-size:12px">@${esc(l.handle)}</div></div></div></td><td><span class="status ${esc(l.status)}">${esc(l.status || "queued")}</span></td><td>${esc(stageOf(l))}</td><td>${esc(l.area || "—")}</td><td>${esc(l.phone || "—")}</td></tr>`,
+                    `<tr data-act="open" data-h="${esc(l.handle)}">${S.selmode ? `<td><input type="checkbox" ${S.checked.has(l.handle) ? "checked" : ""} data-act="check" data-h="${esc(l.handle)}"></td>` : ""}<td><div style="display:flex;gap:10px;align-items:center">${avatarHtml(l,"width:32px;height:32px;font-size:13px;background:hsl("+hue(l.handle)+" 45% 40%)")}<div><div style="font-weight:650">${esc(l.name || "@" + l.handle)}</div><div class="muted" style="font-size:12px">@${esc(l.handle)}</div></div></div></td><td><span class="status ${esc(l.status)}">${esc(l.status || "queued")}</span></td><td>${esc(stageOf(l))}</td><td>${esc(l.area || "—")}</td><td>${esc(l.phone || "—")}</td></tr>`,
                 )
                 .join("") +
               `</tbody></table>`
@@ -2103,6 +2135,7 @@
       /* ---------- studio ---------- */
       async function openStudio(h) {
         S.sel = h;
+        $("#revisionlogs").innerHTML = "";
         $("#studio").hidden = false;
         document.body.style.overflow = "hidden";
         S.nonce = Date.now();
@@ -2284,7 +2317,7 @@
           r
             .map(
               (x) =>
-                `<div class="rev"><div>${esc(x.request)}</div><div class="rh"><span class="status ${x.status === "applied" ? "done" : ""}">${esc(x.status)}</span><span class="spacer"></span><button class="sm" data-act="reapply" data-id="${x.id}">${ic("refresh", 14)} Rerun</button>${x.backup_path ? `<button class="sm" data-act="undorev" data-id="${x.id}">${ic("undo", 14)} Undo</button>` : ""}</div></div>`,
+                `<div class="rev"><div>${esc(x.request)}</div><div class="rh"><span class="status ${x.status === "applied" ? "done" : ""}">${esc(x.status)}</span><span class="spacer"></span><button class="sm" data-act="reapply" data-id="${x.id}" ${S.job.batch_active ? "disabled" : ""}>${ic("refresh", 14)} Rerun</button>${x.backup_path ? `<button class="sm" data-act="undorev" data-id="${x.id}">${ic("undo", 14)} Undo</button>` : ""}</div></div>`,
             )
             .join("") ||
           '<div class="muted">No revisions yet. Describe a change below.</div>';
@@ -2827,6 +2860,10 @@
         exportAccounts: () => (location.href = "/api/accounts/export"),
         exportCsv: () => (location.href = "/api/leads.csv" + bq()),
         clearLogs: () => ($("#logs").innerHTML = ""),
+        logZoom: (el) => {
+          S.logZoom = el.dataset.d === "0" ? 11 : Math.max(8, Math.min(24, S.logZoom + Number(el.dataset.d)));
+          [$("#logs"), $("#revisionlogs")].forEach((box) => box.style.fontSize = `${S.logZoom}px`);
+        },
         saveSettings,
         login: async () => {
           try {
@@ -2970,10 +3007,10 @@
               body: JSON.stringify({ request: text }),
             });
             $("#revision").value = "";
-            await api(`/api/revision/${enc(S.sel)}/${r.id}/apply${bq()}`, {
+            const queued = await api(`/api/revision/${enc(S.sel)}/${r.id}/apply${bq()}`, {
               method: "POST",
             });
-            toast("Revision started");
+            toast(queued.queued ? `Revision queued · position ${queued.position}` : "Revision started");
             S.nonce = Date.now();
             loadLead(S.sel, false);
           } catch (e) {
@@ -2982,11 +3019,11 @@
         },
         reapply: async (el) => {
           try {
-            await api(
+            const queued = await api(
               `/api/revision/${enc(S.sel)}/${el.dataset.id}/apply${bq()}`,
               { method: "POST" },
             );
-            toast("Revision rerun");
+            toast(queued.queued ? `Revision queued · position ${queued.position}` : "Revision started");
           } catch (e) {
             toast(e.message);
           }
@@ -3193,6 +3230,12 @@
         const box = $("#logs");
         box.append(el);
         box.scrollTop = box.scrollHeight;
+        if (x.handle === S.sel && !$("#studio").hidden) {
+          const revbox = $("#revisionlogs");
+          const revisionLine = el.cloneNode(true);
+          revbox.append(revisionLine);
+          revbox.scrollTop = revbox.scrollHeight;
+        }
         if (x.batch === S.st.batch) {
           jobStatus();
           if (x.handle && x.status !== "log") {

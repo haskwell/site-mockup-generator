@@ -11,4 +11,4 @@ until curl -sf http://127.0.0.1:8765/api/state >/dev/null; do
   kill -0 $SERVER 2>/dev/null || exit 1
   sleep 0.3
 done
-chromium --app=http://127.0.0.1:8765 --user-data-dir="$HOME/.cache/studio-profile" --window-size=1500,800 --start-maximized
+chromium --app=http://127.0.0.1:8765 --user-data-dir="$HOME/.cache/studio-profile" --window-size=1500,950

@@ -17,6 +17,7 @@ DB=Path(os.environ.get("DASHBOARD_DB",REPO/"dashboard.sqlite3"))
 DEFAULTS={"websites_root":str(Path.home()/"websites"),"model":MODEL,"timeout":TIMEOUT_SECONDS,"parallelism":1,"max_posts":18,"captions":True,"headed":False,"attempts":3,"credentials":str(REPO/"config/creds.json"),"sheet_name":"websites","browser":"","sync_sheet":True}
 app=FastAPI(title="Studio",docs_url=None,redoc_url=None)
 events=[]; subscribers=set(); event_lock=threading.Lock(); job_lock=threading.Lock(); active_job=None
+revision_queue=queue.Queue(); revision_active=False; revision_pending=0
 def newest_batch():
     base=Path(DEFAULTS["websites_root"])
     dates=[]
@@ -177,7 +178,7 @@ def health_check():
 def queue_run(handles,batch,force,rescrape,scrape_only=False):
     global active_job
     with job_lock:
-        if active_job:raise HTTPException(409,"A queue is already running")
+        if active_job or revision_active or not revision_queue.empty():raise HTTPException(409,"A batch or revision is already running or queued")
         jid=str(uuid.uuid4());active_job={"id":jid,"batch":batch,"handles":handles,"started":time.time(),"cancel":None}
     threading.Thread(target=run_worker,args=(handles,batch,force,rescrape,scrape_only,jid),daemon=True).start();return {"job_id":jid,"handles":handles}
 
@@ -218,7 +219,7 @@ def run_worker(handles,batch,force,rescrape,scrape_only,jid):
             with connect() as d:d.execute("UPDATE leads SET name=CASE WHEN name='' THEN ? ELSE name END,phone=CASE WHEN phone='' THEN ? ELSE phone END,area=CASE WHEN area='' THEN ? ELSE area END,followers=?,site_path=?,qa=?,updated_at=CURRENT_TIMESTAMP WHERE batch=? AND handle=?",(name,phone,area,followers,site_path,qa,batch,current))
             return "skipped" if rc==2 or (rc==0 and scrape_only) else "built" if rc==0 else "failed"
         except Exception as e:emit(current,"failed",str(e),batch);return "failed"
-    workers=max(1,min(8,int(conf.get("parallelism",1))))
+    workers=1
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures=[pool.submit(build_one,h) for h in handles]
         for future in as_completed(futures):
@@ -241,7 +242,7 @@ def cancel():
 
 @app.get("/api/job")
 def job():
-    with job_lock:return {"active":bool(active_job),"id":active_job.get("id") if active_job else None,"handles":active_job.get("handles",[]) if active_job else []}
+    with job_lock:return {"active":bool(active_job or revision_active),"batch_active":bool(active_job),"id":active_job.get("id") if active_job else None,"handles":active_job.get("handles",[]) if active_job else [],"revision_active":revision_active,"revision_pending":revision_pending}
 
 @app.get("/api/events")
 def stream(request:Request):
@@ -346,16 +347,41 @@ def revision_worker(handle,batch,rid,text):
         backup=max(created,key=lambda p:p.stat().st_mtime) if created else None
         status="applied" if rc==0 else "failed"
         with connect() as d:d.execute("UPDATE revisions SET status=?,applied_at=CASE WHEN ?='applied' THEN CURRENT_TIMESTAMP ELSE applied_at END,backup_path=? WHERE id=?",(status,status,str(backup or ""),rid))
-    except Exception as e:emit(handle,"failed",str(e),batch)
+    except Exception as e:
+        with connect() as d:d.execute("UPDATE revisions SET status='failed' WHERE id=?",(rid,))
+        emit(handle,"failed",str(e),batch)
+    finally:
+        global revision_active,revision_pending
+        try: revision_queue.task_done()
+        except ValueError: pass
+        with job_lock:
+            revision_pending=max(0,revision_pending-1)
+            revision_active=revision_pending>0
+
+def revision_queue_worker():
+    global revision_active
+    while True:
+        handle,batch,rid,text=revision_queue.get()
+        revision_worker(handle,batch,rid,text)
+
+threading.Thread(target=revision_queue_worker,daemon=True).start()
 
 @app.post("/api/revision/{handle}/{rid}/apply")
 def apply_revision(handle:str,rid:int,batch:str|None=None):
+    global revision_active,revision_pending
     handle=clean_handle(handle);batch=clean_batch(batch or selected_batch)
     with job_lock:
-        if active_job and handle in active_job.get("handles",[]):raise HTTPException(409,"This lead is currently in the build queue")
+        if active_job:raise HTTPException(409,"Revisions are disabled while a batch is running")
     with connect() as d:r=d.execute("SELECT request FROM revisions WHERE id=? AND batch=? AND handle=?",(rid,batch,handle)).fetchone()
     if not r:raise HTTPException(404,"Revision not found")
-    threading.Thread(target=revision_worker,args=(handle,batch,rid,r["request"]),daemon=True).start();return {"started":True}
+    with job_lock:
+        if active_job:raise HTTPException(409,"Revisions are disabled while a batch is running")
+        revision_active=True
+        revision_pending+=1
+        revision_queue.put((handle,batch,rid,r["request"]))
+        position=revision_pending
+    emit(handle,"revision_queued",f"Revision queued · position {position}",batch)
+    return {"started":True,"queued":position>1,"position":position}
 
 @app.post("/api/revision/{handle}/{rid}/undo")
 def undo_revision(handle:str,rid:int,batch:str|None=None):
