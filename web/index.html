@@ -1165,6 +1165,16 @@
         border-color: #2b2f38;
         color: #eef0f4;
       }
+      .pbar button.record-button {
+        background: #c83f49;
+        border-color: #e65a63;
+        color: #fff;
+        font-weight: 700;
+      }
+      .pbar button.record-button:hover {
+        background: #dc4a55;
+        border-color: #f2757d;
+      }
       .pbar select {
         width: auto;
         padding: 5px 8px;
@@ -1831,11 +1841,11 @@
             <option value="40000000">Max</option>
           </select>
         </label>
-        <label><input type="checkbox" id="pauto" checked /> Auto-scroll</label>
+        <label><input type="checkbox" id="pauto" /> Auto-scroll</label>
         <button data-act="fullscreen" id="p-full"></button>
         <div class="spacer"></div>
         <span class="rec" id="rec"><i></i><span id="rectime">00:00</span></span>
-        <button data-act="record" id="p-rec"></button>
+        <button class="record-button" data-act="record" id="p-rec"></button>
       </div>
       <div class="pstage" id="pstage">
         <iframe id="pframe" title="Present"></iframe>
@@ -2283,6 +2293,8 @@
         $("#m-del").innerHTML = lab("trash", "Delete lead…");
         $("#p-exit").innerHTML = lab("back", "Exit");
         $("#p-full").innerHTML = lab("expand", "Fullscreen");
+        $("#p-rec").innerHTML = lab("rec", "Start recording");
+        $("#p-rec").setAttribute("aria-label", "Start recording");
       }
       async function loadLead(h, full) {
         try {
@@ -2730,7 +2742,8 @@
           cancelAnimationFrame(P.raf);
           clearInterval(P.timer);
           $("#rec").classList.remove("on");
-          $("#p-rec").innerHTML = lab("rec", "Record");
+          $("#p-rec").innerHTML = lab("rec", "Start recording");
+          $("#p-rec").setAttribute("aria-label", "Start recording");
           const type = P.rec.mimeType || "video/webm";
           const ext = type.includes("mp4") ? "mp4" : "webm";
           const a = document.createElement("a");
@@ -2745,7 +2758,8 @@
         P.rec.start(1000);
         P.t0 = Date.now();
         $("#rec").classList.add("on");
-        $("#p-rec").innerHTML = lab("stop", "Stop");
+        $("#p-rec").innerHTML = lab("stop", "Stop recording");
+        $("#p-rec").setAttribute("aria-label", "Stop recording");
         P.timer = setInterval(
           () => ($("#rectime").textContent = fmt(Date.now() - P.t0)),
           250,
