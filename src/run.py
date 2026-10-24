@@ -104,11 +104,13 @@ def process_account(user: str, root: Path, python: str, force: bool, logger: Log
     account = root / user
     data = account / f"{user}_data"
     site = account / "site"
+    scrape_only = options.get("scrape_only")
     import datetime as dt
     try:
         (account / "logs").mkdir(parents=True, exist_ok=True)
-        (site / "assets").mkdir(parents=True, exist_ok=True)
-        shutil.copy2(REPO / "prompts/SKILL.md", account / "SKILL.md")
+        if not scrape_only:
+            (site / "assets").mkdir(parents=True, exist_ok=True)
+            shutil.copy2(REPO / "prompts/SKILL.md", account / "SKILL.md")
     except OSError as exc:
         logger.log("ERROR", f"{user}: failed to prepare account files: {exc}")
         return 1
@@ -119,7 +121,7 @@ def process_account(user: str, root: Path, python: str, force: bool, logger: Log
         return 2
 
     backup = account / "backups" / f"site_before_build_{dt.datetime.now():%Y%m%d_%H%M%S}"
-    if site.exists():
+    if not scrape_only and site.exists():
         backup.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(site, backup)
     agy_log = account / "logs" / f"agy_{dt.datetime.now():%Y-%m-%d_%H%M}.log"
@@ -138,8 +140,23 @@ def process_account(user: str, root: Path, python: str, force: bool, logger: Log
         status("failed", "Scraper failed or was cancelled")
         logger.log("ERROR", f"{user}: scraper failed")
         return 1
-    if options.get("scrape_only"):
-        status("done", "Scrape complete")
+    sheet_command = [python_bin, str(REPO / "src/update_sheet.py"), str(data / "business_data.json"),
+                     "--credentials", str(options.get("credentials", REPO / "config/creds.json")),
+                     "--sheet-name", str(options.get("sheet_name", "websites"))]
+    if scrape_only:
+        summary_command = [python_bin, str(REPO / "src/profile_summary.py"),
+                           str(data / "profile_data.json"), str(data / "business_data.json")]
+        rc, _ = run_streaming(summary_command, REPO, logger, cancel_event=cancel_event)
+        if rc:
+            status("failed", "Profile summary extraction failed")
+            logger.log("ERROR", f"{user}: profile summary extraction failed")
+            return 1
+        rc, _ = run_streaming(sheet_command, REPO, logger, cancel_event=cancel_event)
+        if rc:
+            status("failed", "Google Sheets update failed")
+            logger.log("ERROR", f"{user}: Google Sheets update failed")
+            return 1
+        status("scraped", "Scrape complete; added to Google Sheet")
         return 0
     agy_bin = find_agy()
     if agy_bin is None:
@@ -222,9 +239,6 @@ def process_account(user: str, root: Path, python: str, force: bool, logger: Log
     size = index.stat().st_size
     logger.log("SUCCESS", f"{user}: done -> {index} ({size} bytes)")
     status("done", f"Built {index}")
-    sheet_command = [python_bin, str(REPO / "src/update_sheet.py"), str(data / "business_data.json"),
-                     "--credentials", str(options.get("credentials", REPO / "config/creds.json")),
-                     "--sheet-name", str(options.get("sheet_name", "websites"))]
     rc, _ = run_streaming(sheet_command, REPO, logger) if options.get("sync_sheet", True) else (0, False)
     if rc:
         logger.log("WARN", f"{user}: Google Sheets update failed; site build succeeded")

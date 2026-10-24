@@ -79,7 +79,7 @@ def emit(handle,status,line="",batch=None):
             except queue.Full:pass
     with connect() as d:
         d.execute("INSERT INTO logs(batch,handle,status,line) VALUES(?,?,?,?)",(item["batch"],handle,status,line))
-        if handle and status in {"queued","scraping","building","done","failed"}:
+        if handle and status in {"queued","scraping","building","scraped","done","failed"}:
             d.execute("UPDATE leads SET status=?,error=?,stage=CASE WHEN ?='done' AND stage='new' THEN 'built' ELSE stage END,updated_at=CURRENT_TIMESTAMP WHERE batch=? AND handle=?",(status,line if status=="failed" else "",status,item["batch"],handle))
 
 class Accounts(BaseModel): text:str; batch:str|None=None
@@ -190,11 +190,12 @@ def run_worker(handles,batch,force,rescrape,scrape_only,jid):
     with job_lock:
         if not active_job or active_job["id"]!=jid:return
         active_job["cancel"]=token
-    conf=settings();root=root_for(batch);counts={"built":0,"skipped":0,"failed":0}
+    conf=settings();root=root_for(batch);counts={"scraped":0,"failed":0} if scrape_only else {"built":0,"skipped":0,"failed":0}
     try:root.mkdir(parents=True,exist_ok=True)
     except Exception as exc:
         for h in handles:emit(h,"failed",str(exc),batch)
-        emit("","summary",json.dumps({"built":0,"skipped":0,"failed":len(handles)}),batch)
+        failure_counts={"scraped":0,"failed":len(handles)} if scrape_only else {"built":0,"skipped":0,"failed":len(handles)}
+        emit("","summary",json.dumps(failure_counts),batch)
         with job_lock:active_job=None
         return
     def build_one(current):
@@ -219,7 +220,7 @@ def run_worker(handles,batch,force,rescrape,scrape_only,jid):
             site_index=root/current/"site"/"index.html";site_path=str(site_index) if site_index.is_file() else ""
             qa="passed" if site_path and not validate_site(site_index.parent) else "pending"
             with connect() as d:d.execute("UPDATE leads SET name=CASE WHEN name='' THEN ? ELSE name END,phone=CASE WHEN phone='' THEN ? ELSE phone END,area=CASE WHEN area='' THEN ? ELSE area END,followers=?,site_path=?,qa=?,updated_at=CURRENT_TIMESTAMP WHERE batch=? AND handle=?",(name,phone,area,followers,site_path,qa,batch,current))
-            return "skipped" if rc==2 or (rc==0 and scrape_only) else "built" if rc==0 else "failed"
+            return "scraped" if rc==0 and scrape_only else "skipped" if rc==2 else "built" if rc==0 else "failed"
         except Exception as e:emit(current,"failed",str(e),batch);return "failed"
     workers=1
     with ThreadPoolExecutor(max_workers=workers) as pool:

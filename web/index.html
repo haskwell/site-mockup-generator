@@ -1496,6 +1496,13 @@
                     ></span
                   ></label
                 >
+                <label class="opt"
+                  ><input type="checkbox" id="scrape-only" /><span
+                    >Scrape only<small
+                      >Add accounts to Google Sheets without building websites</small
+                    ></span
+                  ></label
+                >
               </div>
               <div style="display: flex; gap: 8px; flex-wrap: wrap">
                 <button class="primary" data-act="run"></button>
@@ -1937,7 +1944,14 @@
         "won",
         "lost",
       ];
-      const STATUSES = ["queued", "scraping", "building", "done", "failed"];
+      const STATUSES = [
+        "queued",
+        "scraping",
+        "building",
+        "scraped",
+        "done",
+        "failed",
+      ];
       const S = {
         st: { leads: [], settings: {} },
         sel: "",
@@ -2229,13 +2243,15 @@
           (b) => (b.innerHTML = lab("play", "Run batch")),
         );
         const leads = S.st.leads || [];
-        const done = leads.filter((l) => l.status === "done").length,
+        const complete = leads.filter((l) =>
+          ["done", "scraped"].includes(l.status),
+        ).length,
           fail = leads.filter((l) => l.status === "failed").length;
         $("#runsummary").textContent = leads.length
-          ? `${done} built · ${fail} failed · ${leads.length - done - fail} in progress or queued`
+          ? `${complete} complete · ${fail} failed · ${leads.length - complete - fail} in progress or queued`
           : "No activity yet.";
         $("#runbar").style.width = leads.length
-          ? Math.round(((done + fail) / leads.length) * 100) + "%"
+          ? Math.round(((complete + fail) / leads.length) * 100) + "%"
           : "0%";
         $("#runs").innerHTML = leads
           .map((l) => {
@@ -2244,13 +2260,15 @@
               queued: 0,
               scraping: 1,
               building: 2,
+              scraped: 3,
               done: 3,
               failed: -1,
             };
             const n = order[s] ?? 0;
             const step = (i, t) =>
-              `<span class="step ${s === "failed" && i === Math.max(n, 0) ? "bad" : n > i || s === "done" ? "ok" : n === i ? "cur" : ""}">${t}</span>`;
-            return `<div class="run"><div><b>${esc(l.name || "@" + l.handle)}</b> <span class="muted">@${esc(l.handle)}</span><div class="track">${step(1, "Scrape")}${step(2, "Build")}${step(3, "Done")}</div></div><div><button class="sm" data-act="open" data-h="${esc(l.handle)}">Open</button></div></div>`;
+              `<span class="step ${s === "failed" && i === Math.max(n, 0) ? "bad" : n > i || ["done", "scraped"].includes(s) ? "ok" : n === i ? "cur" : ""}">${t}</span>`;
+            const step2 = $("#scrape-only").checked ? "Sheets" : "Build";
+            return `<div class="run"><div><b>${esc(l.name || "@" + l.handle)}</b> <span class="muted">@${esc(l.handle)}</span><div class="track">${step(1, "Scrape")}${step(2, step2)}${step(3, "Done")}</div></div><div><button class="sm" data-act="open" data-h="${esc(l.handle)}">Open</button></div></div>`;
           })
           .join("");
       }
@@ -2577,7 +2595,7 @@
         handles = [],
         force = $("#force").checked,
         rescrape = $("#rescrape").checked,
-        scrape_only = false,
+        scrape_only = S.view === "batch" && $("#scrape-only").checked,
       ) {
         try {
           if (S.view === "batch" || !handles.length) await saveAccounts(true);
@@ -3405,15 +3423,20 @@
           if (x.status === "summary") {
             try {
               const a = JSON.parse(x.line);
-              toast(
-                `Batch finished · ${a.built} built · ${a.skipped} skipped · ${a.failed} failed`,
-              );
+              const summary =
+                a.scraped === undefined
+                  ? `${a.built} built · ${a.skipped} skipped · ${a.failed} failed`
+                  : `${a.scraped} scraped · ${a.failed} failed`;
+              toast(`Batch finished · ${summary}`);
               if (
                 "Notification" in window &&
                 Notification.permission === "granted"
               )
                 new Notification("Studio batch complete", {
-                  body: `${a.built} built · ${a.failed} failed`,
+                  body:
+                    a.scraped === undefined
+                      ? `${a.built} built · ${a.failed} failed`
+                      : `${a.scraped} scraped · ${a.failed} failed`,
                 });
             } catch {}
           }

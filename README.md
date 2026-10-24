@@ -40,10 +40,13 @@ session log in `logs/`; full `agy` output is also stored per account.
 Start the local-only dashboard with `python app.py` and open
 `http://127.0.0.1:8765`. It stores leads, outreach fields, live logs, and
 revision history in `dashboard.sqlite3`. Select a batch date, paste or import
-account handles, then run builds and review sites in the embedded preview.
-Google Sheets sync is optional and runs after a successful build. The dashboard
-does not bind to the network; keep the URL local because it can launch a
-Playwright login window and run local build tools.
+account handles, then run builds and review sites in the embedded preview. The
+Batch screen's **Scrape only** option scrapes the accounts, extracts their
+business details, and adds or updates them in Google Sheets without building
+websites. This mode requires the configured Google Sheets credentials and
+spreadsheet. For regular builds, Google Sheets sync is optional and runs after
+a successful build. The dashboard does not bind to the network; keep the URL
+local because it can launch a Playwright login window and run local build tools.
 
 ## Revise existing sites
 
