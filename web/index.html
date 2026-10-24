@@ -3,109 +3,88 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width,initial-scale=1" />
-    <title>Studio · Site builder</title>
+    <title>Studio</title>
     <style>
       :root {
         color-scheme: dark;
-        --bg: #101114;
-        --panel: #191a1f;
-        --panel2: #202128;
-        --line: #30313a;
-        --muted: #9698a5;
-        --text: #f3f2f7;
-        --accent: var(--theme-accent, #d9ff73);
-        --purple: var(--theme-purple, #bba6ff);
-        --red: var(--theme-red, #ff877c);
-        --shadow: 0 18px 55px #0005;
-        --top: #141519e8;
-        --input: #121318;
-        --run: linear-gradient(120deg, #25242c, #191a1f 70%);
-        --table-head: #191a1f;
-        --table-line: #292a31;
-        --hover: #ffffff08;
-        --selection: color-mix(in srgb, var(--accent) 9%, transparent);
-        --chip: #ffffff0b;
-        --widths: #111216;
-        --width-active: #373842;
-        --frame: #303139;
-        --dialog: #1a1b21;
-        --dialog-line: #44454e;
-        --log: #111216;
-        --log-text: #b9bac4;
-        --revision-text: #c5c4ce;
+        --base-canvas: #0e0f12;
+        --base-panel: #15171b;
+        --float: #1d1f25;
+        --line: #2a2d35;
+        --line2: #363a44;
+        --text: #eef0f4;
+        --muted: #a0a6b3;
+        --accent: #d9ff73;
+        --on-accent: #14170a;
+        --info: #8fa8ff;
+        --danger: #ff7d72;
+        --shadow: 0 20px 60px #0007;
+        --hover: #ffffff0a;
+        --font:
+          Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+        --display:
+          "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+        --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        --canvas: color-mix(in srgb, var(--accent) 3%, var(--base-canvas));
+        --panel: color-mix(in srgb, var(--accent) 2%, var(--base-panel));
+        --r: 12px;
       }
       :root[data-theme="light"] {
         color-scheme: light;
-        --bg: #f3f4f7;
-        --panel: #ffffff;
-        --panel2: #f0f1f5;
-        --line: #d9dbe3;
-        --muted: #686b78;
-        --text: #20212a;
-        --accent: var(--theme-accent, #719900);
-        --purple: var(--theme-purple, #7557c7);
-        --red: var(--theme-red, #c83d35);
-        --shadow: 0 18px 55px #26304a16;
-        --top: #fffffff0;
-        --input: #ffffff;
-        --run: linear-gradient(120deg, #ffffff, #f0f1f5 70%);
-        --table-head: #f7f7fa;
-        --table-line: #e7e8ed;
-        --hover: #20212a08;
-        --selection: color-mix(in srgb, var(--accent) 10%, transparent);
-        --chip: #20212a0a;
-        --widths: #eceef2;
-        --width-active: #d8dbe3;
-        --frame: #e3e5eb;
-        --dialog: #ffffff;
-        --dialog-line: #d9dbe3;
-        --log: #f7f7fa;
-        --log-text: #424550;
-        --revision-text: #424550;
+        --base-canvas: #f2f3f6;
+        --base-panel: #ffffff;
+        --float: #ffffff;
+        --line: #e1e3ea;
+        --line2: #cfd2dc;
+        --text: #1d2029;
+        --muted: #5b6171;
+        --accent: #5f8500;
+        --on-accent: #fff;
+        --info: #4660d6;
+        --danger: #c8382e;
+        --shadow: 0 20px 60px #1f2a4a24;
+        --hover: #1d20290a;
       }
-      :root[data-palette="ocean"] { --theme-accent:#55d6d0; --theme-purple:#7eafff; --theme-red:#ef6f91; }
-      :root[data-palette="ocean"][data-theme="dark"] {
-        --bg:#0d171d; --panel:#14232b; --panel2:#1b3039; --line:#2b4650; --muted:#91aab3; --text:#e5f3f5; --top:#12212aee; --input:#101e25;
-        --run:linear-gradient(120deg,#1b3540,#14232b 70%); --table-head:#14232b; --table-line:#263c44; --hover:#d9ffff09; --selection:#55d6d01b; --chip:#d9ffff0b; --widths:#101e25; --width-active:#31505b; --frame:#263f49; --dialog:#14232b; --dialog-line:#2b4650; --log:#101e25; --log-text:#c1d3d8; --revision-text:#c1d3d8;
+      :root[data-palette="ocean"] {
+        --accent: #55d6d0;
+        --on-accent: #06201f;
       }
       :root[data-palette="ocean"][data-theme="light"] {
-        --bg:#edf7f8; --panel:#fff; --panel2:#e6f2f4; --line:#c5dfe3; --muted:#55727a; --text:#18343b; --top:#fffffff0; --input:#fff;
-        --run:linear-gradient(120deg,#fff,#e6f2f4 70%); --table-head:#f4fbfc; --table-line:#d8e9eb; --hover:#18343b08; --selection:#168d891a; --chip:#18343b0a; --widths:#e2eff1; --width-active:#c8e0e4; --frame:#d5e9ec; --dialog:#fff; --dialog-line:#c5dfe3; --log:#f4fbfc; --log-text:#36545c; --revision-text:#36545c;
+        --accent: #0f8a86;
+        --on-accent: #fff;
       }
-      :root[data-palette="plum"] { --theme-accent:#c7a0ff; --theme-purple:#dfb8ff; --theme-red:#ff8eaa; }
-      :root[data-palette="plum"][data-theme="dark"] {
-        --bg:#17121d; --panel:#211a2a; --panel2:#2d2338; --line:#453653; --muted:#b1a2bf; --text:#f4edf9; --top:#201827ee; --input:#1c1624;
-        --run:linear-gradient(120deg,#33253f,#211a2a 70%); --table-head:#211a2a; --table-line:#392e44; --hover:#fff8ff09; --selection:#c7a0ff1c; --chip:#fff8ff0b; --widths:#1c1624; --width-active:#4a385a; --frame:#382a43; --dialog:#211a2a; --dialog-line:#453653; --log:#1c1624; --log-text:#d2c5dc; --revision-text:#d2c5dc;
+      :root[data-palette="plum"] {
+        --accent: #c7a0ff;
+        --on-accent: #1b0d30;
       }
       :root[data-palette="plum"][data-theme="light"] {
-        --bg:#f6f1fa; --panel:#fff; --panel2:#f0e9f6; --line:#dfd1e9; --muted:#756580; --text:#30233a; --top:#fffffff0; --input:#fff;
-        --run:linear-gradient(120deg,#fff,#f0e9f6 70%); --table-head:#faf7fc; --table-line:#e9e1ef; --hover:#30233a08; --selection:#9660ce18; --chip:#30233a0a; --widths:#eee7f3; --width-active:#ded0e9; --frame:#e9e0ef; --dialog:#fff; --dialog-line:#dfd1e9; --log:#faf7fc; --log-text:#51445d; --revision-text:#51445d;
+        --accent: #7a4bc9;
+        --on-accent: #fff;
       }
-      :root[data-palette="ember"] { --theme-accent:#ffae68; --theme-purple:#e29bdb; --theme-red:#ed665d; }
-      :root[data-palette="ember"][data-theme="dark"] {
-        --bg:#1b1412; --panel:#281d19; --panel2:#382720; --line:#523a2d; --muted:#b9a095; --text:#fff1e6; --top:#251a16ee; --input:#211815;
-        --run:linear-gradient(120deg,#402a20,#281d19 70%); --table-head:#281d19; --table-line:#473127; --hover:#fff5ec09; --selection:#ffae681b; --chip:#fff5ec0b; --widths:#211815; --width-active:#5a3b2c; --frame:#49352b; --dialog:#281d19; --dialog-line:#523a2d; --log:#211815; --log-text:#dbc9bc; --revision-text:#dbc9bc;
+      :root[data-palette="ember"] {
+        --accent: #ffae68;
+        --on-accent: #2b1503;
       }
       :root[data-palette="ember"][data-theme="light"] {
-        --bg:#fbf3ed; --panel:#fff; --panel2:#f5e9df; --line:#e8d3c1; --muted:#806758; --text:#3d281d; --top:#fffffff0; --input:#fff;
-        --run:linear-gradient(120deg,#fff,#f5e9df 70%); --table-head:#fcf8f4; --table-line:#efe2d7; --hover:#3d281d08; --selection:#cf733019; --chip:#3d281d0a; --widths:#f2e6dc; --width-active:#e7d2c0; --frame:#eee0d3; --dialog:#fff; --dialog-line:#e8d3c1; --log:#fcf8f4; --log-text:#634a3b; --revision-text:#634a3b;
+        --accent: #c75f14;
+        --on-accent: #fff;
       }
       * {
         box-sizing: border-box;
       }
+      [hidden] {
+        display: none !important;
+      }
+      html,
+      body {
+        height: 100%;
+      }
       body {
         margin: 0;
-        background:
-          radial-gradient(ellipse at 20% -20%, #46405250, transparent 45%),
-          var(--bg);
+        background: var(--canvas);
         color: var(--text);
-        font:
-          14px/1.45 Inter,
-          ui-sans-serif,
-          system-ui,
-          -apple-system,
-          sans-serif;
-        min-height: 100vh;
+        font: 14px/1.5 var(--font);
+        -webkit-font-smoothing: antialiased;
       }
       button,
       input,
@@ -117,271 +96,269 @@
       button {
         cursor: pointer;
         border: 1px solid var(--line);
-        background: var(--panel2);
-        border-radius: 9px;
-        padding: 9px 13px;
-        transition: 0.16s;
+        background: var(--panel);
+        border-radius: 10px;
+        padding: 8px 13px;
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        transition:
+          background 0.15s,
+          border-color 0.15s,
+          transform 0.15s;
+        white-space: nowrap;
       }
       button:hover {
-        border-color: #73737d;
-        transform: translateY(-1px);
+        border-color: var(--line2);
+        background: color-mix(in srgb, var(--text) 5%, var(--panel));
+      }
+      button:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
       }
       button.primary {
         background: var(--accent);
         border-color: var(--accent);
-        color: #17190f;
-        font-weight: 750;
+        color: var(--on-accent);
+        font-weight: 700;
+      }
+      button.primary:hover {
+        filter: brightness(1.07);
       }
       button.ghost {
         background: transparent;
+        border-color: transparent;
       }
-      button.danger {
-        color: var(--red);
-      }
-      .icon {
-        font-size: 17px;
-        padding: 7px 10px;
-      }
-      .top {
-        height: 65px;
-        border-bottom: 1px solid var(--line);
-        display: flex;
-        align-items: center;
-        padding: 0 24px;
-        gap: 18px;
-        background: var(--top);
-        position: sticky;
-        top: 0;
-        z-index: 4;
-        backdrop-filter: blur(14px);
-      }
-      .brand {
-        font-weight: 800;
-        letter-spacing: -0.5px;
-        font-size: 18px;
-        display: flex;
-        gap: 10px;
-        align-items: center;
-      }
-      .mark {
-        width: 25px;
-        height: 25px;
-        background: var(--accent);
-        border-radius: 8px;
-        display: grid;
-        place-items: center;
-        color: #17190f;
-        font-weight: 900;
-      }
-      .crumb {
-        color: var(--muted);
-        border-left: 1px solid var(--line);
-        padding-left: 17px;
-      }
-      .topright {
-        margin-left: auto;
-        display: flex;
-        gap: 9px;
-        align-items: center;
-      }
-      .theme-switch {
-        display: inline-flex;
-        align-items: center;
-        gap: 7px;
-        padding: 6px 9px;
-        border: 1px solid var(--line);
-        border-radius: 999px;
-        background: var(--panel);
-        color: var(--muted);
-        font-size: 11px;
-      }
-      .theme-switch input {
-        appearance: none;
-        width: 30px;
-        height: 17px;
-        padding: 0;
-        margin: 0;
-        border: 0;
-        border-radius: 99px;
-        background: #747784;
-        position: relative;
-        cursor: pointer;
-        transition: background 0.18s;
-      }
-      .theme-switch input::before {
-        content: "";
-        position: absolute;
-        width: 13px;
-        height: 13px;
-        left: 2px;
-        top: 2px;
-        border-radius: 50%;
-        background: white;
-        transition: transform 0.18s;
-      }
-      .theme-switch input:checked { background: var(--accent); }
-      .theme-switch input:checked::before { transform: translateX(13px); }
-      .theme-switch input:focus-visible { outline: 2px solid var(--purple); outline-offset: 2px; }
-      .batch {
-        background: var(--panel);
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 8px 10px;
-      }
-      .wrap {
-        max-width: 1600px;
-        margin: auto;
-        padding: 21px 24px;
-      }
-      .runbox {
-        display: grid;
-        grid-template-columns: minmax(350px, 1fr) auto;
-        gap: 16px;
-        background: var(--run);
-        border: 1px solid var(--line);
-        border-radius: 14px;
-        padding: 15px;
-        margin-bottom: 18px;
-        box-shadow: var(--shadow);
-      }
-      textarea,
-      input,
-      select {
-        background: var(--input);
-        border: 1px solid var(--line);
-        border-radius: 8px;
-        padding: 10px 11px;
-        outline: none;
-      }
-      textarea:focus,
-      input:focus,
-      select:focus {
-        border-color: #8f83bd;
-      }
-      #accounts {
-        width: 100%;
-        resize: vertical;
-        min-height: 44px;
-        height: 48px;
-        font:
-          12px/1.5 ui-monospace,
-          monospace;
-      }
-      .runcontrols {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        justify-content: flex-end;
-        gap: 8px;
-      }
-      .toggle {
-        display: flex;
-        gap: 7px;
-        align-items: center;
-        color: var(--muted);
-        font-size: 12px;
-        white-space: nowrap;
-      }
-      .toggle input {
-        accent-color: var(--accent);
-      }
-      .layout {
-        display: grid;
-        grid-template-columns: minmax(340px, 450px) minmax(0, 1fr);
-        gap: 18px;
-        min-height: calc(100vh - 183px);
-      }
-      .panel {
-        background: var(--panel);
-        border: 1px solid var(--line);
-        border-radius: 14px;
-        overflow: hidden;
-      }
-      .panelhead {
-        height: 53px;
-        padding: 0 15px;
-        display: flex;
-        align-items: center;
-        gap: 9px;
-        border-bottom: 1px solid var(--line);
-      }
-      .panelhead h2 {
-        font-size: 13px;
-        letter-spacing: 0.02em;
-        margin: 0;
-        font-weight: 750;
-      }
-      .count {
-        color: var(--muted);
-        font-size: 12px;
-      }
-      .spacer {
-        flex: 1;
-      }
-      .search {
-        width: 145px;
-        padding: 7px 9px;
-        font-size: 12px;
-      }
-      .filter {
-        padding: 7px 8px;
-        font-size: 12px;
-      }
-      .tablewrap {
-        overflow: auto;
-        max-height: calc(100vh - 355px);
-      }
-      table {
-        border-collapse: collapse;
-        width: 100%;
-        font-size: 12px;
-      }
-      th {
-        text-align: left;
-        color: var(--muted);
-        font-weight: 600;
-        padding: 10px 12px;
-        position: sticky;
-        top: 0;
-        background: var(--table-head);
-        z-index: 1;
-      }
-      td {
-        padding: 11px 12px;
-        border-top: 1px solid var(--table-line);
-        white-space: nowrap;
-      }
-      tbody tr {
-        cursor: pointer;
-      }
-      tbody tr:hover {
+      button.ghost:hover {
         background: var(--hover);
       }
-      tbody tr.selected {
-        background: var(--selection);
-        box-shadow: inset 2px 0 var(--accent);
+      button.danger {
+        color: var(--danger);
       }
-      .handle {
-        font-weight: 700;
+      button.sm {
+        padding: 5px 9px;
+        font-size: 12px;
+        border-radius: 8px;
       }
-      .name {
-        max-width: 125px;
-        overflow: hidden;
-        text-overflow: ellipsis;
+      button.iconbtn {
+        padding: 8px;
+      }
+      :focus-visible {
+        outline: 2px solid var(--accent);
+        outline-offset: 2px;
+      }
+      input,
+      textarea,
+      select {
+        background: var(--base-panel);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 9px 11px;
+        outline: none;
+        width: 100%;
+      }
+      input:focus,
+      textarea:focus,
+      select:focus {
+        border-color: var(--accent);
+      }
+      input[type="checkbox"] {
+        width: auto;
+        accent-color: var(--accent);
+      }
+      svg.i {
+        width: 18px;
+        height: 18px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 1.8;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        flex: none;
       }
       .muted {
         color: var(--muted);
       }
+      .mono {
+        font-family: var(--mono);
+      }
+      .spacer {
+        flex: 1;
+      }
+
+      /* shell */
+      .app {
+        display: grid;
+        grid-template-columns: 76px 1fr;
+        height: 100vh;
+      }
+      .rail {
+        background: var(--panel);
+        border-right: 1px solid var(--line);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        padding: 14px 0;
+        gap: 6px;
+      }
+      .mark {
+        width: 38px;
+        height: 38px;
+        border-radius: 12px;
+        background: var(--accent);
+        color: var(--on-accent);
+        display: grid;
+        place-items: center;
+        font: 800 19px var(--display);
+        margin-bottom: 14px;
+      }
+      .rail button {
+        flex-direction: column;
+        gap: 3px;
+        width: 60px;
+        padding: 9px 0;
+        font-size: 11px;
+        background: transparent;
+        border-color: transparent;
+        color: var(--muted);
+      }
+      .rail button:hover {
+        background: var(--hover);
+        color: var(--text);
+      }
+      .rail button.active {
+        background: color-mix(in srgb, var(--accent) 14%, transparent);
+        color: var(--accent);
+      }
+      .main {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        height: 100vh;
+      }
+      .top {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 0 24px;
+        height: 64px;
+        border-bottom: 1px solid var(--line);
+        flex: none;
+      }
+      .top h1 {
+        font: 600 22px var(--display);
+        margin: 0;
+        letter-spacing: -0.01em;
+      }
+      .searchtrigger {
+        width: 260px;
+        justify-content: flex-start;
+        color: var(--muted);
+        background: var(--base-panel);
+      }
+      .kbd {
+        margin-left: auto;
+        font: 11px var(--mono);
+        border: 1px solid var(--line);
+        border-radius: 5px;
+        padding: 1px 6px;
+      }
+      .top input[type="date"] {
+        width: auto;
+        padding: 7px 10px;
+      }
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 6px 12px;
+        border-radius: 99px;
+        border: 1px solid var(--line);
+        font-size: 12px;
+        color: var(--muted);
+        background: var(--panel);
+      }
+      .dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--muted);
+      }
+      .pill.run .dot {
+        background: var(--info);
+        animation: pulse 1s infinite alternate;
+      }
+      @keyframes pulse {
+        to {
+          opacity: 0.3;
+          transform: scale(0.7);
+        }
+      }
+      .view {
+        flex: 1;
+        min-height: 0;
+        overflow: auto;
+        padding: 22px 24px;
+      }
+      .toolbar {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 16px;
+        flex-wrap: wrap;
+      }
+      .toolbar input.q {
+        width: 240px;
+      }
+      .chips {
+        display: flex;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .chip {
+        padding: 5px 11px;
+        border-radius: 99px;
+        font-size: 12px;
+        background: transparent;
+        border: 1px solid var(--line);
+        color: var(--muted);
+      }
+      .chip.on {
+        background: color-mix(in srgb, var(--accent) 16%, transparent);
+        border-color: var(--accent);
+        color: var(--accent);
+      }
+      .seg {
+        display: inline-flex;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 2px;
+        background: var(--base-panel);
+      }
+      .seg button {
+        border: 0;
+        background: transparent;
+        padding: 5px 9px;
+        border-radius: 8px;
+        color: var(--muted);
+      }
+      .seg button.on {
+        background: var(--float);
+        color: var(--text);
+        box-shadow: 0 1px 4px #0003;
+      }
+
+      /* status */
       .status {
         display: inline-flex;
         align-items: center;
         gap: 6px;
-        border-radius: 20px;
-        padding: 4px 8px;
-        font-size: 10px;
-        font-weight: 700;
-        background: var(--chip);
-        color: #b8bac5;
+        padding: 3px 9px;
+        border-radius: 99px;
+        font-size: 11px;
+        font-weight: 650;
+        background: color-mix(in srgb, var(--muted) 16%, transparent);
+        color: var(--muted);
       }
       .status:before {
         content: "";
@@ -392,573 +369,1258 @@
       }
       .status.done {
         color: var(--accent);
-        background: #d9ff7315;
+        background: color-mix(in srgb, var(--accent) 15%, transparent);
       }
+      .status.queued,
       .status.scraping,
-      .status.building,
-      .status.queued {
-        color: #c4afff;
-        background: #bba6ff17;
+      .status.building {
+        color: var(--info);
+        background: color-mix(in srgb, var(--info) 15%, transparent);
       }
-      .status.failed {
-        color: var(--red);
-        background: #ff877c17;
-      }
-      .pulse:before {
+      .status.scraping:before,
+      .status.building:before {
         animation: pulse 0.8s infinite alternate;
       }
-      @keyframes pulse {
-        to {
-          opacity: 0.25;
-          transform: scale(0.6);
-        }
+      .status.failed {
+        color: var(--danger);
+        background: color-mix(in srgb, var(--danger) 15%, transparent);
       }
-      .empty {
-        color: var(--muted);
-        text-align: center;
-        padding: 42px 16px;
-      }
-      .right {
-        display: grid;
-        grid-template-rows: minmax(330px, 1fr) auto auto;
-        gap: 14px;
-        min-width: 0;
-      }
-      .previewpanel {
+
+      /* due strip */
+      .due {
         display: flex;
-        flex-direction: column;
-        min-height: 390px;
+        gap: 8px;
+        align-items: center;
+        padding: 10px 14px;
+        border: 1px solid color-mix(in srgb, var(--accent) 40%, var(--line));
+        background: color-mix(in srgb, var(--accent) 8%, transparent);
+        border-radius: var(--r);
+        margin-bottom: 16px;
+        flex-wrap: wrap;
       }
-      .previewbar {
+      .due b {
+        color: var(--accent);
+      }
+
+      /* board */
+      .board {
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: minmax(250px, 1fr);
+        gap: 14px;
+        align-items: start;
+        min-width: max-content;
+      }
+      .col {
+        background: color-mix(in srgb, var(--text) 3%, transparent);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 10px;
+        min-height: 200px;
+        width: 270px;
+      }
+      .col.over {
+        border-color: var(--accent);
+        background: color-mix(in srgb, var(--accent) 7%, transparent);
+      }
+      .colhead {
         display: flex;
         align-items: center;
         gap: 8px;
-        padding: 10px 13px;
-        border-bottom: 1px solid var(--line);
-      }
-      .previewtitle {
+        padding: 4px 6px 10px;
         font-weight: 700;
-      }
-      .previewurl {
-        font:
-          11px ui-monospace,
-          monospace;
-        color: var(--muted);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-      }
-      .widths {
-        display: flex;
-        background: var(--widths);
-        padding: 3px;
-        border-radius: 8px;
-        gap: 2px;
-      }
-      .widths button {
-        border: 0;
-        background: transparent;
-        padding: 5px 9px;
-        font-size: 11px;
-        color: var(--muted);
-      }
-      .widths button.active {
-        background: var(--width-active);
-        color: var(--text);
-      }
-      .framearea {
-        flex: 1;
-        min-height: 300px;
-        background: var(--frame);
-        display: grid;
-        place-items: center;
-        padding: 14px;
-        overflow: auto;
-      }
-      .device {
-        width: 100%;
-        height: 100%;
-        min-height: 330px;
-        background: white;
-        box-shadow: 0 5px 30px #0008;
-        border-radius: 6px;
-        transition: width 0.2s;
-      }
-      .device.phone {
-        width: 390px;
-        height: 720px;
-        min-height: 330px;
-        border: 8px solid #08090c;
-        border-radius: 26px;
-      }
-      .device.tablet {
-        width: 820px;
-      }
-      .device iframe {
-        width: 100%;
-        height: 100%;
-        min-height: inherit;
-        border: 0;
-        background: white;
-        border-radius: inherit;
-      }
-      .previewempty {
-        color: #bbb;
-        font-size: 13px;
-      }
-      .toolrow {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 7px;
-        padding: 11px 13px;
-        border-top: 1px solid var(--line);
-      }
-      .toolrow button {
-        font-size: 11px;
-        padding: 7px 10px;
-      }
-      .editgrid {
-        display: grid;
-        grid-template-columns: repeat(4, minmax(0, 1fr));
-        gap: 8px;
-        padding: 12px;
-      }
-      .field {
-        display: flex;
-        flex-direction: column;
-        gap: 5px;
-        color: var(--muted);
-        font-size: 10px;
-      }
-      .field input,
-      .field select {
         font-size: 12px;
-        padding: 8px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: var(--muted);
       }
-      .editfooter {
-        display: flex;
-        gap: 8px;
-        padding: 0 12px 12px;
+      .colhead .n {
+        margin-left: auto;
+        font-weight: 500;
       }
-      .editfooter input {
-        flex: 1;
-      }
-      .extras {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 14px;
-      }
-      .subpanel {
+      .card {
         background: var(--panel);
         border: 1px solid var(--line);
         border-radius: 12px;
-        overflow: hidden;
+        padding: 12px;
+        margin-bottom: 9px;
+        cursor: pointer;
+        transition:
+          transform 0.15s,
+          border-color 0.15s,
+          box-shadow 0.15s;
       }
-      .subhead {
-        padding: 10px 13px;
-        border-bottom: 1px solid var(--line);
-        font-size: 12px;
-        font-weight: 700;
+      .card:hover {
+        border-color: var(--line2);
+        transform: translateY(-2px);
+        box-shadow: var(--shadow);
+      }
+      .card.dragging {
+        opacity: 0.4;
+      }
+      .card .row {
         display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      .avatar {
+        width: 38px;
+        height: 38px;
+        border-radius: 11px;
+        display: grid;
+        place-items: center;
+        font: 700 15px var(--display);
+        color: #fff;
+        flex: none;
+      }
+      .card .nm {
+        font-weight: 650;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .card .meta {
+        font-size: 12px;
+        color: var(--muted);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .card .foot {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 10px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .card .sel {
+        position: absolute;
+      }
+      .card.picked {
+        border-color: var(--accent);
+        box-shadow: 0 0 0 1px var(--accent);
+      }
+      .cardfail {
+        margin-top: 8px;
+        font-size: 12px;
+        color: var(--danger);
+        display: flex;
+        align-items: center;
         gap: 8px;
       }
-      .subbody {
-        padding: 11px 13px;
-      }
-      .revision {
+      table.list {
         width: 100%;
-        height: 65px;
-        resize: vertical;
+        border-collapse: collapse;
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        overflow: hidden;
+      }
+      table.list th {
+        text-align: left;
         font-size: 12px;
+        color: var(--muted);
+        padding: 11px 14px;
+        border-bottom: 1px solid var(--line);
+        font-weight: 600;
       }
-      .history {
-        max-height: 105px;
-        overflow: auto;
-        margin-top: 8px;
+      table.list td {
+        padding: 11px 14px;
+        border-top: 1px solid var(--line);
+        vertical-align: middle;
       }
-      .revitem {
+      table.list tbody tr {
+        cursor: pointer;
+      }
+      table.list tbody tr:hover {
+        background: var(--hover);
+      }
+      .empty {
+        text-align: center;
+        color: var(--muted);
+        padding: 60px 20px;
+      }
+      .empty h3 {
+        font: 600 20px var(--display);
+        color: var(--text);
+        margin: 0 0 6px;
+      }
+      .selbar {
+        position: fixed;
+        left: 50%;
+        bottom: 24px;
+        transform: translateX(-50%);
+        background: var(--float);
+        border: 1px solid var(--line2);
+        border-radius: 14px;
+        padding: 10px 12px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        box-shadow: var(--shadow);
+        z-index: 30;
+      }
+
+      /* batch */
+      .batchgrid {
+        display: grid;
+        grid-template-columns: minmax(300px, 420px) 1fr;
+        gap: 20px;
+        align-items: start;
+      }
+      .card2 {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 16px;
+      }
+      .card2 h2 {
+        font: 600 18px var(--display);
+        margin: 0 0 4px;
+      }
+      .card2 textarea {
+        min-height: 240px;
+        font: 12.5px/1.6 var(--mono);
+        resize: vertical;
+      }
+      .opts {
+        display: flex;
+        flex-direction: column;
+        gap: 9px;
+        margin: 14px 0;
+      }
+      .opt {
+        display: flex;
+        gap: 9px;
+        align-items: flex-start;
+        font-size: 13px;
+      }
+      .opt small {
+        display: block;
+        color: var(--muted);
+      }
+      .bar {
+        height: 8px;
+        border-radius: 99px;
+        background: var(--line);
+        overflow: hidden;
+        margin: 10px 0 14px;
+      }
+      .bar i {
+        display: block;
+        height: 100%;
+        background: var(--accent);
+        width: 0;
+        transition: width 0.4s;
+      }
+      .run {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 6px 14px;
+        align-items: center;
+        padding: 11px 0;
+        border-top: 1px solid var(--line);
+      }
+      .track {
         display: flex;
         gap: 6px;
         align-items: center;
-        border-top: 1px solid #ffffff0c;
-        padding: 7px 0;
         font-size: 11px;
+        color: var(--muted);
       }
-      .revtext {
-        flex: 1;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
-        color: var(--revision-text);
-      }
-      .photos {
+      .step {
         display: flex;
-        gap: 7px;
-        overflow: auto;
-        padding: 0 0 7px;
+        align-items: center;
+        gap: 5px;
       }
-      .photo {
-        width: 62px;
-        height: 62px;
-        object-fit: cover;
-        border-radius: 7px;
-        border: 1px solid var(--line);
-        flex: none;
+      .step:before {
+        content: "";
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        border: 2px solid var(--line2);
       }
-      .logpanel {
-        border-top: 1px solid var(--line);
-        background: var(--log);
+      .step.ok {
+        color: var(--text);
       }
-      .logsummary {
-        padding: 9px 13px;
+      .step.ok:before {
+        background: var(--accent);
+        border-color: var(--accent);
+      }
+      .step.cur {
+        color: var(--info);
+      }
+      .step.cur:before {
+        border-color: var(--info);
+        animation: pulse 0.8s infinite alternate;
+      }
+      .step.bad {
+        color: var(--danger);
+      }
+      .step.bad:before {
+        background: var(--danger);
+        border-color: var(--danger);
+      }
+      .step + .step {
+        margin-left: 6px;
+      }
+      details.logs summary {
         cursor: pointer;
         color: var(--muted);
-        font-size: 11px;
+        font-size: 12px;
+        margin-top: 6px;
       }
-      .logs {
-        height: 145px;
+      .logbox {
+        height: 190px;
         overflow: auto;
-        padding: 0 13px 12px;
-        font:
-          10px/1.65 ui-monospace,
-          monospace;
-        color: var(--log-text);
+        background: var(--base-canvas);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px;
+        font: 11px/1.7 var(--mono);
+        margin-top: 8px;
       }
       .logline {
         white-space: pre-wrap;
         overflow-wrap: anywhere;
       }
-      .logtime {
-        color: #747682;
+
+      /* settings */
+      .sgrid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+        gap: 14px;
       }
-      .modal {
-        display: none;
+      .field {
+        display: flex;
+        flex-direction: column;
+        gap: 5px;
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .swatches {
+        display: flex;
+        gap: 10px;
+        margin-top: 4px;
+      }
+      .sw {
+        width: 54px;
+        height: 54px;
+        border-radius: 14px;
+        border: 2px solid var(--line);
+        padding: 0;
+        position: relative;
+        display: grid;
+        place-items: center;
+        font-size: 10px;
+        font-weight: 700;
+      }
+      .sw.on {
+        border-color: var(--text);
+      }
+      .sec {
+        margin-bottom: 22px;
+      }
+      .sec > h2 {
+        font: 600 18px var(--display);
+        margin: 0 0 12px;
+      }
+
+      /* studio */
+      .studio {
         position: fixed;
         inset: 0;
-        background: #0009;
-        z-index: 10;
-        place-items: center;
-        padding: 20px;
+        background: var(--canvas);
+        z-index: 40;
+        display: flex;
+        flex-direction: column;
+        animation: fade 0.18s;
       }
-      .modal.open {
+      @keyframes fade {
+        from {
+          opacity: 0;
+          transform: translateY(8px);
+        }
+      }
+      .shead {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 0 18px;
+        height: 64px;
+        border-bottom: 1px solid var(--line);
+        flex: none;
+      }
+      .titleinput {
+        font: 600 22px var(--display);
+        background: transparent;
+        border: 1px solid transparent;
+        padding: 2px 8px;
+        border-radius: 8px;
+        width: min(320px, 30vw);
+      }
+      .titleinput:hover {
+        border-color: var(--line);
+      }
+      .ssub {
+        font-size: 12px;
+        color: var(--muted);
+        padding-left: 8px;
+      }
+      .strip {
+        display: flex;
+        list-style: none;
+        margin: 0 0 0 8px;
+        padding: 0;
+        gap: 4px;
+      }
+      .strip li button {
+        font-size: 12px;
+        padding: 5px 11px;
+        border-radius: 99px;
+        background: transparent;
+        border: 1px solid var(--line);
+        color: var(--muted);
+      }
+      .strip li button.ok {
+        color: var(--accent);
+        border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+      }
+      .strip li button.next {
+        background: color-mix(in srgb, var(--accent) 14%, transparent);
+        color: var(--text);
+        border-color: var(--accent);
+      }
+      .saved {
+        font-size: 12px;
+        color: var(--muted);
+        opacity: 0;
+        transition: opacity 0.3s;
+      }
+      .saved.show {
+        opacity: 1;
+        color: var(--accent);
+      }
+      .sbody {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+      }
+      .stagewrap {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .stagebar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 16px;
+      }
+      .previewurl {
+        font: 11px var(--mono);
+        color: var(--muted);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        max-width: 36vw;
+      }
+      .stage {
+        flex: 1;
+        min-height: 0;
         display: grid;
-      }
-      .dialog {
-        width: min(720px, 100%);
-        max-height: 90vh;
+        place-items: center;
+        padding: 0 16px 16px;
         overflow: auto;
-        background: var(--dialog);
-        border: 1px solid var(--dialog-line);
-        border-radius: 16px;
+        background: transparent;
+      }
+      .device {
+        width: 100%;
+        height: 100%;
+        background: #fff;
+        border-radius: 10px;
         box-shadow: var(--shadow);
-        padding: 18px;
+        overflow: hidden;
+        transition: width 0.25s;
+        border: 1px solid var(--line);
       }
-      .dialog h2 {
-        margin: 0 0 15px;
-        font-size: 17px;
+      .device.tablet {
+        width: 820px;
+        max-width: 100%;
       }
-      .settingsgrid {
+      .device.phone {
+        width: 390px;
+        height: min(100%, 780px);
+        border: 8px solid #08090c;
+        border-radius: 30px;
+      }
+      .device iframe {
+        width: 100%;
+        height: 100%;
+        border: 0;
+        background: #fff;
+        display: block;
+      }
+      .noside .side {
+        display: none;
+      }
+      .side {
+        width: 380px;
+        border-left: 1px solid var(--line);
+        background: var(--panel);
+        display: flex;
+        flex-direction: column;
+        flex: none;
+      }
+      .tabs {
+        display: flex;
+        padding: 0 10px;
+        border-bottom: 1px solid var(--line);
+      }
+      .tabs button {
+        border: 0;
+        border-bottom: 2px solid transparent;
+        border-radius: 0;
+        background: transparent;
+        padding: 14px 11px;
+        color: var(--muted);
+      }
+      .tabs button.on {
+        color: var(--text);
+        border-bottom-color: var(--accent);
+      }
+      .pane {
+        padding: 16px;
+        overflow: auto;
+        flex: 1;
+      }
+      .pane .field {
+        margin-bottom: 13px;
+      }
+      .pane .two {
         display: grid;
         grid-template-columns: 1fr 1fr;
         gap: 12px;
       }
-      .authbox {
-        margin-top: 15px;
-        padding: 12px;
-        background: var(--input);
-        border-radius: 10px;
-        font-size: 12px;
-        color: var(--muted);
+      .photogrid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 8px;
       }
-      .actions {
+      .tile {
+        position: relative;
+        aspect-ratio: 1;
+        border-radius: 10px;
+        overflow: hidden;
+        border: 2px solid transparent;
+        cursor: pointer;
+        padding: 0;
+        background: var(--line);
+      }
+      .tile img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        display: block;
+        opacity: 0.45;
+        transition: opacity 0.15s;
+      }
+      .tile.on {
+        border-color: var(--accent);
+      }
+      .tile.on img {
+        opacity: 1;
+      }
+      .tile .tick {
+        position: absolute;
+        right: 6px;
+        top: 6px;
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        background: var(--accent);
+        color: var(--on-accent);
+        display: none;
+        place-items: center;
+      }
+      .tile.on .tick {
+        display: grid;
+      }
+      .tile .tick svg {
+        width: 13px;
+        height: 13px;
+        stroke-width: 3;
+      }
+      .thread {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+      .rev {
+        background: var(--base-canvas);
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 10px 12px;
+        font-size: 13px;
+      }
+      .rev .rh {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        margin-top: 8px;
+      }
+      .biobox {
+        font-size: 13px;
+        color: var(--muted);
+        background: var(--base-canvas);
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 10px;
+        margin-top: 12px;
+      }
+      pre.design {
+        white-space: pre-wrap;
+        font: 12px/1.65 var(--mono);
+        color: var(--muted);
+        margin: 0;
+      }
+      .menu {
+        position: relative;
+      }
+      .menulist {
+        position: absolute;
+        right: 0;
+        top: calc(100% + 6px);
+        background: var(--float);
+        border: 1px solid var(--line2);
+        border-radius: 12px;
+        padding: 6px;
+        min-width: 200px;
+        box-shadow: var(--shadow);
+        z-index: 5;
+      }
+      .menulist button {
+        width: 100%;
+        border: 0;
+        background: transparent;
+        border-radius: 8px;
+      }
+      .menulist button:hover {
+        background: var(--hover);
+      }
+
+      /* present */
+      .present {
+        position: fixed;
+        inset: 0;
+        z-index: 60;
+        background: #050608;
+        display: flex;
+        flex-direction: column;
+      }
+      .pbar {
+        height: 52px;
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 14px;
+        background: #101216;
+        border-bottom: 1px solid #23262d;
+        color: #eef0f4;
+      }
+      .pbar button {
+        background: #1a1d23;
+        border-color: #2b2f38;
+        color: #eef0f4;
+      }
+      .pbar select {
+        width: auto;
+        padding: 5px 8px;
+        background: #1a1d23;
+        border-color: #2b2f38;
+        color: #eef0f4;
+      }
+      .pbar label {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        font-size: 12px;
+        color: #a0a6b3;
+      }
+      .pbar .seg {
+        background: #1a1d23;
+        border-color: #2b2f38;
+      }
+      .pbar .seg button {
+        background: transparent;
+        border: 0;
+        color: #a0a6b3;
+      }
+      .pbar .seg button.on {
+        background: #2b2f38;
+        color: #fff;
+      }
+      .rec {
+        display: none;
+        align-items: center;
+        gap: 8px;
+        font: 600 13px var(--mono);
+        color: #ff6b6b;
+      }
+      .rec.on {
+        display: flex;
+      }
+      .rec i {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #ff4a4a;
+        animation: pulse 0.7s infinite alternate;
+      }
+      .pstage {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        justify-content: center;
+        background: #050608;
+        position: relative;
+      }
+      .pstage iframe {
+        height: 100%;
+        width: 100%;
+        border: 0;
+        background: #fff;
+        display: block;
+      }
+      .pstage.tablet iframe {
+        width: 820px;
+        max-width: 100%;
+      }
+      .pstage.phone iframe {
+        width: 390px;
+      }
+      .countdown {
+        position: absolute;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        font: 700 160px var(--display);
+        color: #fff;
+        text-shadow: 0 8px 40px #000;
+        pointer-events: none;
+        background: #0006;
+      }
+
+      /* palette, dialog, toast */
+      .overlay {
+        position: fixed;
+        inset: 0;
+        background: #000a;
+        z-index: 80;
+        display: grid;
+        place-items: start center;
+        padding: 14vh 16px 16px;
+      }
+      .overlay.center {
+        place-items: center;
+        padding: 16px;
+      }
+      .dialog {
+        background: var(--float);
+        border: 1px solid var(--line2);
+        border-radius: 16px;
+        box-shadow: var(--shadow);
+        width: min(560px, 100%);
+        overflow: hidden;
+      }
+      .dialog .body {
+        padding: 20px;
+      }
+      .dialog h2 {
+        font: 600 20px var(--display);
+        margin: 0 0 8px;
+      }
+      .dialog .actions {
         display: flex;
         gap: 8px;
         justify-content: flex-end;
-        margin-top: 18px;
+        padding: 0 20px 20px;
+        flex-wrap: wrap;
+      }
+      .pal input {
+        border: 0;
+        border-bottom: 1px solid var(--line);
+        border-radius: 0;
+        padding: 16px 18px;
+        font-size: 16px;
+        background: transparent;
+      }
+      .pal ul {
+        list-style: none;
+        margin: 0;
+        padding: 6px;
+        max-height: 50vh;
+        overflow: auto;
+      }
+      .pal li {
+        padding: 10px 12px;
+        border-radius: 9px;
+        cursor: pointer;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      .pal li.on {
+        background: color-mix(in srgb, var(--accent) 14%, transparent);
+      }
+      .pal li small {
+        margin-left: auto;
+        color: var(--muted);
+      }
+      .toasts {
+        position: fixed;
+        right: 20px;
+        bottom: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        z-index: 100;
       }
       .toast {
-        position: fixed;
-        right: 22px;
-        bottom: 20px;
-        background: #292a32;
-        border: 1px solid #565761;
-        border-radius: 9px;
-        padding: 11px 14px;
-        z-index: 12;
+        background: var(--float);
+        border: 1px solid var(--line2);
+        border-radius: 11px;
+        padding: 11px 15px;
         box-shadow: var(--shadow);
-        opacity: 0;
-        transform: translateY(10px);
-        transition: 0.2s;
-        pointer-events: none;
+        animation: fade 0.2s;
       }
-      .toast.show {
-        opacity: 1;
-        transform: translateY(0);
-      }
-      .split {
-        display: flex;
-        align-items: center;
-        gap: 7px;
-      }
-      .kbd {
-        border: 1px solid #444;
-        padding: 1px 5px;
-        border-radius: 4px;
-        color: #999;
-        font: 10px ui-monospace;
-      }
-      @media (max-width: 1050px) {
-        .layout {
-          grid-template-columns: 330px minmax(0, 1fr);
+
+      @media (max-width: 900px) {
+        .app {
+          grid-template-columns: 1fr;
+          grid-template-rows: 1fr 62px;
         }
-        .editgrid {
-          grid-template-columns: repeat(2, 1fr);
+        .rail {
+          order: 2;
+          flex-direction: row;
+          justify-content: space-around;
+          border-right: 0;
+          border-top: 1px solid var(--line);
+          padding: 4px;
         }
-        .runbox {
+        .mark {
+          display: none;
+        }
+        .main {
+          height: auto;
+          overflow: hidden;
+        }
+        .searchtrigger {
+          display: none;
+        }
+        .batchgrid {
           grid-template-columns: 1fr;
         }
-        .runcontrols {
-          justify-content: flex-start;
+        .sbody {
+          flex-direction: column;
         }
-      }
-      @media (max-width: 760px) {
+        .side {
+          width: 100%;
+          height: 46%;
+          border-left: 0;
+          border-top: 1px solid var(--line);
+        }
+        .strip {
+          display: none;
+        }
         .top {
-          padding: 0 13px;
+          padding: 0 14px;
         }
-        .crumb {
-          display: none;
-        }
-        .wrap {
-          padding: 12px;
-        }
-        .layout {
-          grid-template-columns: 1fr;
-        }
-        .left {
-          min-height: 260px;
-        }
-        .tablewrap {
-          max-height: 300px;
-        }
-        .right {
-          grid-row: 1;
-        }
-        .previewpanel {
-          min-height: 370px;
-        }
-        .extras {
-          grid-template-columns: 1fr;
-        }
-        .runbox {
-          padding: 11px;
-        }
-        .runcontrols {
-          justify-content: flex-start;
-        }
-        .batch {
-          max-width: 125px;
-        }
-        .topright button span {
-          display: none;
-        }
-        .editgrid {
-          grid-template-columns: repeat(2, 1fr);
+        .view {
+          padding: 14px;
         }
       }
-      .previewpanel {
-        min-height: 680px;
-      }
-      .framearea {
-        min-height: 580px;
-      }
-      .device:not(.phone):not(.tablet) {
-        height: min(72vh, 820px);
-        min-height: 580px;
-        flex: none;
-      }
-      .device.tablet {
-        width: min(820px, 100%);
-        height: min(78vh, 980px);
-        min-height: 580px;
-        flex: none;
-      }
-      @media (max-width: 760px) {
-        .previewpanel {
-          min-height: 390px;
-        }
-        .framearea {
-          min-height: 300px;
-        }
-        .device:not(.phone):not(.tablet),
-        .device.tablet {
-          height: 100%;
-          min-height: 330px;
+      @media (prefers-reduced-motion: reduce) {
+        * {
+          animation: none !important;
+          transition: none !important;
         }
       }
     </style>
   </head>
   <body>
-    <header class="top">
-      <div class="brand"><span class="mark">S</span>studio</div>
-      <div class="crumb">Instagram → sites</div>
-      <div class="topright">
-        <span class="muted" id="jobstate">● Ready</span
-        ><label class="theme-switch" title="Switch between light and dark themes">
-          <span aria-hidden="true">☀</span>
-          <input id="themeToggle" type="checkbox" role="switch" aria-label="Use light theme" />
-          <span aria-hidden="true">☾</span>
-        </label><input
-          id="batch"
-          class="batch"
-          type="date"
-          title="Batch date"
-        /><button class="ghost" onclick="openSettings()">
-          ⚙ <span>Settings</span>
-        </button>
-      </div>
-    </header>
-    <main class="wrap">
-      <section class="runbox">
-        <div>
-          <textarea
-            id="accounts"
-            placeholder="Paste Instagram handles or profile URLs, one per line. Use # for comments"
-          ></textarea>
-          <div class="muted" style="font-size: 10px; margin: 4px 2px 0">
-            Account list · one profile per line
-          </div>
-        </div>
-        <div class="runcontrols">
-          <label class="toggle"
-            ><input type="checkbox" id="force" /> Force rebuild</label
-          ><label class="toggle"
-            ><input type="checkbox" id="rescrape" /> Re-scrape</label
-          ><button onclick="saveAccounts()">Save list</button
-          ><label
-            ><input
-              type="file"
-              id="importfile"
-              accept="text/plain"
-              hidden
-              onchange="importAccounts(event)"
-            /><button onclick="document.querySelector('#importfile').click()">
-              Import
-            </button></label
-          ><button onclick="location.href = '/api/accounts/export'">
-            Export</button
-          ><button class="primary" onclick="runBuild()">▶ Run batch</button
-          ><button
-            id="cancel"
-            class="danger"
-            style="display: none"
-            onclick="cancelJob()"
-          >
-            Cancel
+    <div class="app">
+      <nav class="rail" aria-label="Main">
+        <div class="mark">S</div>
+        <button
+          data-act="view"
+          data-v="pipeline"
+          id="nav-pipeline"
+          aria-label="Pipeline"
+        ></button>
+        <button
+          data-act="view"
+          data-v="batch"
+          id="nav-batch"
+          aria-label="Batch"
+        ></button>
+        <div class="spacer"></div>
+        <button
+          data-act="theme"
+          id="nav-theme"
+          aria-label="Toggle theme"
+        ></button>
+        <button
+          data-act="view"
+          data-v="settings"
+          id="nav-settings"
+          aria-label="Settings"
+        ></button>
+      </nav>
+      <div class="main">
+        <header class="top">
+          <h1 id="viewtitle">Pipeline</h1>
+          <div class="spacer"></div>
+          <button class="searchtrigger" data-act="palette">
+            <span id="ic-search"></span> Search or run a command
+            <span class="kbd">Ctrl K</span>
           </button>
-        </div>
-      </section>
-      <section class="layout">
-        <section class="panel left">
-          <div class="panelhead">
-            <h2>LEADS</h2>
-            <span class="count" id="leadcount">0 profiles</span>
-            <div class="spacer"></div>
+          <input
+            id="batch"
+            type="date"
+            title="Batch date"
+            aria-label="Batch date"
+          />
+          <span class="pill" id="jobpill"
+            ><span class="dot"></span><span id="jobtext">Ready</span></span
+          >
+        </header>
+
+        <section class="view" id="view-pipeline">
+          <div class="due" id="due" hidden></div>
+          <div class="toolbar">
             <input
-              class="search"
-              id="search"
-              placeholder="⌕ Search"
-              oninput="renderLeads()"
-            /><select class="filter" id="statusfilter" onchange="renderLeads()">
-              <option value="">All status</option>
-              <option>queued</option>
-              <option>scraping</option>
-              <option>building</option>
-              <option>done</option>
-              <option>failed</option>
-            </select>
+              class="q"
+              id="q"
+              placeholder="Filter leads…"
+              aria-label="Filter leads"
+            />
+            <div class="chips" id="statuschips"></div>
+            <div class="spacer"></div>
+            <button class="sm" data-act="selmode" id="selbtn">Select</button>
+            <div class="seg" role="group" aria-label="Layout">
+              <button
+                data-act="layout"
+                data-l="board"
+                id="lay-board"
+                aria-label="Board"
+              ></button>
+              <button
+                data-act="layout"
+                data-l="list"
+                id="lay-list"
+                aria-label="List"
+              ></button>
+            </div>
           </div>
-          <div class="tablewrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>STATUS</th>
-                  <th>LEAD</th>
-                  <th>AREA</th>
-                  <th>PHONE</th>
-                </tr>
-              </thead>
-              <tbody id="leadrows"></tbody>
-            </table>
-            <div id="empty" class="empty">
-              Add accounts above to start your batch.
+          <div id="pipeline"></div>
+        </section>
+
+        <section class="view" id="view-batch" hidden>
+          <div class="batchgrid">
+            <div class="card2">
+              <h2>Accounts</h2>
+              <div class="muted" style="font-size: 12px; margin-bottom: 10px">
+                One Instagram handle or profile URL per line. Use # for
+                comments.
+              </div>
+              <textarea
+                id="accounts"
+                placeholder="@handle&#10;https://instagram.com/handle&#10;# comment"
+                spellcheck="false"
+              ></textarea>
+              <div class="opts">
+                <label class="opt"
+                  ><input type="checkbox" id="force" /><span
+                    >Force rebuild<small
+                      >Rebuild sites that already exist</small
+                    ></span
+                  ></label
+                >
+                <label class="opt"
+                  ><input type="checkbox" id="rescrape" /><span
+                    >Re-scrape<small
+                      >Fetch fresh Instagram data first</small
+                    ></span
+                  ></label
+                >
+              </div>
+              <div style="display: flex; gap: 8px; flex-wrap: wrap">
+                <button class="primary" data-act="run"></button>
+                <button data-act="saveAccounts">Save list</button>
+                <button class="danger" id="cancel" data-act="cancel" hidden>
+                  Cancel run
+                </button>
+              </div>
+              <div
+                style="
+                  display: flex;
+                  gap: 8px;
+                  margin-top: 12px;
+                  flex-wrap: wrap;
+                "
+              >
+                <button class="sm ghost" data-act="importPick">
+                  Import .txt
+                </button>
+                <button class="sm ghost" data-act="exportAccounts">
+                  Export list
+                </button>
+                <input type="file" id="importfile" accept="text/plain" hidden />
+              </div>
+            </div>
+            <div class="card2">
+              <h2>Live run</h2>
+              <div class="muted" id="runsummary" style="font-size: 13px">
+                No activity yet.
+              </div>
+              <div class="bar"><i id="runbar"></i></div>
+              <div id="runs"></div>
+              <details class="logs">
+                <summary>Show details</summary>
+                <div style="text-align: right">
+                  <button class="sm ghost" data-act="clearLogs">Clear</button>
+                </div>
+                <div class="logbox" id="logs"></div>
+              </details>
             </div>
           </div>
         </section>
-        <section class="right">
-          <section class="panel previewpanel">
-            <div class="previewbar">
-              <span class="previewtitle" id="previewtitle">Site preview</span
-              ><span class="previewurl" id="previewurl"></span>
-              <div class="spacer"></div>
-              <div class="widths">
-                <button data-size="phone" onclick="setWidth('phone')">
-                  Phone</button
-                ><button data-size="tablet" onclick="setWidth('tablet')">
-                  Tablet</button
-                ><button
-                  data-size="desktop"
-                  class="active"
-                  onclick="setWidth('desktop')"
-                >
-                  Desktop
-                </button>
-              </div>
-              <button
-                class="icon"
-                title="Open preview in new tab"
-                onclick="openPreview()"
+
+        <section class="view" id="view-settings" hidden>
+          <div class="sec">
+            <h2>Appearance</h2>
+            <div class="field">Color palette</div>
+            <div class="swatches" id="swatches"></div>
+          </div>
+          <div class="sec">
+            <h2>Workspace</h2>
+            <div class="sgrid">
+              <label class="field">Websites root<input id="sroot" /></label>
+              <label class="field">agy model<input id="smodel" /></label>
+              <label class="field"
+                >Timeout (seconds)<input id="stimeout" type="number"
+              /></label>
+              <label class="field"
+                >Parallel builds<input
+                  id="sparallel"
+                  type="number"
+                  min="1"
+                  max="8"
+              /></label>
+              <label class="field"
+                >Maximum posts<input id="sposts" type="number" min="1" max="60"
+              /></label>
+              <label class="field"
+                >Retry attempts<input
+                  id="sattempts"
+                  type="number"
+                  min="1"
+                  max="5"
+              /></label>
+              <label class="field"
+                >Google Sheet name<input id="ssheet"
+              /></label>
+              <label class="field"
+                >Credentials JSON path<input id="screds"
+              /></label>
+              <label class="field"
+                >Preferred browser command<input id="sbrowser"
+              /></label>
+            </div>
+            <div
+              style="
+                display: flex;
+                gap: 22px;
+                flex-wrap: wrap;
+                margin-top: 14px;
+              "
+            >
+              <label class="opt"
+                ><input id="scaptions" type="checkbox" /> Fetch post
+                captions</label
               >
-                ↗
+              <label class="opt"
+                ><input id="sheaded" type="checkbox" /> Show scraper
+                browser</label
+              >
+              <label class="opt"
+                ><input id="ssync" type="checkbox" /> Sync Google Sheets after
+                build</label
+              >
+            </div>
+            <div style="margin-top: 16px">
+              <button class="primary" data-act="saveSettings">
+                Save settings
               </button>
             </div>
-            <div class="framearea">
-              <div id="device" class="device">
-                <iframe
-                  id="preview"
-                  title="Generated site preview"
-                  hidden
-                ></iframe>
-                <div id="previewempty" class="previewempty">
-                  Select a lead to inspect its site.
-                </div>
+          </div>
+          <div class="sec">
+            <h2>Instagram session</h2>
+            <div class="muted" style="margin-bottom: 10px">
+              Status: <b id="authstate" style="color: var(--text)">checking…</b>
+            </div>
+            <div
+              style="
+                display: flex;
+                gap: 8px;
+                flex-wrap: wrap;
+                align-items: center;
+              "
+            >
+              <button data-act="login">Log in / refresh session</button>
+              <button class="danger" data-act="clearAuth">Clear session</button>
+              <button data-act="health">Health check</button>
+              <button data-act="sheetTest">Test Sheets</button>
+              <span id="healthresult" class="muted"></span>
+            </div>
+          </div>
+          <div class="sec">
+            <h2>Data</h2>
+            <div style="display: flex; gap: 8px; flex-wrap: wrap">
+              <button data-act="exportCsv">Export leads CSV</button>
+              <button data-act="exportAccounts">Export account list</button>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- studio -->
+    <div class="studio" id="studio" hidden>
+      <header class="shead">
+        <button
+          class="iconbtn ghost"
+          data-act="closeStudio"
+          aria-label="Back to pipeline"
+          id="ic-back"
+        ></button>
+        <div style="min-width: 0">
+          <input
+            class="titleinput"
+            id="f-name"
+            data-field
+            aria-label="Business name"
+          />
+          <div class="ssub" id="ssub"></div>
+        </div>
+        <ol class="strip" id="strip"></ol>
+        <div class="spacer"></div>
+        <span class="saved" id="saved">Saved</span>
+        <button class="primary" id="nextbtn" data-act="next"></button>
+        <button data-act="present" id="presentbtn"></button>
+        <div class="menu">
+          <button
+            class="iconbtn"
+            data-act="menu"
+            aria-label="More actions"
+            id="ic-more"
+          ></button>
+          <div class="menulist" id="smenu" hidden>
+            <button data-act="rebuild" id="m-rebuild"></button>
+            <button data-act="openTab" id="m-open"></button>
+            <button data-act="instagram" id="m-ig"></button>
+            <button data-act="whatsapp" id="m-wa"></button>
+            <button data-act="copyPitch" id="m-pitch"></button>
+            <button data-act="copyPath" id="m-path"></button>
+            <button data-act="zip" id="m-zip"></button>
+            <button class="danger" data-act="deleteOne" id="m-del"></button>
+          </div>
+        </div>
+      </header>
+      <div class="sbody" id="sbody">
+        <div class="stagewrap">
+          <div class="stagebar">
+            <div class="seg" role="group" aria-label="Device size">
+              <button
+                data-act="device"
+                data-d="phone"
+                id="d-phone"
+                aria-label="Phone"
+              ></button>
+              <button
+                data-act="device"
+                data-d="tablet"
+                id="d-tablet"
+                aria-label="Tablet"
+              ></button>
+              <button
+                data-act="device"
+                data-d="desktop"
+                id="d-desktop"
+                aria-label="Desktop"
+                class="on"
+              ></button>
+            </div>
+            <span class="previewurl" id="previewurl"></span>
+            <div class="spacer"></div>
+            <button
+              class="sm ghost"
+              data-act="reloadPreview"
+              id="b-reload"
+            ></button>
+            <button
+              class="sm ghost"
+              data-act="toggleSide"
+              id="b-side"
+              aria-label="Toggle side panel"
+            ></button>
+          </div>
+          <div class="stage">
+            <div class="device" id="device">
+              <iframe
+                id="preview"
+                title="Generated site preview"
+                hidden
+              ></iframe>
+              <div class="empty" id="previewempty" style="color: #555">
+                <h3 style="color: #222">No site yet</h3>
+                Build this lead to see the preview.<br /><br />
+                <button
+                  class="primary"
+                  data-act="rebuild"
+                  id="b-buildnow"
+                ></button>
               </div>
             </div>
-            <div class="toolrow">
-              <button onclick="openSite()">Open site</button
-              ><button onclick="copySitePath()">Copy path</button
-              ><button onclick="downloadZip()">Download ZIP</button
-              ><button onclick="openInstagram()">Instagram ↗</button
-              ><button onclick="openWhatsApp()">WhatsApp ↗</button
-              ><button onclick="copyPitch()">Copy pitch</button
-              ><button onclick="rebuildSelected()">Rebuild</button
-              ><button onclick="recordVideo()">Record video</button>
-            </div>
-          </section>
-          <section class="panel">
-            <div class="panelhead">
-              <h2>LEAD DETAILS</h2>
-              <span class="spacer"></span
-              ><button onclick="openInstagram()">Open profile ↗</button>
-            </div>
-            <div class="editgrid">
-              <label class="field">Business name<input id="name" /></label
-              ><label class="field">Area<input id="area" /></label
-              ><label class="field">Phone<input id="phone" /></label
-              ><label class="field">Followers<input id="followers" /></label>
-            </div>
-            <div class="editgrid" style="padding-top: 0">
+          </div>
+        </div>
+        <aside class="side" id="side">
+          <div class="tabs" role="tablist">
+            <button data-act="tab" data-t="details" class="on">Details</button>
+            <button data-act="tab" data-t="photos">Photos</button>
+            <button data-act="tab" data-t="revisions">Revisions</button>
+            <button data-act="tab" data-t="design">Design</button>
+          </div>
+          <div class="pane" id="pane-details">
+            <div class="two">
+              <label class="field">Area<input id="f-area" data-field /></label>
               <label class="field"
-                >Outreach stage<select id="stage">
+                >Phone<input id="f-phone" data-field
+              /></label>
+              <label class="field"
+                >Followers<input id="f-followers" data-field
+              /></label>
+              <label class="field"
+                >Quoted price<input id="f-price" data-field
+              /></label>
+              <label class="field"
+                >Outreach stage
+                <select id="f-stage" data-field>
                   <option>new</option>
                   <option>built</option>
                   <option>recorded</option>
@@ -967,270 +1629,111 @@
                   <option>won</option>
                   <option>lost</option>
                 </select></label
-              ><label class="field"
-                >Follow-up date<input id="followup" type="date" /></label
-              ><label class="field">Quoted price<input id="price" /></label
-              ><label class="field"
-                >QA result<input id="qa" disabled placeholder="Pending build"
+              >
+              <label class="field"
+                >Follow-up date<input id="f-follow_up" type="date" data-field
               /></label>
             </div>
-            <div class="editfooter">
-              <input id="notes" placeholder="Lead notes" /><button
+            <label class="field"
+              >QA result<input id="f-qa" disabled placeholder="Pending build"
+            /></label>
+            <label class="field"
+              >Notes<textarea
+                id="f-notes"
+                rows="4"
+                data-field
+                placeholder="Lead notes"
+              ></textarea>
+            </label>
+            <div class="biobox" id="biotext"></div>
+          </div>
+          <div class="pane" id="pane-photos" hidden>
+            <div
+              class="muted"
+              style="margin-bottom: 10px"
+              id="photocount"
+            ></div>
+            <div class="photogrid" id="photos"></div>
+          </div>
+          <div class="pane" id="pane-revisions" hidden>
+            <div class="thread" id="history"></div>
+            <textarea
+              id="revision"
+              rows="3"
+              placeholder="Describe a change to the site…  (Alt+Enter to apply)"
+            ></textarea>
+            <div style="margin-top: 8px">
+              <button
                 class="primary"
-                onclick="saveLead()"
-              >
-                Save details
-              </button>
+                data-act="addRevision"
+                id="b-rev"
+              ></button>
             </div>
-          </section>
-          <div class="extras">
-            <section class="subpanel">
-              <div class="subhead">
-                REVISION
-                <span class="muted">· saved once, rerunnable, undoable</span
-                ><span class="spacer"></span
-                ><button
-                  class="icon"
-                  title="Apply revision"
-                  onclick="addRevision()"
-                >
-                  ↗
-                </button>
-              </div>
-              <div class="subbody">
-                <textarea
-                  id="revision"
-                  class="revision"
-                  placeholder="Describe a site change…"
-                ></textarea>
-                <div class="history" id="history"></div>
-              </div>
-            </section>
-            <section class="subpanel">
-              <div class="subhead">
-                SCRAPED PHOTOS <span class="muted" id="photocount"></span
-                ><span class="spacer"></span
-                ><button
-                  class="icon"
-                  onclick="showDesign()"
-                  title="View design direction"
-                >
-                  Design
-                </button>
-              </div>
-              <div class="subbody">
-                <div id="photos" class="photos"></div>
-                <div
-                  class="muted"
-                  id="biotext"
-                  style="font-size: 11px; max-height: 36px; overflow: hidden"
-                ></div>
-              </div>
-            </section>
           </div>
-          <section class="panel logpanel">
-            <details open>
-              <summary class="logsummary">
-                LIVE ACTIVITY <span class="muted">· session stream</span
-                ><span
-                  class="spacer"
-                  style="display: inline-block; width: 20px"
-                ></span
-                ><button
-                  class="ghost"
-                  style="padding: 3px 7px"
-                  onclick="clearLogs(event)"
-                >
-                  Clear
-                </button>
-              </summary>
-              <div class="logs" id="logs"></div>
-            </details>
-          </section>
-        </section>
-      </section>
-    </main>
-    <div
-      class="modal"
-      id="settingsmodal"
-      onclick="if (event.target === this) closeSettings();"
-    >
-      <div class="dialog">
-        <h2>Workspace settings</h2>
-        <div class="settingsgrid">
-          <label class="field">Websites root<input id="sroot" /></label
-          ><label class="field">Color theme<select id="spalette">
-            <option value="studio">Studio Lime</option>
-            <option value="ocean">Ocean</option>
-            <option value="plum">Plum</option>
-            <option value="ember">Ember</option>
-          </select></label><label class="field"
-            >Batch date<input id="sdate" type="date" /></label
-          ><label class="field">agy model<input id="smodel" /></label
-          ><label class="field"
-            >Timeout (seconds)<input id="stimeout" type="number" /></label
-          ><label class="field"
-            >Parallel builds<input
-              id="sparallel"
-              type="number"
-              min="1"
-              max="8" /></label
-          ><label class="field"
-            >Maximum posts<input
-              id="sposts"
-              type="number"
-              min="1"
-              max="60" /></label
-          ><label class="field"
-            >Retry attempts<input
-              id="sattempts"
-              type="number"
-              min="1"
-              max="5" /></label
-          ><label class="field">Google Sheet name<input id="ssheet" /></label
-          ><label class="field"
-            >Credentials JSON path<input id="screds" /></label
-          ><label class="field"
-            >Preferred browser command<input id="sbrowser" /></label
-          ><label class="toggle"
-            ><input id="scaptions" type="checkbox" /> Fetch post captions</label
-          ><label class="toggle"
-            ><input id="sheaded" type="checkbox" /> Show scraper browser</label
-          ><label class="toggle"
-            ><input id="ssync" type="checkbox" /> Sync Google Sheets after
-            build</label
-          >
-        </div>
-        <div class="authbox">
-          Instagram session: <strong id="authstate">checking…</strong>
-          <div style="margin-top: 9px; display: flex; gap: 8px">
-            <button onclick="startLogin()">Log in / refresh session</button
-            ><button class="danger" onclick="clearAuth()">Clear session</button
-            ><button onclick="health()">Health check</button
-            ><span id="healthresult"></span>
+          <div class="pane" id="pane-design" hidden>
+            <pre class="design" id="designtext"></pre>
           </div>
-        </div>
-        <div class="actions">
-          <button onclick="closeSettings()">Cancel</button
-          ><button class="primary" onclick="saveSettings()">
-            Save settings
+        </aside>
+      </div>
+    </div>
+
+    <!-- present -->
+    <div class="present" id="present" hidden>
+      <div class="pbar">
+        <button data-act="exitPresent" id="p-exit"></button>
+        <div class="seg" role="group" aria-label="Present device">
+          <button data-act="pdevice" data-d="phone">Phone</button>
+          <button data-act="pdevice" data-d="tablet">Tablet</button>
+          <button data-act="pdevice" data-d="desktop" class="on">
+            Desktop
           </button>
         </div>
+        <label
+          >Quality
+          <select id="pquality">
+            <option value="8000000">Standard</option>
+            <option value="16000000" selected>High</option>
+            <option value="40000000">Max</option>
+          </select>
+        </label>
+        <label><input type="checkbox" id="pauto" checked /> Auto-scroll</label>
+        <button data-act="fullscreen" id="p-full"></button>
+        <div class="spacer"></div>
+        <span class="rec" id="rec"><i></i><span id="rectime">00:00</span></span>
+        <button data-act="record" id="p-rec"></button>
+      </div>
+      <div class="pstage" id="pstage">
+        <iframe id="pframe" title="Present"></iframe>
+        <div class="countdown" id="countdown" hidden></div>
       </div>
     </div>
-    <div
-      class="modal"
-      id="designmodal"
-      onclick="if (event.target === this) this.classList.remove('open');"
-    >
-      <div class="dialog">
-        <h2>Assigned design direction</h2>
-        <pre
-          id="designtext"
-          style="
-            white-space: pre-wrap;
-            color: #d4d2de;
-            font:
-              12px/1.6 ui-monospace,
-              monospace;
-          "
-        ></pre>
-        <button
-          onclick="
-            document.querySelector('#designmodal').classList.remove('open')
-          "
-        >
-          Close
-        </button>
+
+    <div class="overlay" id="paletteov" hidden>
+      <div class="dialog pal" role="dialog" aria-label="Command palette">
+        <input
+          id="palq"
+          placeholder="Type a lead or command…"
+          autocomplete="off"
+        />
+        <ul id="pallist"></ul>
       </div>
     </div>
-    <div id="toast" class="toast"></div>
+    <div class="overlay center" id="dlgov" hidden>
+      <div class="dialog" role="dialog" aria-modal="true">
+        <div class="body">
+          <h2 id="dlgtitle"></h2>
+          <div class="muted" id="dlgbody"></div>
+        </div>
+        <div class="actions" id="dlgactions"></div>
+      </div>
+    </div>
+    <div class="toasts" id="toasts" aria-live="polite"></div>
+
     <script>
-      let state = {},
-        selected = "",
-        leadData = null,
-        source = [];
-      const $ = (s) => document.querySelector(s);
-      function setTheme(theme) {
-        const light = theme === "light";
-        document.documentElement.dataset.theme = light ? "light" : "dark";
-        const toggle = $("#themeToggle");
-        if (toggle) toggle.checked = light;
-        localStorage.setItem("studio-theme", light ? "light" : "dark");
-      }
-      function setPalette(palette) {
-        const valid = ["studio", "ocean", "plum", "ember"].includes(palette)
-          ? palette
-          : "studio";
-        document.documentElement.dataset.palette = valid;
-        localStorage.setItem("studio-palette", valid);
-      }
-      const savedTheme = localStorage.getItem("studio-theme");
-      setTheme(savedTheme === "light" ? "light" : "dark");
-      setPalette(localStorage.getItem("studio-palette") || "studio");
-      $("#themeToggle").addEventListener("change", (event) =>
-        setTheme(event.target.checked ? "light" : "dark"),
-      );
-      $("#spalette").addEventListener("change", (event) => setPalette(event.target.value));
-      const api = async (url, opt = {}) => {
-        let r = await fetch(url, {
-          headers: { "Content-Type": "application/json" },
-          ...opt,
-        });
-        let j = await r.json().catch(() => ({}));
-        if (!r.ok) throw Error(j.detail || r.statusText);
-        return j;
-      };
-      function toast(s) {
-        let t = $("#toast");
-        t.textContent = s;
-        t.classList.add("show");
-        setTimeout(() => t.classList.remove("show"), 2400);
-      }
-      function batchq() {
-        let b = $("#batch").value || state.batch;
-        return b ? "?batch=" + encodeURIComponent(b) : "";
-      }
-      async function refresh() {
-        state = await api("/api/state" + batchq());
-        $("#batch").value = state.batch;
-        $("#accounts").value = state.accounts;
-        $("#sroot").value = state.settings.websites_root;
-        $("#authstate").textContent = state.auth_exists
-          ? "Session saved · " + state.auth_mtime
-          : "No session";
-        renderLeads();
-        if (selected && state.leads.some((x) => x.handle === selected))
-          selectLead(selected);
-        else if (!selected && state.leads.length)
-          selectLead(state.leads[0].handle);
-        await jobStatus();
-      }
-      function renderLeads() {
-        let q = $("#search").value.toLowerCase(),
-          f = $("#statusfilter").value;
-        let rows = state.leads || [];
-        source = rows.filter(
-          (x) =>
-            (!q ||
-              [x.handle, x.name, x.area, x.phone]
-                .join(" ")
-                .toLowerCase()
-                .includes(q)) &&
-            (!f || x.status === f),
-        );
-        $("#leadcount").textContent =
-          `${source.length} / ${rows.length} profiles`;
-        $("#empty").style.display = source.length ? "none" : "block";
-        $("#leadrows").innerHTML = source
-          .map(
-            (x) =>
-              `<tr data-h="${esc(x.handle)}" class="${x.handle === selected ? "selected" : ""}" onclick="selectLead('${esc(x.handle)}')"><td><span class="status ${esc(x.status)} ${["queued", "scraping", "building"].includes(x.status) ? "pulse" : ""}">${esc(x.status || "queued")}</span></td><td><div class="handle">${esc(x.name || "@" + x.handle)}</div><div class="muted">@${esc(x.handle)}</div></td><td>${esc(x.area || "—")}</td><td>${esc(x.phone || "—")}</td></tr>`,
-          )
-          .join("");
-      }
-      function esc(x) {
-        return String(x ?? "").replace(
+      const $ = (s, r = document) => r.querySelector(s),
+        $$ = (s, r = document) => [...r.querySelectorAll(s)];
+      const esc = (x) =>
+        String(x ?? "").replace(
           /[&<>"']/g,
           (c) =>
             ({
@@ -1241,82 +1744,676 @@
               "'": "&#39;",
             })[c],
         );
+      const enc = encodeURIComponent;
+      const ICONS = {
+        board:
+          '<rect x="3" y="3" width="5" height="18" rx="1"/><rect x="10" y="3" width="5" height="11" rx="1"/><rect x="17" y="3" width="4" height="15" rx="1"/>',
+        batch: '<path d="M6 3l14 9-14 9z"/>',
+        gear: '<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1L7 17M17 7l2.1-2.1"/>',
+        search: '<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>',
+        sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5L19 19M5 19l1.5-1.5M17.5 6.5L19 5"/>',
+        moon: '<path d="M20 14.5A8 8 0 019.5 4a8 8 0 1010.5 10.5z"/>',
+        back: '<path d="M15 18l-6-6 6-6"/>',
+        ext: '<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 01-1 1H5a1 1 0 01-1-1V7a1 1 0 011-1h5"/>',
+        phone:
+          '<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/>',
+        tablet:
+          '<rect x="4" y="3" width="16" height="18" rx="2"/><path d="M11 18h2"/>',
+        monitor:
+          '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+        rec: '<circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3" fill="currentColor"/>',
+        stop: '<rect x="6" y="6" width="12" height="12" rx="2" fill="currentColor"/>',
+        more: '<circle cx="5" cy="12" r="1.6" fill="currentColor"/><circle cx="12" cy="12" r="1.6" fill="currentColor"/><circle cx="19" cy="12" r="1.6" fill="currentColor"/>',
+        check: '<path d="M5 12l5 5 9-10"/>',
+        trash: '<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>',
+        download: '<path d="M12 3v12M7 10l5 5 5-5M4 20h16"/>',
+        copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V5a1 1 0 00-1-1H5a1 1 0 00-1 1v10a1 1 0 001 1h3"/>',
+        refresh: '<path d="M20 11a8 8 0 10-2.3 5.7M20 4v7h-7"/>',
+        undo: '<path d="M9 14L4 9l5-5M4 9h10a6 6 0 010 12h-3"/>',
+        send: '<path d="M21 3L10 14M21 3l-7 18-4-7-7-4z"/>',
+        x: '<path d="M6 6l12 12M18 6L6 18"/>',
+        expand: '<path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/>',
+        list: '<path d="M4 6h16M4 12h16M4 18h16"/>',
+        side: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M15 4v16"/>',
+        globe:
+          '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',
+        chat: '<path d="M4 5h16v11H9l-5 4z"/>',
+        play: '<path d="M6 3l14 9-14 9z"/>',
+      };
+      const ic = (n, s) =>
+        `<svg class="i" viewBox="0 0 24 24"${s ? ` style="width:${s}px;height:${s}px"` : ""} aria-hidden="true">${ICONS[n] || ""}</svg>`;
+      const lab = (n, t) => `${ic(n)}<span>${t}</span>`;
+      const STAGES = [
+        "new",
+        "built",
+        "recorded",
+        "sent",
+        "replied",
+        "won",
+        "lost",
+      ];
+      const STATUSES = ["queued", "scraping", "building", "done", "failed"];
+      const S = {
+        st: { leads: [], settings: {} },
+        sel: "",
+        ld: null,
+        view: "pipeline",
+        layout: localStorage.getItem("studio-layout") || "board",
+        checked: new Set(),
+        selmode: false,
+        filter: "",
+        nonce: Date.now(),
+        device: "desktop",
+        job: { active: false, handles: [] },
+        sideOpen: true,
+      };
+
+      /* ---------- theme ---------- */
+      function setTheme(t) {
+        document.documentElement.dataset.theme =
+          t === "light" ? "light" : "dark";
+        localStorage.setItem("studio-theme", t === "light" ? "light" : "dark");
+        $("#nav-theme").innerHTML =
+          ic(t === "light" ? "moon" : "sun") +
+          `<span>${t === "light" ? "Dark" : "Light"}</span>`;
       }
-      async function selectLead(h) {
-        selected = h;
-        renderLeads();
+      function setPalette(p) {
+        const v = ["studio", "ocean", "plum", "ember"].includes(p)
+          ? p
+          : "studio";
+        document.documentElement.dataset.palette = v;
+        localStorage.setItem("studio-palette", v);
+        drawSwatches();
+      }
+      function drawSwatches() {
+        const cur = document.documentElement.dataset.palette;
+        const cols = {
+          studio: "#d9ff73",
+          ocean: "#55d6d0",
+          plum: "#c7a0ff",
+          ember: "#ffae68",
+        };
+        $("#swatches").innerHTML = Object.entries(cols)
+          .map(
+            ([k, c]) =>
+              `<button class="sw ${k === cur ? "on" : ""}" data-act="palette-set" data-p="${k}" style="background:${c};color:#111" aria-label="${k}">${k === cur ? ic("check") : ""}</button>`,
+          )
+          .join("");
+      }
+
+      /* ---------- utils ---------- */
+      const api = async (url, opt = {}) => {
+        const r = await fetch(url, {
+          headers: { "Content-Type": "application/json" },
+          ...opt,
+        });
+        const j = await r.json().catch(() => ({}));
+        if (!r.ok) throw Error(j.detail || r.statusText);
+        return j;
+      };
+      const bq = () => {
+        const b = $("#batch").value || S.st.batch;
+        return b ? "?batch=" + enc(b) : "";
+      };
+      const leadUrl = (h) => `/api/lead/${enc(h)}`;
+      const previewUrl = (h) =>
+        `/preview/${enc(S.st.batch)}/${enc(h)}/index.html?t=${S.nonce}`;
+      function toast(s) {
+        const t = document.createElement("div");
+        t.className = "toast";
+        t.textContent = s;
+        $("#toasts").append(t);
+        setTimeout(() => t.remove(), 2800);
+      }
+      const debounce = (f, ms) => {
+        let t;
+        return (...a) => {
+          clearTimeout(t);
+          t = setTimeout(() => f(...a), ms);
+        };
+      };
+      function hue(s) {
+        let h = 0;
+        for (const c of String(s)) h = (h * 31 + c.charCodeAt(0)) % 360;
+        return h;
+      }
+      const initial = (l) =>
+        ((l.name || l.handle || "?").trim()[0] || "?").toUpperCase();
+      const stageOf = (l) => (STAGES.includes(l.stage) ? l.stage : "new");
+      function dlg(title, body, buttons) {
+        return new Promise((res) => {
+          $("#dlgtitle").textContent = title;
+          $("#dlgbody").textContent = body;
+          const a = $("#dlgactions");
+          a.innerHTML = "";
+          buttons.forEach((b) => {
+            const el = document.createElement("button");
+            el.textContent = b.label;
+            if (b.cls) el.className = b.cls;
+            el.onclick = () => {
+              $("#dlgov").hidden = true;
+              res(b.value);
+            };
+            a.append(el);
+          });
+          $("#dlgov").hidden = false;
+          a.querySelector("button:last-child")?.focus();
+        });
+      }
+      const confirmDlg = (t, b, ok) =>
+        dlg(t, b, [
+          { label: "Cancel", value: false },
+          { label: ok, value: true, cls: "primary" },
+        ]);
+      const leadOf = (h) =>
+        S.st.leads.find((x) => x.handle === h) || { handle: h };
+      const hasSite = () => !!(S.ld && S.ld.lead && S.ld.lead.site_path);
+
+      /* ---------- data ---------- */
+      async function refresh(reload) {
+        S.st = await api("/api/state" + bq());
+        $("#batch").value = S.st.batch;
+        if (document.activeElement !== $("#accounts"))
+          $("#accounts").value = S.st.accounts || "";
+        const s = S.st.settings || {};
+        if (S.view !== "settings" || !$("#sroot").dataset.filled) {
+          fillSettings();
+        }
+        $("#authstate").textContent = S.st.auth_exists
+          ? "Session saved · " + S.st.auth_mtime
+          : "No session";
+        render();
+        if (reload && S.sel && !$("#studio").hidden)
+          await loadLead(S.sel, false);
+        await jobStatus();
+      }
+      async function jobStatus() {
         try {
-          leadData = await api(`/api/lead/${encodeURIComponent(h)}${batchq()}`);
-          let l = leadData.lead;
-          $("#previewtitle").textContent = l.name || "@" + h;
-          $("#previewurl").textContent = l.site_path || "";
-          let built = l.site_path && l.site_path.length;
-          $("#preview").hidden = !built;
-          $("#previewempty").hidden = !!built;
-          if (built)
-            $("#preview").src =
-              `/preview/${encodeURIComponent(state.batch)}/${encodeURIComponent(h)}/index.html?t=${Date.now()}`;
-          $("#name").value = l.name || "";
-          $("#area").value = l.area || "";
-          $("#phone").value = l.phone || "";
-          $("#followers").value = l.followers || "";
-          $("#notes").value = l.notes || "";
-          $("#stage").value = l.stage || "new";
-          $("#followup").value = l.follow_up || "";
-          $("#price").value = l.price || "";
-          $("#qa").value = l.qa || "";
-          $("#biotext").textContent =
-            leadData.profile.bio || "Profile data will appear after scraping.";
-          $("#photocount").textContent =
-            (leadData.profile.posts || []).length + " images";
-          $("#photos").innerHTML = (leadData.profile.posts || [])
+          S.job = await api("/api/job");
+        } catch {}
+        const a = S.job.active;
+        $("#jobpill").classList.toggle("run", !!a);
+        $("#jobtext").textContent = a
+          ? `Running · ${(S.job.handles || []).length} queued`
+          : "Ready";
+        $("#cancel").hidden = !a;
+      }
+      const refreshSoon = debounce(() => refresh(false), 350);
+
+      /* ---------- views ---------- */
+      function setView(v) {
+        S.view = v;
+        ["pipeline", "batch", "settings"].forEach((x) => {
+          $("#view-" + x).hidden = x !== v;
+          $("#nav-" + x).classList.toggle("active", x === v);
+        });
+        $("#viewtitle").textContent = {
+          pipeline: "Pipeline",
+          batch: "Batch",
+          settings: "Settings",
+        }[v];
+        if (v === "settings") fillSettings();
+        render();
+      }
+      function filtered() {
+        const q = ($("#q").value || "").toLowerCase();
+        return (S.st.leads || []).filter(
+          (x) =>
+            (!q ||
+              [x.handle, x.name, x.area, x.phone]
+                .join(" ")
+                .toLowerCase()
+                .includes(q)) &&
+            (!S.filter || x.status === S.filter),
+        );
+      }
+      function render() {
+        $("#nav-pipeline").innerHTML = lab("board", "Pipeline");
+        $("#nav-batch").innerHTML = lab("batch", "Batch");
+        $("#nav-settings").innerHTML = lab("gear", "Settings");
+        $("#ic-search").innerHTML = ic("search");
+        $("#lay-board").innerHTML = ic("board");
+        $("#lay-list").innerHTML = ic("list");
+        $("#lay-board").classList.toggle("on", S.layout === "board");
+        $("#lay-list").classList.toggle("on", S.layout === "list");
+        $("#selbtn").textContent = S.selmode ? "Done" : "Select";
+        renderChips();
+        if (S.view === "pipeline") renderPipeline();
+        if (S.view === "batch") renderBatch();
+        renderSelbar();
+      }
+      function renderChips() {
+        const counts = {};
+        (S.st.leads || []).forEach(
+          (l) => (counts[l.status] = (counts[l.status] || 0) + 1),
+        );
+        $("#statuschips").innerHTML =
+          `<button class="chip ${S.filter ? "" : "on"}" data-act="filter" data-f="">All · ${(S.st.leads || []).length}</button>` +
+          STATUSES.filter((s) => counts[s])
             .map(
-              (p) =>
-                `<img class="photo" src="${esc(p.preview)}" title="${esc(p.caption || p.alt_text || "Post image")}" onclick="window.open('${esc(p.preview)}','_blank')">`,
+              (s) =>
+                `<button class="chip ${S.filter === s ? "on" : ""}" data-act="filter" data-f="${s}">${s} · ${counts[s]}</button>`,
             )
             .join("");
-          $("#history").innerHTML =
-            (leadData.revisions || [])
+      }
+      function cardHtml(l) {
+        const h = esc(l.handle),
+          picked = S.checked.has(l.handle);
+        const fail =
+          l.status === "failed"
+            ? `<div class="cardfail">${ic("x", 14)}<span>Build failed</span><button class="sm" data-act="retry" data-h="${h}">Retry</button></div>`
+            : "";
+        return `<div class="card ${picked ? "picked" : ""}" draggable="true" data-act="open" data-h="${h}" tabindex="0">
+    <div class="row">${S.selmode ? `<input type="checkbox" ${picked ? "checked" : ""} data-act="check" data-h="${h}" aria-label="Select ${h}" />` : ""}
+    <div class="avatar" style="background:hsl(${hue(l.handle)} 45% 40%)">${esc(initial(l))}</div>
+    <div style="min-width:0"><div class="nm">${esc(l.name || "@" + l.handle)}</div><div class="meta">@${h}${l.area ? " · " + esc(l.area) : ""}</div></div></div>
+    <div class="foot"><span class="status ${esc(l.status)}">${esc(l.status || "queued")}</span><span class="spacer"></span>${l.phone ? esc(l.phone) : ""}</div>${fail}</div>`;
+      }
+      function renderPipeline() {
+        const rows = filtered();
+        const today = new Date().toISOString().slice(0, 10);
+        const due = (S.st.leads || []).filter(
+          (l) =>
+            l.follow_up &&
+            l.follow_up <= today &&
+            !["won", "lost"].includes(stageOf(l)),
+        );
+        const d = $("#due");
+        d.hidden = !due.length;
+        d.innerHTML = due.length
+          ? `<b>Follow-ups due</b>` +
+            due
               .map(
-                (r) =>
-                  `<div class="revitem"><span class="status ${r.status === "applied" ? "done" : ""}">${esc(r.status)}</span><span class="revtext" title="${esc(r.request)}">${esc(r.request)}</span><button onclick="applyRevision(${r.id})">↻</button>${r.backup_path ? `<button onclick="undoRevision(${r.id})">Undo</button>` : ""}</div>`,
+                (l) =>
+                  `<button class="sm" data-act="open" data-h="${esc(l.handle)}">${esc(l.name || "@" + l.handle)}</button>`,
               )
-              .join("") || '<span class="muted">No revisions yet.</span>';
+              .join("")
+          : "";
+        const root = $("#pipeline");
+        if (!(S.st.leads || []).length) {
+          root.innerHTML = `<div class="empty"><h3>No leads yet</h3>Add Instagram accounts in Batch to start building sites.<br><br><button class="primary" data-act="view" data-v="batch">Add accounts</button></div>`;
+          return;
+        }
+        if (S.layout === "board") {
+          root.innerHTML =
+            `<div class="board">` +
+            STAGES.map((st) => {
+              const c = rows.filter((l) => stageOf(l) === st);
+              return `<div class="col" data-stage="${st}"><div class="colhead">${st}<span class="n">${c.length}</span></div>${c.map(cardHtml).join("") || '<div class="muted" style="font-size:12px;padding:8px">Drop a lead here</div>'}</div>`;
+            }).join("") +
+            `</div>`;
+        } else {
+          root.innerHTML = rows.length
+            ? `<table class="list"><thead><tr>${S.selmode ? "<th></th>" : ""}<th>Lead</th><th>Status</th><th>Stage</th><th>Area</th><th>Phone</th></tr></thead><tbody>` +
+              rows
+                .map(
+                  (l) =>
+                    `<tr data-act="open" data-h="${esc(l.handle)}">${S.selmode ? `<td><input type="checkbox" ${S.checked.has(l.handle) ? "checked" : ""} data-act="check" data-h="${esc(l.handle)}"></td>` : ""}<td><div style="display:flex;gap:10px;align-items:center"><div class="avatar" style="width:32px;height:32px;font-size:13px;background:hsl(${hue(l.handle)} 45% 40%)">${esc(initial(l))}</div><div><div style="font-weight:650">${esc(l.name || "@" + l.handle)}</div><div class="muted" style="font-size:12px">@${esc(l.handle)}</div></div></div></td><td><span class="status ${esc(l.status)}">${esc(l.status || "queued")}</span></td><td>${esc(stageOf(l))}</td><td>${esc(l.area || "—")}</td><td>${esc(l.phone || "—")}</td></tr>`,
+                )
+                .join("") +
+              `</tbody></table>`
+            : `<div class="empty"><h3>No matches</h3>Try a different filter.</div>`;
+        }
+      }
+      function renderSelbar() {
+        let b = $("#selbar");
+        if (!S.selmode || !S.checked.size || S.view !== "pipeline") {
+          b && b.remove();
+          return;
+        }
+        if (!b) {
+          b = document.createElement("div");
+          b.id = "selbar";
+          b.className = "selbar";
+          document.body.append(b);
+        }
+        b.innerHTML = `<b>${S.checked.size} selected</b><button class="primary sm" data-act="runChecked">Run</button><button class="sm danger" data-act="deleteChecked">Delete</button><button class="sm ghost" data-act="selmode">Cancel</button>`;
+      }
+      function renderBatch() {
+        $$('[data-act="run"]').forEach(
+          (b) => (b.innerHTML = lab("play", "Run batch")),
+        );
+        const leads = S.st.leads || [];
+        const done = leads.filter((l) => l.status === "done").length,
+          fail = leads.filter((l) => l.status === "failed").length;
+        $("#runsummary").textContent = leads.length
+          ? `${done} built · ${fail} failed · ${leads.length - done - fail} in progress or queued`
+          : "No activity yet.";
+        $("#runbar").style.width = leads.length
+          ? Math.round(((done + fail) / leads.length) * 100) + "%"
+          : "0%";
+        $("#runs").innerHTML = leads
+          .map((l) => {
+            const s = l.status;
+            const order = {
+              queued: 0,
+              scraping: 1,
+              building: 2,
+              done: 3,
+              failed: -1,
+            };
+            const n = order[s] ?? 0;
+            const step = (i, t) =>
+              `<span class="step ${s === "failed" && i === Math.max(n, 0) ? "bad" : n > i || s === "done" ? "ok" : n === i ? "cur" : ""}">${t}</span>`;
+            return `<div class="run"><div><b>${esc(l.name || "@" + l.handle)}</b> <span class="muted">@${esc(l.handle)}</span><div class="track">${step(1, "Scrape")}${step(2, "Build")}${step(3, "Done")}</div></div><div><button class="sm" data-act="open" data-h="${esc(l.handle)}">Open</button></div></div>`;
+          })
+          .join("");
+      }
+
+      /* ---------- studio ---------- */
+      async function openStudio(h) {
+        S.sel = h;
+        $("#studio").hidden = false;
+        document.body.style.overflow = "hidden";
+        S.nonce = Date.now();
+        paintStudioChrome();
+        await loadLead(h, true);
+      }
+      function closeStudio() {
+        $("#studio").hidden = true;
+        document.body.style.overflow = "";
+        $("#preview").removeAttribute("src");
+        $("#smenu").hidden = true;
+        refresh(false);
+      }
+      function paintStudioChrome() {
+        $("#ic-back").innerHTML = ic("back");
+        $("#ic-more").innerHTML = ic("more");
+        $("#presentbtn").innerHTML = lab("expand", "Present");
+        $("#d-phone").innerHTML = ic("phone");
+        $("#d-tablet").innerHTML = ic("tablet");
+        $("#d-desktop").innerHTML = ic("monitor");
+        $("#b-reload").innerHTML = lab("refresh", "Reload");
+        $("#b-side").innerHTML = ic("side");
+        $("#b-buildnow").innerHTML = lab("play", "Build site");
+        $("#b-rev").innerHTML = lab("send", "Apply change");
+        $("#m-rebuild").innerHTML = lab("refresh", "Rebuild site");
+        $("#m-open").innerHTML = lab("ext", "Open in new tab");
+        $("#m-ig").innerHTML = lab("globe", "Instagram profile");
+        $("#m-wa").innerHTML = lab("chat", "WhatsApp");
+        $("#m-pitch").innerHTML = lab("copy", "Copy pitch");
+        $("#m-path").innerHTML = lab("copy", "Copy site path");
+        $("#m-zip").innerHTML = lab("download", "Download ZIP");
+        $("#m-del").innerHTML = lab("trash", "Delete lead…");
+        $("#p-exit").innerHTML = lab("back", "Exit");
+        $("#p-full").innerHTML = lab("expand", "Fullscreen");
+      }
+      async function loadLead(h, full) {
+        try {
+          const d = await api(leadUrl(h) + bq());
+          if (h !== S.sel) return;
+          S.ld = d;
+          const l = d.lead;
+          $("#ssub").textContent = `@${h}${l.area ? " · " + l.area : ""}`;
+          $("#previewurl").textContent = l.site_path || "";
+          const built = !!(l.site_path && l.site_path.length);
+          $("#preview").hidden = !built;
+          $("#previewempty").hidden = built;
+          if (built) {
+            const base = `/preview/${enc(S.st.batch)}/${enc(h)}/index.html`;
+            const f = $("#preview");
+            if (full || !f.dataset.base || f.dataset.base !== base + S.nonce) {
+              f.dataset.base = base + S.nonce;
+              f.src = previewUrl(h);
+            }
+          }
+          if (
+            full ||
+            !$("#studio").contains(document.activeElement) ||
+            document.activeElement.tagName === "BODY"
+          ) {
+            $("#f-name").value = l.name || "";
+            [
+              "area",
+              "phone",
+              "followers",
+              "price",
+              "notes",
+              "follow_up",
+            ].forEach((k) => ($("#f-" + k).value = l[k] || ""));
+            $("#f-stage").value = stageOf(l);
+          }
+          $("#f-qa").value = l.qa || "";
+          $("#biotext").textContent =
+            d.profile?.bio || "Profile data appears after scraping.";
+          drawStrip();
+          drawNext();
+          drawPhotos();
+          drawRevisions();
+          $("#designtext").textContent =
+            d.design || "No design direction generated yet.";
         } catch (e) {
           toast(e.message);
         }
       }
-      async function saveAccounts() {
+      function drawStrip() {
+        const l = S.ld.lead,
+          cur = STAGES.indexOf(stageOf(l)),
+          built = hasSite();
+        const steps = [
+          ["built", "Built"],
+          ["recorded", "Recorded"],
+          ["sent", "Sent"],
+          ["replied", "Replied"],
+        ];
+        let nextMarked = false;
+        $("#strip").innerHTML = steps
+          .map(([k, t]) => {
+            const idx = STAGES.indexOf(k);
+            const ok = (k === "built" && built) || cur >= idx;
+            let cls = ok ? "ok" : "";
+            if (!ok && !nextMarked) {
+              cls = "next";
+              nextMarked = true;
+            }
+            return `<li><button class="${cls}" data-act="setstage" data-s="${k}">${ok ? "✓ " : ""}${t}</button></li>`;
+          })
+          .join("");
+      }
+      function drawNext() {
+        const l = S.ld.lead,
+          st = stageOf(l),
+          b = $("#nextbtn"),
+          busy = ["queued", "scraping", "building"].includes(
+            leadOf(S.sel).status,
+          );
+        let txt,
+          ico,
+          act = "next";
+        if (!hasSite()) {
+          txt = busy ? "Building…" : "Build site";
+          ico = "play";
+          b.disabled = busy;
+        } else {
+          b.disabled = false;
+          if (st === "new" || st === "built") {
+            txt = "Record walkthrough";
+            ico = "rec";
+          } else if (st === "recorded") {
+            txt = "Copy pitch & open WhatsApp";
+            ico = "send";
+          } else if (st === "sent") {
+            txt = "Mark replied";
+            ico = "check";
+          } else if (st === "replied") {
+            txt = "Mark won";
+            ico = "check";
+          } else {
+            txt = "Closed · " + st;
+            ico = "check";
+            b.disabled = true;
+          }
+        }
+        b.innerHTML = lab(ico, txt);
+      }
+      function drawPhotos() {
+        const posts = S.ld.profile?.posts || [];
+        const chosen = new Set(S.ld.selected_photos || []);
+        const fn = (p) => (p.web_path || "").split("/").pop();
+        $("#photos").innerHTML =
+          posts
+            .map(
+              (p) =>
+                `<button class="tile ${chosen.has(fn(p)) ? "on" : ""}" data-act="photo" data-f="${esc(fn(p))}" title="${esc(p.caption || p.alt_text || "Post image")}"><img src="${esc(p.preview)}" alt="${esc(p.alt_text || "")}" loading="lazy"><span class="tick">${ic("check")}</span></button>`,
+            )
+            .join("") || '<div class="muted">No scraped photos yet.</div>';
+        updatePhotoCount();
+      }
+      function updatePhotoCount() {
+        const n = $$(".tile.on").length,
+          t = $$(".tile").length;
+        $("#photocount").textContent = t
+          ? `${n} of ${t} images allowed in the site`
+          : "";
+      }
+      const savePhotos = debounce(async () => {
+        const files = $$(".tile.on").map((x) => x.dataset.f);
         try {
-          let x = await api("/api/accounts", {
-            method: "POST",
+          await api(`${leadUrl(S.sel)}/photos${bq()}`, {
+            method: "PUT",
+            body: JSON.stringify({ files }),
+          });
+          flashSaved();
+        } catch (e) {
+          toast(e.message);
+        }
+      }, 500);
+      function drawRevisions() {
+        const r = S.ld.revisions || [];
+        $("#history").innerHTML =
+          r
+            .map(
+              (x) =>
+                `<div class="rev"><div>${esc(x.request)}</div><div class="rh"><span class="status ${x.status === "applied" ? "done" : ""}">${esc(x.status)}</span><span class="spacer"></span><button class="sm" data-act="reapply" data-id="${x.id}">${ic("refresh", 14)} Rerun</button>${x.backup_path ? `<button class="sm" data-act="undorev" data-id="${x.id}">${ic("undo", 14)} Undo</button>` : ""}</div></div>`,
+            )
+            .join("") ||
+          '<div class="muted">No revisions yet. Describe a change below.</div>';
+      }
+      function flashSaved() {
+        const s = $("#saved");
+        s.classList.add("show");
+        clearTimeout(flashSaved.t);
+        flashSaved.t = setTimeout(() => s.classList.remove("show"), 1500);
+      }
+      async function putLead(extra = {}) {
+        if (!S.sel) return;
+        const body = {
+          name: $("#f-name").value,
+          phone: $("#f-phone").value,
+          area: $("#f-area").value,
+          followers: $("#f-followers").value,
+          notes: $("#f-notes").value,
+          stage: $("#f-stage").value,
+          follow_up: $("#f-follow_up").value,
+          price: $("#f-price").value,
+          ...extra,
+        };
+        await api(`${leadUrl(S.sel)}${bq()}`, {
+          method: "PUT",
+          body: JSON.stringify(body),
+        });
+        if (extra.stage) $("#f-stage").value = extra.stage;
+        flashSaved();
+      }
+      const autosave = debounce(async () => {
+        try {
+          await putLead();
+          const l = leadOf(S.sel);
+          Object.assign(l, {
+            name: $("#f-name").value,
+            stage: $("#f-stage").value,
+          });
+          $("#ssub").textContent =
+            `@${S.sel}${$("#f-area").value ? " · " + $("#f-area").value : ""}`;
+          if (S.ld) {
+            S.ld.lead.stage = $("#f-stage").value;
+            drawStrip();
+            drawNext();
+          }
+          render();
+        } catch (e) {
+          toast(e.message);
+        }
+      }, 600);
+      async function setStage(st) {
+        try {
+          await putLead({ stage: st });
+          if (S.ld) S.ld.lead.stage = st;
+          leadOf(S.sel).stage = st;
+          drawStrip();
+          drawNext();
+          render();
+        } catch (e) {
+          toast(e.message);
+        }
+      }
+      async function stageFor(h, st) {
+        // used by drag & drop, merges with full lead data first
+        try {
+          const d = await api(leadUrl(h) + bq());
+          const l = d.lead;
+          await api(`${leadUrl(h)}${bq()}`, {
+            method: "PUT",
             body: JSON.stringify({
-              text: $("#accounts").value,
-              batch: $("#batch").value,
+              name: l.name || "",
+              phone: l.phone || "",
+              area: l.area || "",
+              followers: l.followers || "",
+              notes: l.notes || "",
+              stage: st,
+              follow_up: l.follow_up || "",
+              price: l.price || "",
             }),
           });
-          $("#accounts").value = x.handles.join("\n");
-          await refresh();
-          toast(`${x.handles.length} accounts saved`);
+          leadOf(h).stage = st;
+          render();
+          toast(`Moved to ${st}`);
         } catch (e) {
           toast(e.message);
+          refresh(false);
         }
       }
-      async function importAccounts(e) {
-        let f = e.target.files[0];
-        if (f) $("#accounts").value = await f.text();
-        e.target.value = "";
+      function pitch() {
+        const n = $("#f-name").value || S.sel;
+        return `Hi ${n}, I came across your Instagram and made a website concept for your business. Would you like to take a look?`;
+      }
+      function whatsapp() {
+        const p = $("#f-phone").value.replace(/\D/g, "");
+        if (!p) {
+          toast("No phone number on this lead");
+          return false;
+        }
+        window.open(`https://wa.me/${p}?text=${enc(pitch())}`, "_blank");
+        return true;
+      }
+
+      /* ---------- running ---------- */
+      async function saveAccounts(quiet) {
+        const x = await api("/api/accounts", {
+          method: "POST",
+          body: JSON.stringify({
+            text: $("#accounts").value,
+            batch: $("#batch").value,
+          }),
+        });
+        $("#accounts").value = x.handles.join("\n");
+        if (!quiet) {
+          await refresh(false);
+          toast(`${x.handles.length} accounts saved`);
+        }
+        return x;
       }
       async function runBuild(
-        handles = null,
+        handles = [],
         force = $("#force").checked,
         rescrape = $("#rescrape").checked,
+        scrape_only = false,
       ) {
         try {
-          await saveAccounts();
-          let x = await api("/api/run" + batchq(), {
+          if (S.view === "batch" || !handles.length) await saveAccounts(true);
+          const x = await api("/api/run" + bq(), {
             method: "POST",
-            body: JSON.stringify({ handles: handles || [], force, rescrape }),
+            body: JSON.stringify({ handles, force, rescrape, scrape_only }),
           });
           toast(`Queued ${x.handles.length} profile(s)`);
           jobStatus();
@@ -1324,183 +2421,33 @@
           toast(e.message);
         }
       }
-      function runSelected() {
-        if (selected) runBuild([selected], true);
-      }
-      function rebuildSelected() {
-        runBuild([selected], true);
-      }
-      async function cancelJob() {
-        await api("/api/cancel", { method: "POST" });
-        toast("Cancellation requested");
-      }
-      async function jobStatus() {
-        let j = await api("/api/job");
-        $("#cancel").style.display = j.active ? "" : "none";
-        $("#jobstate").textContent = j.active
-          ? `● Running · ${j.handles.length} queued`
-          : "● Ready";
-      }
-      async function saveLead() {
-        if (!selected) return toast("Select a lead");
-        let body = {
-          name: $("#name").value,
-          phone: $("#phone").value,
-          area: $("#area").value,
-          followers: $("#followers").value,
-          notes: $("#notes").value,
-          stage: $("#stage").value,
-          follow_up: $("#followup").value,
-          price: $("#price").value,
-        };
-        try {
-          await api(`/api/lead/${selected}${batchq()}`, {
-            method: "PUT",
-            body: JSON.stringify(body),
-          });
-          toast("Lead saved");
-          await refresh();
-        } catch (e) {
-          toast(e.message);
-        }
-      }
-      async function addRevision() {
-        if (!selected) return toast("Select a lead");
-        let text = $("#revision").value.trim();
-        if (!text) return toast("Describe the change first");
-        try {
-          let r = await api(`/api/revision/${selected}${batchq()}`, {
-            method: "POST",
-            body: JSON.stringify({ request: text }),
-          });
-          $("#revision").value = "";
-          await api(`/api/revision/${selected}/${r.id}/apply${batchq()}`, {
-            method: "POST",
-          });
-          toast("Revision started");
-          selectLead(selected);
-        } catch (e) {
-          toast(e.message);
-        }
-      }
-      async function applyRevision(id) {
-        await api(`/api/revision/${selected}/${id}/apply${batchq()}`, {
-          method: "POST",
-        });
-        toast("Revision rerun");
-      }
-      async function undoRevision(id) {
-        if (confirm("Restore the site backup made before this revision?")) {
-          await api(`/api/revision/${selected}/${id}/undo${batchq()}`, {
-            method: "POST",
-          });
-          selectLead(selected);
-          toast("Backup restored");
-        }
-      }
-      function setWidth(w) {
-        $("#device").className = "device" + (w === "desktop" ? "" : " " + w);
-        document
-          .querySelectorAll(".widths button")
-          .forEach((b) => b.classList.toggle("active", b.dataset.size === w));
-      }
-      function openPreview() {
-        if (selected)
-          window.open(
-            `/preview/${state.batch}/${selected}/index.html`,
-            "_blank",
-          );
-      }
-      function openSite() {
-        openPreview();
-      }
-      function copySitePath() {
-        if (leadData?.lead.site_path)
-          navigator.clipboard
-            .writeText(leadData.lead.site_path)
-            .then(() => toast("Path copied"));
-      }
-      function downloadZip() {
-        if (selected) location.href = `/api/lead/${selected}/zip${batchq()}`;
-      }
-      function openInstagram() {
-        if (selected)
-          window.open(`https://www.instagram.com/${selected}/`, "_blank");
-      }
-      function openWhatsApp() {
-        let p = $("#phone").value.replace(/\D/g, "");
-        if (p) window.open("https://wa.me/" + p, "_blank");
-        else toast("No phone number on this lead");
-      }
-      function copyPitch() {
-        let n = $("#name").value || selected;
-        let msg = `Hi ${n}, I came across your Instagram and made a website concept for your business. Would you like to take a look?`;
-        navigator.clipboard.writeText(msg).then(() => toast("Pitch copied"));
-      }
-      function recordVideo() {
-        openPreview();
-        toast("Preview opened. Use your screen recorder to capture it.");
-      }
-      function showDesign() {
-        if (!leadData) return;
-        $("#designtext").textContent =
-          leadData.design || "No direction generated yet.";
-        $("#designmodal").classList.add("open");
-      }
-      function clearLogs(e) {
-        e.stopPropagation();
-        $("#logs").innerHTML = "";
-      }
-      function addLog(x) {
-        let el = document.createElement("div");
-        el.className = "logline";
-        el.innerHTML = `<span class="logtime">${esc(x.time?.split("T")[1] || "")}</span> <b>${esc(x.handle || "batch")}</b> <span class="muted">${esc(x.status)}</span> ${esc(x.line)}`;
-        $("#logs").append(el);
-        $("#logs").scrollTop = $("#logs").scrollHeight;
-        if (x.batch === state.batch) {
-          jobStatus();
-          if (x.handle && x.status !== "log") refresh();
-          if (x.status === "summary") {
-            let a = JSON.parse(x.line);
-            toast(
-              `Batch finished · ${a.built} built · ${a.skipped} skipped · ${a.failed} failed`,
-            );
-            if (Notification.permission === "granted")
-              new Notification("Studio batch complete", {
-                body: `${a.built} built · ${a.failed} failed`,
-              });
-          }
-        }
-      }
-      const es = new EventSource("/api/events");
-      es.onmessage = (e) => {
-        let x = JSON.parse(e.data);
-        addLog(x);
-      };
-      function openSettings() {
-        let s = state.settings;
-        $("#spalette").value = localStorage.getItem("studio-palette") || "studio";
-        $("#sroot").value = s.websites_root;
-        $("#sdate").value = state.batch;
-        $("#smodel").value = s.model;
-        $("#stimeout").value = s.timeout;
-        $("#sparallel").value = s.parallelism;
-        $("#sposts").value = s.max_posts;
-        $("#sattempts").value = s.attempts;
-        $("#ssheet").value = s.sheet_name;
-        $("#screds").value = s.credentials;
-        $("#sbrowser").value = s.browser;
-        $("#scaptions").checked = s.captions;
-        $("#sheaded").checked = s.headed;
-        $("#ssync").checked = s.sync_sheet;
-        $("#settingsmodal").classList.add("open");
-      }
-      function closeSettings() {
-        $("#settingsmodal").classList.remove("open");
+
+      /* ---------- settings ---------- */
+      function fillSettings() {
+        const s = S.st.settings || {};
+        if (
+          !s.websites_root &&
+          s.websites_root !== "" &&
+          !Object.keys(s).length
+        )
+          return;
+        $("#sroot").value = s.websites_root || "";
+        $("#sroot").dataset.filled = "1";
+        $("#smodel").value = s.model || "";
+        $("#stimeout").value = s.timeout ?? "";
+        $("#sparallel").value = s.parallelism ?? "";
+        $("#sposts").value = s.max_posts ?? "";
+        $("#sattempts").value = s.attempts ?? "";
+        $("#ssheet").value = s.sheet_name || "";
+        $("#screds").value = s.credentials || "";
+        $("#sbrowser").value = s.browser || "";
+        $("#scaptions").checked = !!s.captions;
+        $("#sheaded").checked = !!s.headed;
+        $("#ssync").checked = !!s.sync_sheet;
+        drawSwatches();
       }
       async function saveSettings() {
-        setPalette($("#spalette").value);
-        let values = {
+        const values = {
           websites_root: $("#sroot").value,
           model: $("#smodel").value,
           timeout: +$("#stimeout").value,
@@ -1515,373 +2462,784 @@
           sync_sheet: $("#ssync").checked,
         };
         try {
-          state.settings = await api("/api/settings", {
+          S.st.settings = await api("/api/settings", {
             method: "PUT",
             body: JSON.stringify({ values }),
           });
-          $("#batch").value = $("#sdate").value;
-          closeSettings();
-          await refresh();
           toast("Settings saved");
+          await refresh(false);
         } catch (e) {
           toast(e.message);
         }
       }
-      async function startLogin() {
-        await api("/api/auth/login", { method: "POST" });
-        toast("Browser opened. Sign in to Instagram there.");
-      }
-      async function clearAuth() {
-        await api("/api/auth/clear", { method: "POST" });
-        await refresh();
-        toast("Session cleared");
-      }
-      async function health() {
-        let checks = [];
-        try {
-          await api("/api/state");
-          checks.push("API OK");
-        } catch (e) {
-          checks.push("API failed");
-        }
-        try {
-          await fetch(
-            "/preview/" + state.batch + "/" + (selected || "") + "/index.html",
-          );
-          checks.push("Preview server OK");
-        } catch (e) {
-          checks.push("Preview unavailable");
-        }
-        $("#healthresult").textContent = checks.join(" · ");
-      }
-      $("#batch").addEventListener("change", () => {
-        selected = "";
-        refresh();
-      });
-      document.addEventListener("keydown", (e) => {
-        if (e.key === "Escape") {
-          closeSettings();
-          $("#designmodal").classList.remove("open");
-        }
-        if (e.key === "Enter" && e.ctrlKey) runBuild();
-        if (e.key === "ArrowDown" && e.altKey) {
-          let i = source.findIndex((x) => x.handle === selected);
-          if (source[i + 1]) selectLead(source[i + 1].handle);
-        }
-        if (e.key === "Enter" && e.altKey) addRevision();
-      });
-      if ("Notification" in window && Notification.permission === "default")
-        Notification.requestPermission();
-      refresh().catch((e) => toast(e.message));
-      async function health() {
-        try {
-          let h = await api("/api/health");
-          $("#healthresult").textContent = Object.entries(h.checks)
-            .map(([k, v]) => k + ": " + (v ? "OK" : "missing"))
-            .join(" · ");
-        } catch (e) {
-          $("#healthresult").textContent = e.message;
-        }
-      }
-      async function testSheet() {
-        try {
-          let x = await api("/api/sheets/test", { method: "POST" });
-          $("#healthresult").textContent = x.message;
-          toast(x.message);
-        } catch (e) {
-          $("#healthresult").textContent = e.message;
-          toast(e.message);
-        }
-      }
-      const sheetTest = document.createElement("button");
-      sheetTest.textContent = "Test Sheets";
-      sheetTest.onclick = testSheet;
-      $("#healthresult").parentElement.append(sheetTest);
-      const scrapeButton = document.createElement("button");
-      scrapeButton.textContent = "Scrape only";
-      scrapeButton.onclick = () =>
-        selected && runBuild([selected], false, true, true);
-      $(".runcontrols").insertBefore(scrapeButton, $(".runcontrols .primary"));
-      let checked = new Set();
-      const selectedRun = document.createElement("button");
-      selectedRun.textContent = "Run checked";
-      selectedRun.onclick = () => checked.size && runBuild([...checked]);
-      $(".runcontrols").insertBefore(selectedRun, $(".runcontrols .primary"));
-      const csvExport = document.createElement("button");
-      csvExport.textContent = "Export CSV";
-      csvExport.onclick = () => (location.href = "/api/leads.csv" + batchq());
-      $(".panelhead").append(csvExport);
-      const deleteChecked = document.createElement("button");
-      deleteChecked.textContent = "Delete checked";
-      deleteChecked.className = "danger";
-      deleteChecked.onclick = async () => {
-        if (
-          !checked.size ||
-          !confirm(
-            `Remove ${checked.size} lead(s) from the database and delete their site folders? Scraped data and backups will remain.`,
-          )
-        )
-          return;
-        try {
-          await api("/api/lead/delete" + batchq(), {
-            method: "POST",
-            body: JSON.stringify({ handles: [...checked] }),
-          });
-          checked.clear();
-          selected = "";
-          await refresh();
-          toast("Selected leads removed; site folders deleted");
-        } catch (e) {
-          toast(e.message);
-        }
+
+      /* ---------- present + recorder ---------- */
+      const P = {
+        rec: null,
+        chunks: [],
+        timer: null,
+        t0: 0,
+        raf: 0,
+        device: "desktop",
       };
-      $(".panelhead").append(deleteChecked);
-      const deleteOne = document.createElement("button");
-      deleteOne.textContent = "Delete lead";
-      deleteOne.className = "danger";
-      deleteOne.onclick = async () => {
-        if (
-          !selected ||
-          !confirm(
-            `Remove @${selected} from the database and delete its site folder? Scraped data and backups will remain.`,
-          )
-        )
+      function openPresent(autoRecord) {
+        if (!hasSite()) {
+          toast("Build the site first");
           return;
-        try {
-          await api("/api/lead/delete" + batchq(), {
-            method: "POST",
-            body: JSON.stringify({ handles: [selected] }),
-          });
-          checked.delete(selected);
-          selected = "";
-          await refresh();
-          toast("Lead removed; site folder deleted");
-        } catch (e) {
-          toast(e.message);
         }
-      };
-      $(".right > .panel:nth-child(2) .panelhead").append(deleteOne);
-      function renderLeads() {
-        let q = $("#search").value.toLowerCase(),
-          f = $("#statusfilter").value,
-          rows = state.leads || [];
-        source = rows.filter(
-          (x) =>
-            (!q ||
-              [x.handle, x.name, x.area, x.phone]
-                .join(" ")
-                .toLowerCase()
-                .includes(q)) &&
-            (!f || x.status === f),
+        $("#present").hidden = false;
+        $("#pframe").src = previewUrl(S.sel);
+        pdevice(P.device);
+        if (autoRecord)
+          toast("Pick this tab in the share dialog, then recording starts");
+      }
+      function pdevice(d) {
+        P.device = d;
+        $("#pstage").className = "pstage " + (d === "desktop" ? "" : d);
+        $$('#present [data-act="pdevice"]').forEach((b) =>
+          b.classList.toggle("on", b.dataset.d === d),
         );
-        $("#leadcount").textContent =
-          `${source.length} / ${rows.length} profiles`;
-        $("#empty").style.display = source.length ? "none" : "block";
-        $("#leadrows").innerHTML = source
-          .map(
-            (x) =>
-              `<tr data-h="${esc(x.handle)}" class="${x.handle === selected ? "selected" : ""}" onclick="selectLead('${esc(x.handle)}')"><td><input type="checkbox" ${checked.has(x.handle) ? "checked" : ""} onclick="event.stopPropagation()" onchange="toggleChecked('${esc(x.handle)}',this.checked)"><span class="status ${esc(x.status)} ${["queued", "scraping", "building"].includes(x.status) ? "pulse" : ""}">${esc(x.status || "queued")}</span></td><td><div class="handle">${esc(x.name || "@" + x.handle)}</div><div class="muted">@${esc(x.handle)}</div></td><td>${esc(x.area || "—")}</td><td>${esc(x.phone || "—")}</td></tr>`,
-          )
-          .join("");
       }
-      function toggleChecked(h, on) {
-        if (on) checked.add(h);
-        else checked.delete(h);
-        selectedRun.textContent = `Run checked (${checked.size})`;
+      function exitPresent() {
+        if (P.rec && P.rec.state === "recording") stopRecord();
+        if (document.fullscreenElement)
+          document.exitFullscreen().catch(() => {});
+        $("#present").hidden = true;
+        $("#pframe").removeAttribute("src");
       }
-      let recorder = null,
-        recordChunks = [];
-      async function recordVideo() {
+      function fmt(ms) {
+        const s = Math.floor(ms / 1000);
+        return (
+          String(Math.floor(s / 60)).padStart(2, "0") +
+          ":" +
+          String(s % 60).padStart(2, "0")
+        );
+      }
+      async function toggleRecord() {
+        if (P.rec && P.rec.state === "recording") {
+          stopRecord();
+          return;
+        }
+        const frame = $("#pframe");
+        if (
+          !("CropTarget" in window) ||
+          typeof CropTarget.fromElement !== "function"
+        ) {
+          toast("Recording needs Chrome or Edge (region capture).");
+          return;
+        }
+        let stream;
         try {
-          if (recorder && recorder.state === "recording") {
-            recorder.stop();
+          stream = await navigator.mediaDevices.getDisplayMedia({
+            video: {
+              frameRate: 30,
+              width: { ideal: 3840 },
+              height: { ideal: 2160 },
+            },
+            audio: false,
+            preferCurrentTab: true,
+          });
+        } catch (e) {
+          toast("Screen capture cancelled");
+          return;
+        }
+        const track = stream.getVideoTracks()[0];
+        try {
+          if (typeof track.cropTo !== "function") throw 0;
+          await track.cropTo(await CropTarget.fromElement(frame));
+        } catch {
+          stream.getTracks().forEach((t) => t.stop());
+          toast(
+            "Choose this tab in the share picker so the preview can be cropped.",
+          );
+          return;
+        }
+        // countdown (not recorded: recorder has not started yet)
+        const cd = $("#countdown");
+        cd.hidden = false;
+        for (let n = 3; n > 0; n--) {
+          cd.textContent = n;
+          await new Promise((r) => setTimeout(r, 900));
+        }
+        cd.hidden = true;
+        try {
+          frame.contentWindow.scrollTo(0, 0);
+        } catch {}
+        const mimeType = [
+          "video/mp4;codecs=avc1.42E01E",
+          "video/mp4",
+          "video/webm;codecs=vp9",
+          "video/webm;codecs=vp8",
+          "video/webm",
+        ].find((t) => MediaRecorder.isTypeSupported(t));
+        const bps = +$("#pquality").value || 16000000;
+        P.rec = new MediaRecorder(stream, {
+          ...(mimeType ? { mimeType } : {}),
+          videoBitsPerSecond: bps,
+        });
+        P.chunks = [];
+        P.rec.ondataavailable = (e) => e.data.size && P.chunks.push(e.data);
+        P.rec.onstop = () => {
+          stream.getTracks().forEach((t) => t.stop());
+          cancelAnimationFrame(P.raf);
+          clearInterval(P.timer);
+          $("#rec").classList.remove("on");
+          $("#p-rec").innerHTML = lab("rec", "Record");
+          const type = P.rec.mimeType || "video/webm";
+          const ext = type.includes("mp4") ? "mp4" : "webm";
+          const a = document.createElement("a");
+          a.href = URL.createObjectURL(new Blob(P.chunks, { type }));
+          a.download = `${S.sel || "site"}.${ext}`;
+          a.click();
+          setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+          toast(`Recording saved as ${ext.toUpperCase()}`);
+          const st = stageOf(S.ld?.lead || {});
+          if (st === "new" || st === "built") setStage("recorded");
+        };
+        P.rec.start(1000);
+        P.t0 = Date.now();
+        $("#rec").classList.add("on");
+        $("#p-rec").innerHTML = lab("stop", "Stop");
+        P.timer = setInterval(
+          () => ($("#rectime").textContent = fmt(Date.now() - P.t0)),
+          250,
+        );
+        if ($("#pauto").checked) autoScroll(frame);
+      }
+      function autoScroll(frame) {
+        try {
+          const doc = frame.contentDocument,
+            win = frame.contentWindow;
+          const max = Math.max(
+            0,
+            doc.documentElement.scrollHeight - frame.clientHeight,
+          );
+          if (!max) {
+            setTimeout(
+              () => P.rec && P.rec.state === "recording" && stopRecord(),
+              4000,
+            );
             return;
           }
-          const stream = await navigator.mediaDevices.getDisplayMedia({
-            video: { frameRate: 30 },
-            audio: false,
-          });
-          recordChunks = [];
-          recorder = new MediaRecorder(stream);
-          recorder.ondataavailable = (e) =>
-            e.data.size && recordChunks.push(e.data);
-          recorder.onstop = () => {
-            stream.getTracks().forEach((t) => t.stop());
-            const a = document.createElement("a");
-            a.href = URL.createObjectURL(
-              new Blob(recordChunks, { type: "video/webm" }),
-            );
-            a.download = (selected || "site-preview") + ".webm";
-            a.click();
-            URL.revokeObjectURL(a.href);
-            toast("Recording downloaded");
+          const dur = Math.min(60000, Math.max(6000, max / 0.11));
+          const t0 = performance.now() + 1200;
+          const ease = (t) =>
+            t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+          const step = (now) => {
+            if (!P.rec || P.rec.state !== "recording") return;
+            const k = Math.min(1, Math.max(0, (now - t0) / dur));
+            win.scrollTo(0, max * ease(k));
+            if (k < 1) P.raf = requestAnimationFrame(step);
+            else
+              setTimeout(
+                () => P.rec && P.rec.state === "recording" && stopRecord(),
+                1500,
+              );
           };
-          recorder.start();
-          toast("Recording started · click Record video again to stop");
-        } catch (e) {
-          toast("Screen recording unavailable: " + e.message);
+          P.raf = requestAnimationFrame(step);
+        } catch {
+          toast("Auto-scroll unavailable for this page; scroll manually");
         }
       }
-      const selectLeadBase = selectLead;
-      selectLead = async (h) => {
-        await selectLeadBase(h);
-        drawPhotoChecks();
-      };
-      function drawPhotoChecks() {
-        if (!leadData) return;
-        let chosen = new Set(leadData.selected_photos || []);
-        $("#photos").innerHTML = (leadData.profile.posts || [])
-          .map(
-            (p) =>
-              `<label style="position:relative;display:block;flex:none"><img class="photo" src="${esc(p.preview)}" title="${esc(p.caption || p.alt_text || "Post image")}"><input type="checkbox" value="${esc((p.web_path || "").split("/").pop())}" ${chosen.has((p.web_path || "").split("/").pop()) ? "checked" : ""} style="position:absolute;right:2px;top:2px;accent-color:#d9ff73" title="Allow this image in the site"></label>`,
+      function stopRecord() {
+        if (P.rec && P.rec.state === "recording") P.rec.stop();
+      }
+
+      /* ---------- command palette ---------- */
+      let palItems = [],
+        palIdx = 0;
+      function commands() {
+        const c = [
+          {
+            t: "Go to Pipeline",
+            k: "view",
+            run: () => {
+              closeStudio();
+              setView("pipeline");
+            },
+          },
+          {
+            t: "Go to Batch",
+            run: () => {
+              closeStudio();
+              setView("batch");
+            },
+          },
+          {
+            t: "Open Settings",
+            run: () => {
+              closeStudio();
+              setView("settings");
+            },
+          },
+          { t: "Run batch", run: () => runBuild() },
+          {
+            t: "Toggle light / dark theme",
+            run: () =>
+              setTheme(
+                document.documentElement.dataset.theme === "light"
+                  ? "dark"
+                  : "light",
+              ),
+          },
+          {
+            t:
+              "Switch to " +
+              (S.layout === "board" ? "list" : "board") +
+              " layout",
+            run: () => {
+              S.layout = S.layout === "board" ? "list" : "board";
+              localStorage.setItem("studio-layout", S.layout);
+              render();
+            },
+          },
+          {
+            t: "Export leads CSV",
+            run: () => (location.href = "/api/leads.csv" + bq()),
+          },
+        ];
+        if (!$("#studio").hidden && S.sel) {
+          c.push(
+            { t: "Rebuild this site", run: () => runBuild([S.sel], true) },
+            { t: "Present mode", run: () => openPresent() },
+            {
+              t: "Copy pitch",
+              run: () =>
+                navigator.clipboard
+                  .writeText(pitch())
+                  .then(() => toast("Pitch copied")),
+            },
+            {
+              t: "Open Instagram profile",
+              run: () =>
+                window.open(`https://www.instagram.com/${S.sel}/`, "_blank"),
+            },
+            {
+              t: "Download ZIP",
+              run: () => (location.href = `${leadUrl(S.sel)}/zip${bq()}`),
+            },
+          );
+        }
+        return c;
+      }
+      function openPalette() {
+        $("#paletteov").hidden = false;
+        $("#palq").value = "";
+        drawPalette();
+        $("#palq").focus();
+      }
+      function drawPalette() {
+        const q = $("#palq").value.toLowerCase();
+        const leads = (S.st.leads || []).map((l) => ({
+          t: l.name || "@" + l.handle,
+          sub: "@" + l.handle,
+          run: () => {
+            if ($("#studio").hidden) openStudio(l.handle);
+            else {
+              S.sel = l.handle;
+              openStudio(l.handle);
+            }
+          },
+        }));
+        palItems = [...commands(), ...leads]
+          .filter(
+            (i) => !q || (i.t + " " + (i.sub || "")).toLowerCase().includes(q),
           )
-          .join("");
-        if (!$("#savephotos")) {
-          let b = document.createElement("button");
-          b.id = "savephotos";
-          b.textContent = "Save photo selection";
-          b.onclick = savePhotos;
-          $("#photos").parentElement.append(b);
-        }
+          .slice(0, 40);
+        palIdx = Math.min(palIdx, Math.max(0, palItems.length - 1));
+        $("#pallist").innerHTML =
+          palItems
+            .map(
+              (i, n) =>
+                `<li class="${n === palIdx ? "on" : ""}" data-n="${n}">${esc(i.t)}<small>${esc(i.sub || "")}</small></li>`,
+            )
+            .join("") || '<li class="muted">No matches</li>';
       }
-      async function savePhotos() {
-        if (!leadData) return;
-        let files = [...$("#photos").querySelectorAll("input:checked")].map(
-          (x) => x.value,
+      function runPal(n) {
+        const i = palItems[n];
+        if (!i) return;
+        $("#paletteov").hidden = true;
+        i.run();
+      }
+
+      /* ---------- actions ---------- */
+      const A = {
+        view: (el) => {
+          closeStudioIfOpen();
+          setView(el.dataset.v);
+        },
+        theme: () =>
+          setTheme(
+            document.documentElement.dataset.theme === "light"
+              ? "dark"
+              : "light",
+          ),
+        "palette-set": (el) => setPalette(el.dataset.p),
+        palette: openPalette,
+        filter: (el) => {
+          S.filter = el.dataset.f;
+          render();
+        },
+        layout: (el) => {
+          S.layout = el.dataset.l;
+          localStorage.setItem("studio-layout", S.layout);
+          render();
+        },
+        selmode: () => {
+          S.selmode = !S.selmode;
+          if (!S.selmode) S.checked.clear();
+          render();
+        },
+        check: (el, e) => {
+          e.stopPropagation();
+          el.checked
+            ? S.checked.add(el.dataset.h)
+            : S.checked.delete(el.dataset.h);
+          el.closest(".card")?.classList.toggle("picked", el.checked);
+          renderSelbar();
+        },
+        open: (el) => {
+          if (S.selmode) {
+            const h = el.dataset.h;
+            S.checked.has(h) ? S.checked.delete(h) : S.checked.add(h);
+            render();
+            return;
+          }
+          openStudio(el.dataset.h);
+        },
+        retry: (el, e) => {
+          e.stopPropagation();
+          runBuild([el.dataset.h], true);
+        },
+        runChecked: () => runBuild([...S.checked]),
+        deleteChecked: () => chooseDelete([...S.checked]),
+        deleteOne: () => {
+          $("#smenu").hidden = true;
+          chooseDelete([S.sel]);
+        },
+        run: () => runBuild(),
+        saveAccounts: () => saveAccounts().catch((e) => toast(e.message)),
+        cancel: async () => {
+          await api("/api/cancel", { method: "POST" });
+          toast("Cancellation requested");
+        },
+        importPick: () => $("#importfile").click(),
+        exportAccounts: () => (location.href = "/api/accounts/export"),
+        exportCsv: () => (location.href = "/api/leads.csv" + bq()),
+        clearLogs: () => ($("#logs").innerHTML = ""),
+        saveSettings,
+        login: async () => {
+          try {
+            await api("/api/auth/login", { method: "POST" });
+            toast("Browser opened. Sign in to Instagram there.");
+          } catch (e) {
+            toast(e.message);
+          }
+        },
+        clearAuth: async () => {
+          try {
+            await api("/api/auth/clear", { method: "POST" });
+            await refresh(false);
+            toast("Session cleared");
+          } catch (e) {
+            toast(e.message);
+          }
+        },
+        health: async () => {
+          try {
+            const h = await api("/api/health");
+            $("#healthresult").textContent = Object.entries(h.checks)
+              .map(([k, v]) => k + ": " + (v ? "OK" : "missing"))
+              .join(" · ");
+          } catch (e) {
+            $("#healthresult").textContent = e.message;
+          }
+        },
+        sheetTest: async () => {
+          try {
+            const x = await api("/api/sheets/test", { method: "POST" });
+            $("#healthresult").textContent = x.message;
+            toast(x.message);
+          } catch (e) {
+            $("#healthresult").textContent = e.message;
+            toast(e.message);
+          }
+        },
+        closeStudio,
+        menu: (el, e) => {
+          e.stopPropagation();
+          $("#smenu").hidden = !$("#smenu").hidden;
+        },
+        rebuild: () => {
+          $("#smenu").hidden = true;
+          runBuild([S.sel], true);
+        },
+        openTab: () => {
+          $("#smenu").hidden = true;
+          if (S.sel)
+            window.open(
+              `/preview/${enc(S.st.batch)}/${enc(S.sel)}/index.html`,
+              "_blank",
+            );
+        },
+        instagram: () => {
+          $("#smenu").hidden = true;
+          window.open(`https://www.instagram.com/${S.sel}/`, "_blank");
+        },
+        whatsapp: () => {
+          $("#smenu").hidden = true;
+          whatsapp();
+        },
+        copyPitch: () => {
+          $("#smenu").hidden = true;
+          navigator.clipboard
+            .writeText(pitch())
+            .then(() => toast("Pitch copied"));
+        },
+        copyPath: () => {
+          $("#smenu").hidden = true;
+          S.ld?.lead.site_path &&
+            navigator.clipboard
+              .writeText(S.ld.lead.site_path)
+              .then(() => toast("Path copied"));
+        },
+        zip: () => {
+          $("#smenu").hidden = true;
+          location.href = `${leadUrl(S.sel)}/zip${bq()}`;
+        },
+        device: (el) => {
+          const d = el.dataset.d;
+          S.device = d;
+          $("#device").className = "device" + (d === "desktop" ? "" : " " + d);
+          $$('[data-act="device"]').forEach((b) =>
+            b.classList.toggle("on", b.dataset.d === d),
+          );
+        },
+        reloadPreview: () => {
+          S.nonce = Date.now();
+          if (S.sel && hasSite()) $("#preview").src = previewUrl(S.sel);
+        },
+        toggleSide: () => {
+          S.sideOpen = !S.sideOpen;
+          $("#sbody").classList.toggle("noside", !S.sideOpen);
+        },
+        tab: (el) => {
+          $$(".tabs button").forEach((b) => b.classList.toggle("on", b === el));
+          ["details", "photos", "revisions", "design"].forEach(
+            (t) => ($("#pane-" + t).hidden = t !== el.dataset.t),
+          );
+        },
+        setstage: (el) => setStage(el.dataset.s),
+        next: async () => {
+          if (!S.ld) return;
+          const st = stageOf(S.ld.lead);
+          if (!hasSite()) return runBuild([S.sel], true);
+          if (st === "new" || st === "built") return openPresent(true);
+          if (st === "recorded") {
+            await navigator.clipboard.writeText(pitch()).catch(() => {});
+            if (whatsapp()) {
+              await setStage("sent");
+              toast("Pitch copied · marked as sent");
+            }
+            return;
+          }
+          if (st === "sent") return setStage("replied");
+          if (st === "replied") return setStage("won");
+        },
+        present: () => openPresent(),
+        exitPresent,
+        pdevice: (el) => pdevice(el.dataset.d),
+        fullscreen: () => {
+          const p = $("#present");
+          document.fullscreenElement
+            ? document.exitFullscreen()
+            : p.requestFullscreen?.().catch(() => toast("Fullscreen blocked"));
+        },
+        record: toggleRecord,
+        photo: (el) => {
+          el.classList.toggle("on");
+          updatePhotoCount();
+          savePhotos();
+        },
+        addRevision: async () => {
+          const text = $("#revision").value.trim();
+          if (!text) return toast("Describe the change first");
+          try {
+            const r = await api(`/api/revision/${enc(S.sel)}${bq()}`, {
+              method: "POST",
+              body: JSON.stringify({ request: text }),
+            });
+            $("#revision").value = "";
+            await api(`/api/revision/${enc(S.sel)}/${r.id}/apply${bq()}`, {
+              method: "POST",
+            });
+            toast("Revision started");
+            S.nonce = Date.now();
+            loadLead(S.sel, false);
+          } catch (e) {
+            toast(e.message);
+          }
+        },
+        reapply: async (el) => {
+          try {
+            await api(
+              `/api/revision/${enc(S.sel)}/${el.dataset.id}/apply${bq()}`,
+              { method: "POST" },
+            );
+            toast("Revision rerun");
+          } catch (e) {
+            toast(e.message);
+          }
+        },
+        undorev: async (el) => {
+          if (
+            !(await confirmDlg(
+              "Undo revision",
+              "Restore the site backup made before this revision?",
+              "Restore",
+            ))
+          )
+            return;
+          try {
+            await api(
+              `/api/revision/${enc(S.sel)}/${el.dataset.id}/undo${bq()}`,
+              { method: "POST" },
+            );
+            S.nonce = Date.now();
+            await loadLead(S.sel, true);
+            toast("Backup restored");
+          } catch (e) {
+            toast(e.message);
+          }
+        },
+      };
+      function closeStudioIfOpen() {
+        if (!$("#studio").hidden) closeStudio();
+      }
+      async function chooseDelete(handles) {
+        if (!handles.length) return;
+        const names = handles.map((h) => "@" + h).join(", ");
+        const mode = await dlg(
+          "Delete " + (handles.length > 1 ? handles.length + " leads" : "lead"),
+          `Choose what to remove for ${names}. “Website only” keeps scraped Instagram data and backups. “Everything” removes those too. Both remove the lead and its revision history from the database.`,
+          [
+            { label: "Cancel", value: null },
+            { label: "Website only", value: "site", cls: "danger" },
+            { label: "Everything", value: "folder", cls: "danger" },
+          ],
         );
+        if (!mode) return;
         try {
-          await api(`/api/lead/${selected}/photos${batchq()}`, {
-            method: "PUT",
-            body: JSON.stringify({ files }),
-          });
-          toast(`${files.length} photos selected`);
-        } catch (e) {
-          toast(e.message);
-        }
-      }
-      async function runBuild(
-        handles = null,
-        force = $("#force").checked,
-        rescrape = $("#rescrape").checked,
-        scrapeOnly = false,
-      ) {
-        try {
-          await saveAccounts();
-          let x = await api("/api/run" + batchq(), {
+          await api("/api/lead/delete" + bq(), {
             method: "POST",
-            body: JSON.stringify({
-              handles: handles || [],
-              force,
-              rescrape,
-              scrape_only: scrapeOnly,
-            }),
+            body: JSON.stringify({ handles, mode }),
           });
-          toast(`Queued ${x.handles.length} profile(s)`);
-          jobStatus();
-        } catch (e) {
-          toast(e.message);
-        }
-      }
-      const deleteModal = document.createElement("div");
-      deleteModal.className = "modal";
-      deleteModal.innerHTML =
-        '<div class="dialog"><h2>Delete lead</h2><p id="deleteprompt" class="muted"></p><div class="actions" style="justify-content:flex-start"><button class="danger" id="deletesite">Delete website only</button><button class="danger" id="deletefolder">Delete entire folder</button><span class="spacer"></span><button id="deletecancel">Cancel</button></div><p class="muted" style="font-size:11px">Website only keeps scraped Instagram data and backups. Entire folder removes those too. Both options remove the lead and revision history from the database.</p></div>';
-      document.body.append(deleteModal);
-      let pendingDelete = [];
-      function chooseDelete(handles) {
-        pendingDelete = handles;
-        $("#deleteprompt").textContent =
-          `Choose what to remove for ${handles.map((h) => "@" + h).join(", ")}.`;
-        deleteModal.classList.add("open");
-      }
-      async function executeDelete(mode) {
-        try {
-          await api("/api/lead/delete" + batchq(), {
-            method: "POST",
-            body: JSON.stringify({ handles: pendingDelete, mode }),
-          });
-          for (const h of pendingDelete) checked.delete(h);
-          if (pendingDelete.includes(selected)) selected = "";
-          deleteModal.classList.remove("open");
-          await refresh();
+          handles.forEach((h) => S.checked.delete(h));
+          if (handles.includes(S.sel)) {
+            S.sel = "";
+            S.ld = null;
+            $("#studio").hidden = true;
+            document.body.style.overflow = "";
+          }
+          await refresh(false);
           toast(
             mode === "site"
-              ? "Lead removed; website deleted"
+              ? "Lead removed, website deleted"
               : "Lead and entire folder deleted",
           );
         } catch (e) {
           toast(e.message);
         }
       }
-      deleteOne.onclick = () => selected && chooseDelete([selected]);
-      deleteChecked.onclick = () => checked.size && chooseDelete([...checked]);
-      $("#deletesite").onclick = () => executeDelete("site");
-      $("#deletefolder").onclick = () => executeDelete("folder");
-      $("#deletecancel").onclick = () => deleteModal.classList.remove("open");
-      deleteModal.onclick = (e) => {
-        if (e.target === deleteModal) deleteModal.classList.remove("open");
-      };
-      async function recordVideo() {
-        try {
-          if (recorder && recorder.state === "recording") {
-            recorder.stop();
+
+      /* ---------- events ---------- */
+      document.addEventListener("click", (e) => {
+        if (!e.target.closest(".menu")) $("#smenu").hidden = true;
+        const el = e.target.closest("[data-act]");
+        if (el && A[el.dataset.act]) {
+          if (el.type === "checkbox") {
+            A[el.dataset.act](el, e);
             return;
           }
-          const frame = $("#preview");
-          if (frame.hidden || !selected) {
-            toast("Select a built site before recording");
+          A[el.dataset.act](el, e);
+        }
+        const li = e.target.closest("#pallist li[data-n]");
+        if (li) runPal(+li.dataset.n);
+        if (e.target === $("#paletteov")) $("#paletteov").hidden = true;
+      });
+      document.addEventListener("keydown", (e) => {
+        const typing = /INPUT|TEXTAREA|SELECT/.test(e.target.tagName);
+        if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+          e.preventDefault();
+          $("#paletteov").hidden
+            ? openPalette()
+            : ($("#paletteov").hidden = true);
+          return;
+        }
+        if (!$("#paletteov").hidden) {
+          if (e.key === "Escape") $("#paletteov").hidden = true;
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
+            palIdx = Math.min(palIdx + 1, palItems.length - 1);
+            drawPalette();
+          }
+          if (e.key === "ArrowUp") {
+            e.preventDefault();
+            palIdx = Math.max(palIdx - 1, 0);
+            drawPalette();
+          }
+          if (e.key === "Enter") runPal(palIdx);
+          return;
+        }
+        if (!$("#dlgov").hidden) {
+          if (e.key === "Escape") $("#dlgov").hidden = true;
+          return;
+        }
+        if (e.key === "Escape") {
+          if (!$("#present").hidden) {
+            exitPresent();
             return;
           }
-          if (
-            !("CropTarget" in window) ||
-            typeof CropTarget.fromElement !== "function"
-          ) {
-            toast(
-              "This browser cannot crop screen capture to the preview. Use Chrome or Edge and try again.",
-            );
+          if (!$("#studio").hidden) {
+            closeStudio();
             return;
           }
-          const stream = await navigator.mediaDevices.getDisplayMedia({
-            video: { frameRate: 30 },
-            audio: false,
-            preferCurrentTab: true,
-          });
-          const track = stream.getVideoTracks()[0];
-          try {
-            if (typeof track.cropTo !== "function")
-              throw Error("The selected capture is not a browser tab");
-            const target = await CropTarget.fromElement(frame);
-            await track.cropTo(target);
-          } catch (e) {
-            stream.getTracks().forEach((t) => t.stop());
-            toast(
-              "Choose this dashboard tab in the share picker so the preview can be cropped.",
-            );
-            return;
+          if (S.selmode) A.selmode();
+          return;
+        }
+        if (!$("#present").hidden && e.key.toLowerCase() === "r" && !typing) {
+          toggleRecord();
+          return;
+        }
+        if (typing) {
+          if (e.key === "Enter" && e.altKey && e.target.id === "revision")
+            A.addRevision();
+          return;
+        }
+        if (!$("#studio").hidden) {
+          const k = e.key.toLowerCase();
+          if (k === "r") runBuild([S.sel], true);
+          if (k === "p") openPresent();
+          if (k === "j" || k === "k") {
+            const list = filtered();
+            const i = list.findIndex((x) => x.handle === S.sel);
+            const n = list[i + (k === "j" ? 1 : -1)];
+            if (n) {
+              S.sel = n.handle;
+              openStudio(n.handle);
+            }
           }
-          recordChunks = [];
-          recorder = new MediaRecorder(stream);
-          recorder.ondataavailable = (e) =>
-            e.data.size && recordChunks.push(e.data);
-          recorder.onstop = () => {
-            stream.getTracks().forEach((t) => t.stop());
-            const a = document.createElement("a");
-            a.href = URL.createObjectURL(
-              new Blob(recordChunks, { type: "video/webm" }),
-            );
-            a.download = (selected || "site-preview") + ".webm";
-            a.click();
-            URL.revokeObjectURL(a.href);
-            toast("Preview recording downloaded");
-          };
-          recorder.start();
-          toast(
-            "Recording the preview only · click Record video again to stop",
-          );
-        } catch (e) {
-          toast("Screen recording unavailable: " + e.message);
+        }
+      });
+      $("#palq").addEventListener("input", () => {
+        palIdx = 0;
+        drawPalette();
+      });
+      $("#q").addEventListener("input", render);
+      $("#batch").addEventListener("change", () => {
+        S.sel = "";
+        S.checked.clear();
+        refresh(false);
+      });
+      $("#importfile").addEventListener("change", async (e) => {
+        const f = e.target.files[0];
+        if (f) $("#accounts").value = await f.text();
+        e.target.value = "";
+      });
+      document.addEventListener("input", (e) => {
+        if (e.target.matches("[data-field]")) autosave();
+      });
+      document.addEventListener("change", (e) => {
+        if (e.target.matches("[data-field]")) autosave();
+      });
+      // drag & drop between pipeline stages
+      let dragH = null;
+      document.addEventListener("dragstart", (e) => {
+        const c = e.target.closest?.(".card[data-h]");
+        if (!c) return;
+        dragH = c.dataset.h;
+        c.classList.add("dragging");
+        e.dataTransfer.effectAllowed = "move";
+        e.dataTransfer.setData("text/plain", dragH);
+      });
+      document.addEventListener("dragend", (e) => {
+        e.target.classList?.remove("dragging");
+        $$(".col.over").forEach((c) => c.classList.remove("over"));
+      });
+      document.addEventListener("dragover", (e) => {
+        const c = e.target.closest?.(".col");
+        if (c && dragH) {
+          e.preventDefault();
+          $$(".col.over").forEach((x) => x !== c && x.classList.remove("over"));
+          c.classList.add("over");
+        }
+      });
+      document.addEventListener("drop", (e) => {
+        const c = e.target.closest?.(".col");
+        if (!c || !dragH) return;
+        e.preventDefault();
+        const st = c.dataset.stage,
+          h = dragH;
+        dragH = null;
+        c.classList.remove("over");
+        if (stageOf(leadOf(h)) !== st) stageFor(h, st);
+      });
+
+      /* live activity */
+      function addLog(x) {
+        const el = document.createElement("div");
+        el.className = "logline";
+        el.innerHTML = `<span class="muted">${esc((x.time || "").split("T")[1] || "")}</span> <b>${esc(x.handle || "batch")}</b> <span class="muted">${esc(x.status)}</span> ${esc(x.line)}`;
+        const box = $("#logs");
+        box.append(el);
+        box.scrollTop = box.scrollHeight;
+        if (x.batch === S.st.batch) {
+          jobStatus();
+          if (x.handle && x.status !== "log") {
+            refreshSoon();
+            if (
+              x.handle === S.sel &&
+              x.status === "done" &&
+              !$("#studio").hidden
+            ) {
+              S.nonce = Date.now();
+              setTimeout(() => loadLead(S.sel, true), 500);
+            }
+          }
+          if (x.status === "summary") {
+            try {
+              const a = JSON.parse(x.line);
+              toast(
+                `Batch finished · ${a.built} built · ${a.skipped} skipped · ${a.failed} failed`,
+              );
+              if (
+                "Notification" in window &&
+                Notification.permission === "granted"
+              )
+                new Notification("Studio batch complete", {
+                  body: `${a.built} built · ${a.failed} failed`,
+                });
+            } catch {}
+          }
         }
       }
+      const es = new EventSource("/api/events");
+      es.onmessage = (e) => {
+        try {
+          addLog(JSON.parse(e.data));
+        } catch {}
+      };
+
+      /* boot */
+      setTheme(
+        localStorage.getItem("studio-theme") === "light" ? "light" : "dark",
+      );
+      setPalette(localStorage.getItem("studio-palette") || "studio");
+      paintStudioChrome();
+      setView("pipeline");
+      if ("Notification" in window && Notification.permission === "default")
+        Notification.requestPermission();
+      refresh(false).catch((e) => toast(e.message));
     </script>
   </body>
 </html>
