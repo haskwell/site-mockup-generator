@@ -66,9 +66,10 @@ preserved when `run.py` refreshes the list of account headings.
 config/                 Account list, revision requests, local credentials
 prompts/GEMINI.md       Generation instructions
 prompts/SKILL.md        Design guidance
-src/                    Scraper, summary, design, and Sheets utility
-pipeline_common.py      Shared settings, logger, process and account helpers
-run.py                  Build workflow
-revisions.py            Revision workflow
+src/                    Dashboard, build and revision workflows, plus pipeline modules
+run.py                  Build command entrypoint
+app.py                  Dashboard command entrypoint
+revisions.py            Revision command entrypoint
+launch.py               Desktop dashboard launcher
 requirements.txt        Python dependencies
 ```
