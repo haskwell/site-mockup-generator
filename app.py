@@ -9,7 +9,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from pydantic import BaseModel, Field
-from pipeline_common import MODEL, TIMEOUT_SECONDS, account_handle, run_streaming
+from pipeline_common import MODEL, TIMEOUT_SECONDS, account_handle, find_agy, run_streaming
 from run import process_account, validate_site
 
 REPO=Path(__file__).resolve().parent; WEB=REPO/"web"
@@ -164,8 +164,9 @@ def test_sheet():
 
 @app.get("/api/health")
 def health_check():
-    import importlib.util, shutil as sh
-    checks={"agy":bool(sh.which("agy")),"playwright":importlib.util.find_spec("playwright") is not None,"browser":False}
+    import importlib.util
+    agy_path = find_agy()
+    checks={"agy":bool(agy_path),"playwright":importlib.util.find_spec("playwright") is not None,"browser":False}
     if checks["playwright"]:
         try:
             from playwright.sync_api import sync_playwright
@@ -173,7 +174,7 @@ def health_check():
                 browser=p.chromium.launch(headless=True);browser.close()
             checks["browser"]=True
         except Exception:pass
-    return {"checks":checks,"ok":all(checks.values())}
+    return {"checks":checks,"paths":{"agy":agy_path},"ok":all(checks.values())}
 
 def queue_run(handles,batch,force,rescrape,scrape_only=False):
     global active_job

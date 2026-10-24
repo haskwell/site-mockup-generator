@@ -9,7 +9,7 @@ import datetime as dt
 import shutil
 import sys
 from pathlib import Path
-from pipeline_common import Logger, MODEL, MIN_SIZE, TIMEOUT_SECONDS, account_handle, run_streaming
+from pipeline_common import Logger, MODEL, MIN_SIZE, TIMEOUT_SECONDS, account_handle, find_agy, run_streaming
 
 REPO = Path(__file__).resolve().parent
 
@@ -78,6 +78,12 @@ def revise(user: str, revision: str, root: Path, accounts: set[str], logger: Log
     if not (account / "DESIGN.md").is_file():
         logger.log("ERROR", f"{user}: DESIGN.md not found in {account}")
         return 1
+    agy_bin = find_agy()
+    if not agy_bin:
+        message = "agy executable not found on PATH or at ~/.local/bin/agy"
+        logger.log("ERROR", f"{user}: {message}")
+        report("failed", message)
+        return 1
     try:
         (account / "logs").mkdir(parents=True, exist_ok=True)
         shutil.copy2(REPO / "prompts/GEMINI.md", account / "GEMINI.md")
@@ -95,7 +101,7 @@ def revise(user: str, revision: str, root: Path, accounts: set[str], logger: Log
               "Revision requests:\n" + revision)
     logger.log("INFO", f"{user}: revising site with agy ({model})...")
     report("building", "Applying revision")
-    code, timed_out = run_streaming(["agy", "-p", prompt, "--model", model],
+    code, timed_out = run_streaming([agy_bin, "-p", prompt, "--model", model],
                                     account, logger, agy_log, timeout, f"{user}: ")
     if timed_out:
         shutil.rmtree(account / "site", ignore_errors=True)

@@ -6,6 +6,7 @@ import os
 import re
 import signal
 import selectors
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -13,6 +14,17 @@ from pathlib import Path
 MODEL = "gemini-3.8-flash-medium"
 MIN_SIZE = 600
 TIMEOUT_SECONDS = 900
+
+
+def find_agy() -> str | None:
+    """Find agy on PATH or in the standard per-user executable directory."""
+    executable = shutil.which("agy")
+    if executable:
+        return executable
+    user_executable = Path.home() / ".local" / "bin" / "agy"
+    if user_executable.is_file() and os.access(user_executable, os.X_OK):
+        return str(user_executable)
+    return None
 
 
 class Logger:

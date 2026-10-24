@@ -12,10 +12,12 @@ python -m pip install -r requirements.txt
 playwright install chromium
 ```
 
-Install and authenticate `agy` separately. Put account handles or Instagram
-profile URLs, one per line, in `config/accounts.txt`. Optional saved browser
-state belongs in `config/auth.json`; Google Sheets credentials belong in
-`config/creds.json`. Both are ignored by git.
+Install and authenticate `agy` separately. It must be available on `PATH` or
+installed at `~/.local/bin/agy`; the dashboard checks both locations. Put
+account handles or Instagram profile URLs, one per line, in
+`config/accounts.txt`. Optional saved browser state belongs in
+`config/auth.json`; Google Sheets credentials belong in `config/creds.json`.
+Both are ignored by git.
 
 ## Build
 

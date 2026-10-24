@@ -2890,7 +2890,14 @@
           try {
             const h = await api("/api/health");
             $("#healthresult").textContent = Object.entries(h.checks)
-              .map(([k, v]) => k + ": " + (v ? "OK" : "missing"))
+              .map(
+                ([k, v]) =>
+                  k +
+                  ": " +
+                  (v
+                    ? "OK" + (k === "agy" && h.paths?.agy ? " (" + h.paths.agy + ")" : "")
+                    : "missing"),
+              )
               .join(" · ");
           } catch (e) {
             $("#healthresult").textContent = e.message;

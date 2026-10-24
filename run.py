@@ -11,7 +11,7 @@ import shutil
 import sys
 import time
 from pathlib import Path
-from pipeline_common import Logger, MODEL, MIN_SIZE, TIMEOUT_SECONDS, account_handle, run_streaming
+from pipeline_common import Logger, MODEL, MIN_SIZE, TIMEOUT_SECONDS, account_handle, find_agy, run_streaming
 
 
 REPO = Path(__file__).resolve().parent
@@ -141,6 +141,12 @@ def process_account(user: str, root: Path, python: str, force: bool, logger: Log
     if options.get("scrape_only"):
         status("done", "Scrape complete")
         return 0
+    agy_bin = find_agy()
+    if agy_bin is None:
+        message = "agy executable not found on PATH or at ~/.local/bin/agy"
+        logger.log("ERROR", f"{user}: {message}")
+        status("failed", message)
+        return 1
     if not (data / "profile_data.json").is_file():
         logger.log("ERROR", f"{user}: no profile_data.json")
         return 1
@@ -196,7 +202,7 @@ def process_account(user: str, root: Path, python: str, force: bool, logger: Log
     logger.log("INFO", f"{user}: building site with agy ({model})...")
     status("building", "Building site with agy")
     rc, timed_out = run_streaming(
-        ["agy", "-p", "Read GEMINI.md, DESIGN.md and SKILL.md, then build the site. DESIGN.md is binding.",
+        [agy_bin, "-p", "Read GEMINI.md, DESIGN.md and SKILL.md, then build the site. DESIGN.md is binding.",
          "--model", model],
         account, logger, agy_log, int(options.get("timeout", TIMEOUT_SECONDS)), cancel_event=cancel_event)
     if timed_out:
