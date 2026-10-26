@@ -1436,6 +1436,9 @@
           <span class="pill" id="jobpill"
             ><span class="dot"></span><span id="jobtext">Ready</span></span
           >
+          <span class="pill run" id="syncpill" style="border-color:var(--accent);color:var(--accent)" hidden
+            ><span class="dot" style="background:var(--accent)"></span><span id="synctext">Uploading…</span></span
+          >
         </header>
 
         <section class="view" id="view-pipeline">
@@ -1687,7 +1690,9 @@
             <button data-act="whatsapp" id="m-wa"></button>
             <button data-act="copyPitch" id="m-pitch"></button>
             <button data-act="copyPath" id="m-path"></button>
-            <button data-act="zip" id="m-zip"></button>
+            <button data-act="zipSite" id="m-zip"></button>
+            <button data-act="zipFull" id="m-zip-full"></button>
+            <button data-act="downloadRec" id="m-rec-dl" hidden></button>
             <button class="danger" data-act="deleteOne" id="m-del"></button>
           </div>
         </div>
@@ -2027,6 +2032,16 @@
         $("#toasts").append(t);
         setTimeout(() => t.remove(), 2800);
       }
+      function setSyncIndicator(msg) {
+        const p = $("#syncpill");
+        if (!p) return;
+        if (!msg) {
+          p.hidden = true;
+          return;
+        }
+        $("#synctext").textContent = msg;
+        p.hidden = false;
+      }
       const debounce = (f, ms) => {
         let t;
         return (...a) => {
@@ -2307,7 +2322,9 @@
         $("#m-wa").innerHTML = lab("chat", "WhatsApp");
         $("#m-pitch").innerHTML = lab("copy", "Copy pitch");
         $("#m-path").innerHTML = lab("copy", "Copy site path");
-        $("#m-zip").innerHTML = lab("download", "Download ZIP");
+        $("#m-zip").innerHTML = lab("download", "Download Site ZIP");
+        $("#m-zip-full").innerHTML = lab("download", "Download Full Folder ZIP");
+        $("#m-rec-dl").innerHTML = lab("play", "Download Recording");
         $("#m-del").innerHTML = lab("trash", "Delete lead…");
         $("#p-exit").innerHTML = lab("back", "Exit");
         $("#p-full").innerHTML = lab("expand", "Fullscreen");
@@ -2350,6 +2367,15 @@
             $("#f-stage").value = stageOf(l);
           }
           updateContactMenu();
+          const recBtn = $("#m-rec-dl");
+          if (recBtn) {
+            const hasRec = d.recordings && Object.keys(d.recordings).length > 0;
+            recBtn.hidden = !hasRec;
+            if (hasRec) {
+              const recDevs = Object.keys(d.recordings).join("/");
+              recBtn.innerHTML = lab("play", `Download Recording (${recDevs})`);
+            }
+          }
           $("#f-qa").value = l.qa || "";
           $("#biotext").textContent =
             d.profile?.bio || "Profile data appears after scraping.";
@@ -2781,16 +2807,24 @@
           a.download = `${S.sel || "site"}-${P.device}.${ext}`;
           a.click();
           setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+          setSyncIndicator(`Uploading ${P.device} recording…`);
           try {
             const blob = new Blob(P.chunks, { type });
             const qs = new URLSearchParams({ batch: S.st.batch, screen: P.device, extension: ext });
-            await api(`${leadUrl(S.sel)}/recording?${qs}`, { method: "POST", body: blob });
-            toast(`Recording saved to websites as ${S.sel}-${P.device}.${ext}`);
+            const res = await api(`${leadUrl(S.sel)}/recording?${qs}`, { method: "POST", body: blob });
+            setSyncIndicator(null);
+            if (res && res.r2_url) {
+              toast(`Recording uploaded & synced to Cloudflare R2!`);
+            } else {
+              toast(`Recording saved as ${S.sel}-${P.device}.${ext}`);
+            }
           } catch (e) {
-            toast(`Download saved; website copy failed: ${e.message}`);
+            setSyncIndicator(null);
+            toast(`Download saved; server upload failed: ${e.message}`);
           }
           const st = stageOf(S.ld?.lead || {});
           if (st === "new" || st === "built") setStage("recorded");
+          if (S.sel) loadLead(S.sel, true);
         };
         P.rec.start(1000);
         P.t0 = Date.now();
@@ -3113,7 +3147,40 @@
         },
         zip: () => {
           $("#smenu").hidden = true;
-          location.href = `${leadUrl(S.sel)}/zip${bq()}`;
+          actions.zipSite();
+        },
+        zipSite: () => {
+          $("#smenu").hidden = true;
+          if (!S.sel) return;
+          setSyncIndicator(`Preparing Website ZIP for @${S.sel}…`);
+          toast("Preparing Website ZIP…");
+          const a = document.createElement("a");
+          a.href = `${leadUrl(S.sel)}/zip?mode=site&${bq().slice(1)}`;
+          a.download = `${S.sel}-site.zip`;
+          a.click();
+          setTimeout(() => setSyncIndicator(null), 2500);
+        },
+        zipFull: () => {
+          $("#smenu").hidden = true;
+          if (!S.sel) return;
+          setSyncIndicator(`Bundling Full Folder Archive for @${S.sel}…`);
+          toast("Preparing Full Folder Archive ZIP…");
+          const a = document.createElement("a");
+          a.href = `${leadUrl(S.sel)}/zip?mode=full&${bq().slice(1)}`;
+          a.download = `${S.sel}-full.zip`;
+          a.click();
+          setTimeout(() => setSyncIndicator(null), 3500);
+        },
+        downloadRec: () => {
+          $("#smenu").hidden = true;
+          if (!S.sel) return;
+          const dev = S.device || P.device || "desktop";
+          setSyncIndicator(`Downloading demo recording for @${S.sel}…`);
+          toast(`Downloading ${dev} demo recording…`);
+          const a = document.createElement("a");
+          a.href = `${leadUrl(S.sel)}/recording/${dev}?download=true&${bq().slice(1)}`;
+          a.click();
+          setTimeout(() => setSyncIndicator(null), 2500);
         },
         device: (el) => {
           const d = el.dataset.d;

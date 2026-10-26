@@ -12,7 +12,18 @@ from pydantic import BaseModel, Field
 from src.pipeline_common import MODEL, TIMEOUT_SECONDS, account_handle, find_agy, get_venv_python, run_streaming
 from src.run import process_account, validate_site
 from src.d1_client import get_current_user, get_db_connection, is_d1_configured
-from src.r2_storage import delete_lead_assets, get_preview_url, is_r2_configured
+from src.r2_storage import (
+    delete_lead_assets,
+    download_lead_folder,
+    download_recording,
+    download_site,
+    get_preview_url,
+    get_recording_url,
+    is_r2_configured,
+    list_recordings,
+    upload_recording,
+)
+from tempfile import gettempdir
 
 REPO=Path(__file__).resolve().parents[1]; WEB=REPO/"web"
 DB=Path(os.environ.get("DASHBOARD_DB",REPO/"dashboard.sqlite3"))
@@ -62,8 +73,11 @@ def init_db():
 def startup(): init_db()
 
 def settings():
-    with connect() as d: rows=d.execute("SELECT key,value FROM settings").fetchall()
-    return {r["key"]:json.loads(r["value"]) for r in rows}
+    try:
+        with connect() as d: rows=d.execute("SELECT key,value FROM settings").fetchall()
+        return {r["key"]:json.loads(r["value"]) for r in rows}
+    except Exception:
+        return dict(DEFAULTS)
 
 def clean_batch(batch):
     try:
@@ -307,7 +321,18 @@ def lead(handle:str,batch:str|None=None):
     selected_file=root_for(batch)/handle/"selected_posts.json"
     try:selected=json.loads(selected_file.read_text())
     except Exception:selected=[Path(p.get("web_path","")).name for p in profile.get("posts",[])]
-    return {"lead":dict(r),"profile":profile,"summary":summary,"revisions":rev,"design":design.read_text() if design.exists() else "","selected_photos":selected}
+    recordings={}
+    local_recs=account/"recordings"
+    if local_recs.is_dir():
+        for f in local_recs.iterdir():
+            if f.is_file() and f.suffix.lower() in {".webm",".mp4"}:
+                for s in ["desktop","tablet","phone"]:
+                    if f"-{s}." in f.name:recordings[s]=f.name
+    if is_r2_configured():
+        for r2_rec in list_recordings(batch,handle):
+            for s in ["desktop","tablet","phone"]:
+                if f"-{s}." in r2_rec:recordings[s]=r2_rec
+    return {"lead":dict(r),"profile":profile,"summary":summary,"revisions":rev,"design":design.read_text() if design.exists() else "","selected_photos":selected,"recordings":recordings}
 
 @app.post("/api/lead/{handle}/recording")
 async def save_recording(handle:str,request:Request,batch:str|None=None,screen:str="desktop",extension:str="webm"):
@@ -315,13 +340,56 @@ async def save_recording(handle:str,request:Request,batch:str|None=None,screen:s
     if screen not in {"phone","tablet","desktop"}:raise HTTPException(400,"Invalid screen size")
     if extension not in {"mp4","webm"}:raise HTTPException(400,"Invalid recording format")
     account=root_for(batch)/handle
-    if not (account/"site"/"index.html").is_file():raise HTTPException(404,"Site not found")
+    site_file=account/"site"/"index.html"
+    has_site=site_file.is_file()
+    if not has_site:
+        with connect() as d:
+            row=d.execute("SELECT site_path, status FROM leads WHERE batch=? AND handle=?",(batch,handle)).fetchone()
+            if row and (row.get("site_path") or row.get("status") in {"done","built"}):
+                has_site=True
+        if not has_site and is_r2_configured():
+            has_site=bool(get_preview_url(batch,handle,"index.html"))
+    if not has_site:raise HTTPException(404,"Site not found")
     data=await request.body()
     if not data:raise HTTPException(400,"Recording is empty")
     recordings=account/"recordings";recordings.mkdir(parents=True,exist_ok=True)
-    path=recordings/f"{handle}-{screen}.{extension}"
+    filename=f"{handle}-{screen}.{extension}"
+    path=recordings/filename
     path.write_bytes(data)
-    return {"path":str(path)}
+    r2_url=None
+    if is_r2_configured():
+        r2_url=upload_recording(path,batch,handle,filename)
+    return {"path":str(path),"filename":filename,"r2_url":r2_url,"screen":screen}
+
+@app.get("/api/lead/{handle}/recording/{screen}")
+def get_recording(handle:str,screen:str,batch:str|None=None,download:bool=False):
+    handle=clean_handle(handle);batch=clean_batch(batch or selected_batch)
+    if screen not in {"phone","tablet","desktop"}:raise HTTPException(400,"Invalid screen size")
+    account=root_for(batch)/handle
+    recordings_dir=account/"recordings"
+    local_file=None; filename=None
+    for ext in ["webm","mp4"]:
+        f=recordings_dir/f"{handle}-{screen}.{ext}"
+        if f.is_file():
+            local_file=f; filename=f.name; break
+    if is_r2_configured():
+        if not filename:
+            for rec in list_recordings(batch,handle):
+                if rec.startswith(f"{handle}-{screen}."):
+                    filename=rec; break
+        if filename:
+            r2_url=get_recording_url(batch,handle,filename)
+            if r2_url and not download:
+                from fastapi.responses import RedirectResponse
+                return RedirectResponse(r2_url,status_code=302)
+            elif r2_url and download and not local_file:
+                temp_file=Path(gettempdir())/f"rec_{handle}_{screen}_{filename}"
+                if download_recording(batch,handle,filename,temp_file):
+                    return FileResponse(temp_file,filename=filename,media_type="video/webm" if filename.endswith(".webm") else "video/mp4")
+    if local_file and local_file.is_file():
+        headers={"Content-Disposition":f'attachment; filename="{filename}"'} if download else {}
+        return FileResponse(local_file,headers=headers,media_type="video/webm" if filename.endswith(".webm") else "video/mp4")
+    raise HTTPException(404,"Recording not found")
 
 @app.put("/api/lead/{handle}/photos")
 def save_photos(handle:str,b:PhotoSelection,batch:str|None=None):
@@ -442,11 +510,37 @@ def undo_revision(handle:str,rid:int,batch:str|None=None):
     shutil.rmtree(site,ignore_errors=True);shutil.copytree(backup,site);emit(handle,"done","Revision undone",batch);return {"undone":True}
 
 @app.get("/api/lead/{handle}/zip")
-def zip_site(handle:str,batch:str|None=None):
-    from tempfile import gettempdir
-    handle=clean_handle(handle);site=root_for(clean_batch(batch or selected_batch))/handle/"site"
-    if not site.is_dir():raise HTTPException(404,"Site not found")
-    target=shutil.make_archive(str(Path(gettempdir())/f"studio_{handle}"),"zip",site);return FileResponse(target,filename=handle+".zip")
+def zip_site(handle:str,batch:str|None=None,mode:str="site"):
+    handle=clean_handle(handle);batch=clean_batch(batch or selected_batch)
+    if mode not in {"site","full"}:raise HTTPException(400,"mode must be 'site' or 'full'")
+    account=root_for(batch)/handle
+    target_name=f"{handle}-site" if mode=="site" else f"{handle}-full"
+    archive_base=str(Path(gettempdir())/f"studio_{handle}_{mode}")
+    if mode=="site":
+        site=account/"site"
+        if site.is_dir() and (site/"index.html").is_file():
+            target=shutil.make_archive(archive_base,"zip",site)
+            return FileResponse(target,filename=f"{target_name}.zip")
+        if is_r2_configured():
+            temp_site=Path(gettempdir())/f"r2_site_{batch}_{handle}"
+            temp_site.mkdir(parents=True,exist_ok=True)
+            if download_site(batch,handle,temp_site):
+                target=shutil.make_archive(archive_base,"zip",temp_site)
+                shutil.rmtree(temp_site,ignore_errors=True)
+                return FileResponse(target,filename=f"{target_name}.zip")
+        raise HTTPException(404,"Website files not found")
+    else:
+        if account.is_dir():
+            target=shutil.make_archive(archive_base,"zip",account)
+            return FileResponse(target,filename=f"{target_name}.zip")
+        if is_r2_configured():
+            temp_lead=Path(gettempdir())/f"r2_lead_{batch}_{handle}"
+            temp_lead.mkdir(parents=True,exist_ok=True)
+            if download_lead_folder(batch,handle,temp_lead):
+                target=shutil.make_archive(archive_base,"zip",temp_lead)
+                shutil.rmtree(temp_lead,ignore_errors=True)
+                return FileResponse(target,filename=f"{target_name}.zip")
+        raise HTTPException(404,"Account files not found")
 
 @app.get("/api/open/{handle}")
 def open_profile(handle:str):
