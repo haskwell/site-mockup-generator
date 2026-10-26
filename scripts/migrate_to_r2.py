@@ -34,7 +34,7 @@ def get_default_websites_root() -> Path:
         row = conn.execute("SELECT value FROM settings WHERE key='websites_root'").fetchone()
         if row:
             val = json.loads(row["value"] if isinstance(row, dict) or hasattr(row, "__getitem__") else row[0])
-            if val:
+            if val and Path(val).expanduser().is_dir():
                 return Path(val).expanduser().resolve()
     except Exception:
         pass

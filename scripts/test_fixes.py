@@ -179,5 +179,76 @@ class TestR2AssetSyncHelpers(unittest.TestCase):
         self.assertEqual(mock_upload_file.call_count, 2)  # DESIGN.md and selected_posts.json
 
 
+class TestParallelR2LeadFetch(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.websites_root = Path(self.temp_dir) / "websites"
+        self.batch_dir = self.websites_root / "2026-10-11"
+        self.batch_dir.mkdir(parents=True)
+        self.db_path = Path(self.temp_dir) / "test.db"
+        import sqlite3
+        conn = sqlite3.connect(self.db_path)
+        conn.execute("CREATE TABLE leads(batch TEXT, handle TEXT, name TEXT DEFAULT '', phone TEXT DEFAULT '', area TEXT DEFAULT '', followers TEXT DEFAULT '', status TEXT DEFAULT 'queued', error TEXT DEFAULT '', site_path TEXT DEFAULT '', notes TEXT DEFAULT '', stage TEXT DEFAULT 'new', follow_up TEXT DEFAULT '', price TEXT DEFAULT '', qa TEXT DEFAULT '', created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP, locked_by TEXT DEFAULT '', locked_at TEXT DEFAULT '', PRIMARY KEY(batch, handle))")
+        conn.execute("CREATE TABLE revisions(id INTEGER PRIMARY KEY AUTOINCREMENT, batch TEXT, handle TEXT, request TEXT, status TEXT DEFAULT 'pending', created_at TEXT DEFAULT CURRENT_TIMESTAMP, applied_at TEXT, backup_path TEXT DEFAULT '')")
+        conn.execute("INSERT INTO leads(batch, handle, name, site_path) VALUES('2026-10-11', 'cloud_lead', 'Cloud Cafe', 'https://pub-r2.dev/site/index.html')")
+        conn.commit()
+        conn.close()
+
+    def tearDown(self):
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    @patch("src.app.is_r2_configured", return_value=True)
+    @patch("src.app.get_lead_json")
+    @patch("src.app.get_lead_text")
+    @patch("src.app.list_recordings")
+    @patch("src.app.connect")
+    @patch("src.app.root_for")
+    def test_lead_parallel_r2_resolution(self, mock_root_for, mock_connect, mock_list_rec, mock_get_text, mock_get_json, mock_r2_cfg):
+        import sqlite3
+        mock_root_for.return_value = self.batch_dir
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        mock_connect.return_value = conn
+
+        def fake_get_json(batch, handle, filename):
+            if filename == "profile_data.json":
+                return {"name": "Cloud Cafe", "posts": [{"web_path": "posts/web/pic1.webp"}]}
+            elif filename == "business_data.json":
+                return [{"name": "Cloud Cafe", "phone": "12345"}]
+            elif filename == "selected_posts.json":
+                return ["pic1.webp"]
+            return None
+
+        mock_get_json.side_effect = fake_get_json
+        mock_get_text.return_value = "# Cloud Design"
+        mock_list_rec.return_value = ["cloud_lead-desktop.webm"]
+
+        from src.app import lead
+        res = lead("cloud_lead", batch="2026-10-11")
+
+        self.assertEqual(res["lead"]["name"], "Cloud Cafe")
+        self.assertEqual(res["profile"]["name"], "Cloud Cafe")
+        self.assertEqual(res["design"], "# Cloud Design")
+        self.assertEqual(res["selected_photos"], ["pic1.webp"])
+        self.assertEqual(res["recordings"], {"desktop": "cloud_lead-desktop.webm"})
+
+
+class TestCrossPlatformPaths(unittest.TestCase):
+    def test_resolve_credentials_from_foreign_os_path(self):
+        from src.app import resolve_credentials_path, REPO
+        # Simulate a Linux path string passed on a Windows system where that path does not exist
+        foreign_linux_path = "/home/frost/code/python/test/config/creds.json"
+        resolved = resolve_credentials_path(foreign_linux_path)
+        # Should cleanly resolve to the current local repo's config/creds.json
+        expected = (REPO / "config" / "creds.json").resolve()
+        self.assertEqual(resolved, expected)
+
+    def test_resolve_credentials_from_relative_path(self):
+        from src.app import resolve_credentials_path, REPO
+        resolved = resolve_credentials_path("config/creds.json")
+        expected = (REPO / "config" / "creds.json").resolve()
+        self.assertEqual(resolved, expected)
+
+
 if __name__ == "__main__":
     unittest.main()

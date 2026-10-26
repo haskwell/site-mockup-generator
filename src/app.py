@@ -30,7 +30,7 @@ from tempfile import gettempdir
 
 REPO=Path(__file__).resolve().parents[1]; WEB=REPO/"web"
 DB=Path(os.environ.get("DASHBOARD_DB",REPO/"dashboard.sqlite3"))
-DEFAULTS={"websites_root":str(Path.home()/"websites"),"model":MODEL,"timeout":TIMEOUT_SECONDS,"parallelism":1,"max_posts":18,"captions":True,"headed":False,"attempts":3,"credentials":str(REPO/"config/creds.json"),"sheet_name":"websites","browser":"","sync_sheet":True}
+DEFAULTS={"websites_root":"websites","model":MODEL,"timeout":TIMEOUT_SECONDS,"parallelism":1,"max_posts":18,"captions":True,"headed":False,"attempts":3,"credentials":"config/creds.json","sheet_name":"websites","browser":"","sync_sheet":True}
 app=FastAPI(title="Studio",docs_url=None,redoc_url=None)
 events=[]; subscribers=set(); event_lock=threading.Lock(); job_lock=threading.Lock(); active_job=None
 revision_queue=queue.Queue(); revision_active=False; revision_pending=0
@@ -75,12 +75,44 @@ def init_db():
 @app.on_event("startup")
 def startup(): init_db()
 
+def resolve_credentials_path(path_str: str | None = None) -> Path:
+    env_creds = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
+    if env_creds and Path(env_creds).is_file():
+        return Path(env_creds).resolve()
+    local_creds = (REPO / "config" / "creds.json").resolve()
+    if local_creds.is_file():
+        return local_creds
+    if path_str:
+        p = Path(path_str).expanduser()
+        if not p.is_absolute():
+            p = (REPO / p).resolve()
+        if p.is_file():
+            return p.resolve()
+    return local_creds
+
+def resolve_websites_root(root_str: str | None = None) -> Path:
+    env_root = os.environ.get("WEBSITES_ROOT")
+    if env_root:
+        return Path(env_root).expanduser().resolve()
+    if root_str:
+        p = Path(root_str).expanduser()
+        if not p.is_absolute():
+            p = (Path.home() / p).resolve()
+        if p.is_dir():
+            return p.resolve()
+    return (Path.home() / "websites").resolve()
+
 def settings():
     try:
         with connect() as d: rows=d.execute("SELECT key,value FROM settings").fetchall()
-        return {r["key"]:json.loads(r["value"]) for r in rows}
+        conf = {r["key"]:json.loads(r["value"]) for r in rows}
     except Exception:
-        return dict(DEFAULTS)
+        conf = dict(DEFAULTS)
+    for k, v in DEFAULTS.items():
+        if k not in conf: conf[k] = v
+    conf["credentials"] = str(resolve_credentials_path(conf.get("credentials")))
+    conf["websites_root"] = str(resolve_websites_root(conf.get("websites_root")))
+    return conf
 
 def clean_batch(batch):
     try:
@@ -189,7 +221,9 @@ def save_settings(b:SettingsBody):
 
 @app.post("/api/sheets/test")
 def test_sheet():
-    conf=settings(); credentials=Path(conf["credentials"]).expanduser()
+    conf=settings(); credentials=resolve_credentials_path(conf.get("credentials"))
+    if not credentials.is_file():
+        raise HTTPException(400,f"Google Sheets credentials file not found at: {credentials}")
     try:
         import gspread
         from google.oauth2.service_account import Credentials
@@ -330,19 +364,12 @@ def lead(handle:str,batch:str|None=None):
     except Exception:pass
     try:summary=json.loads((data/"business_data.json").read_text(encoding="utf-8"))
     except Exception:pass
-    if not profile and is_r2_configured():
-        profile=get_lead_json(batch,handle,"profile_data.json") or {}
-    if not summary and is_r2_configured():
-        summary=get_lead_json(batch,handle,"business_data.json") or []
-    for post in profile.get("posts",[]):post["preview"]=f"/media/{batch}/{handle}/{post.get('web_path','')}"
     design=account/"DESIGN.md"
-    design_content=design.read_text(encoding="utf-8") if design.exists() else ((get_lead_text(batch,handle,"DESIGN.md") if is_r2_configured() else "") or "")
+    design_content=design.read_text(encoding="utf-8") if design.exists() else None
     selected_file=root_for(batch)/handle/"selected_posts.json"
+    selected=None
     try:selected=json.loads(selected_file.read_text(encoding="utf-8"))
-    except Exception:
-        selected=get_lead_json(batch,handle,"selected_posts.json") if is_r2_configured() else None
-        if selected is None:
-            selected=[Path(p.get("web_path","")).name for p in profile.get("posts",[])]
+    except Exception:pass
     recordings={}
     local_recs=account/"recordings"
     if local_recs.is_dir():
@@ -351,9 +378,34 @@ def lead(handle:str,batch:str|None=None):
                 for s in ["desktop","tablet","phone"]:
                     if f"-{s}." in f.name:recordings[s]=f.name
     if is_r2_configured():
-        for r2_rec in list_recordings(batch,handle):
-            for s in ["desktop","tablet","phone"]:
-                if f"-{s}." in r2_rec:recordings[s]=r2_rec
+        r2_tasks={}
+        with ThreadPoolExecutor(max_workers=5) as pool:
+            if not profile:r2_tasks["profile"]=pool.submit(get_lead_json,batch,handle,"profile_data.json")
+            if not summary:r2_tasks["summary"]=pool.submit(get_lead_json,batch,handle,"business_data.json")
+            if design_content is None:r2_tasks["design"]=pool.submit(get_lead_text,batch,handle,"DESIGN.md")
+            if selected is None:r2_tasks["selected"]=pool.submit(get_lead_json,batch,handle,"selected_posts.json")
+            r2_tasks["recordings"]=pool.submit(list_recordings,batch,handle)
+            if "profile" in r2_tasks:
+                try:profile=r2_tasks["profile"].result() or {}
+                except Exception:profile={}
+            if "summary" in r2_tasks:
+                try:summary=r2_tasks["summary"].result() or []
+                except Exception:summary=[]
+            if "design" in r2_tasks:
+                try:design_content=r2_tasks["design"].result() or ""
+                except Exception:design_content=""
+            if "selected" in r2_tasks:
+                try:selected=r2_tasks["selected"].result()
+                except Exception:selected=None
+            if "recordings" in r2_tasks:
+                try:r2_recs=r2_tasks["recordings"].result() or []
+                except Exception:r2_recs=[]
+                for r2_rec in r2_recs:
+                    for s in ["desktop","tablet","phone"]:
+                        if f"-{s}." in r2_rec:recordings[s]=r2_rec
+    if design_content is None:design_content=""
+    for post in profile.get("posts",[]):post["preview"]=f"/media/{batch}/{handle}/{post.get('web_path','')}"
+    if selected is None:selected=[Path(p.get("web_path","")).name for p in profile.get("posts",[])]
     lead_dict=dict(r)
     if is_r2_configured():
         sp=lead_dict.get("site_path") or ""

@@ -973,6 +973,7 @@
         overflow: hidden;
         transition: width 0.25s;
         border: 1px solid var(--line);
+        position: relative;
       }
       .device.tablet {
         width: 820px;
@@ -990,6 +991,67 @@
         border: 0;
         background: #fff;
         display: block;
+      }
+      .device-loader {
+        position: absolute;
+        inset: 0;
+        background: var(--base-canvas);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 10;
+        gap: 12px;
+        color: var(--text);
+        text-align: center;
+        padding: 24px;
+        transition: opacity 0.25s ease-out;
+      }
+      .device-loader.fade-out {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .loader-spinner {
+        width: 40px;
+        height: 40px;
+        border: 3.5px solid var(--line);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 0.75s linear infinite;
+      }
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+      .loader-handle {
+        font-family: var(--display);
+        font-size: 19px;
+        font-weight: 700;
+        color: var(--text);
+      }
+      .loader-status {
+        font-size: 13.5px;
+        font-weight: 600;
+        color: var(--accent);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .loader-sub {
+        font-size: 12px;
+        color: var(--muted);
+      }
+      .cloud-badge {
+        font-size: 10px;
+        font-weight: 700;
+        padding: 2px 6px;
+        border-radius: 8px;
+        background: rgba(143, 168, 255, 0.12);
+        color: var(--info);
+        border: 1px solid rgba(143, 168, 255, 0.28);
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        vertical-align: middle;
       }
       .noside .side {
         display: none;
@@ -1742,6 +1804,12 @@
                 title="Generated site preview"
                 hidden
               ></iframe>
+              <div class="device-loader" id="deviceloader" hidden>
+                <div class="loader-spinner"></div>
+                <div class="loader-handle" id="loaderhandle">@handle</div>
+                <div class="loader-status" id="loaderstatus">☁️ Connecting to Cloudflare R2…</div>
+                <div class="loader-sub" id="loadersub">Fetching website, assets & recordings</div>
+              </div>
               <div class="empty" id="previewempty" style="color: #555">
                 <h3 style="color: #222">No site yet</h3>
                 Build this lead to see the preview.<br /><br />
@@ -2187,11 +2255,13 @@
           l.status === "failed"
             ? `<div class="cardfail">${ic("x", 14)}<span>Build failed</span><button class="sm" data-act="retry" data-h="${h}">Retry</button></div>`
             : "";
+        const isCloud = l.site_path && l.site_path.startsWith("http");
+        const cloudBadge = isCloud ? `<span class="cloud-badge" title="Hosted in Cloudflare R2">☁️ R2</span>` : "";
         return `<div class="card ${picked ? "picked" : ""}" draggable="true" data-act="open" data-h="${h}" tabindex="0">
     <div class="row">${S.selmode ? `<input type="checkbox" ${picked ? "checked" : ""} data-act="check" data-h="${h}" aria-label="Select ${h}" />` : ""}
     ${avatarHtml(l)}
     <div style="min-width:0"><div class="nm">${esc(l.name || "@" + l.handle)}</div><div class="meta">@${h}${l.area ? " · " + esc(l.area) : ""}</div></div></div>
-    <div class="foot"><span class="status ${esc(l.status)}">${esc(l.status || "queued")}</span><span class="spacer"></span>${l.phone ? esc(l.phone) : ""}</div>${fail}</div>`;
+    <div class="foot"><span class="status ${esc(l.status)}">${esc(l.status || "queued")}</span>${cloudBadge}<span class="spacer"></span>${l.phone ? esc(l.phone) : ""}</div>${fail}</div>`;
       }
       function renderPipeline() {
         const rows = filtered();
@@ -2232,7 +2302,7 @@
               rows
                 .map(
                   (l) =>
-                    `<tr data-act="open" data-h="${esc(l.handle)}">${S.selmode ? `<td><input type="checkbox" ${S.checked.has(l.handle) ? "checked" : ""} data-act="check" data-h="${esc(l.handle)}"></td>` : ""}<td><div style="display:flex;gap:10px;align-items:center">${avatarHtml(l,"width:32px;height:32px;font-size:13px;background:hsl("+hue(l.handle)+" 45% 40%)")}<div><div style="font-weight:650">${esc(l.name || "@" + l.handle)}</div><div class="muted" style="font-size:12px">@${esc(l.handle)}</div></div></div></td><td><span class="status ${esc(l.status)}">${esc(l.status || "queued")}</span></td><td>${esc(stageOf(l))}</td><td>${esc(l.area || "—")}</td><td>${esc(l.phone || "—")}</td></tr>`,
+                    `<tr data-act="open" data-h="${esc(l.handle)}">${S.selmode ? `<td><input type="checkbox" ${S.checked.has(l.handle) ? "checked" : ""} data-act="check" data-h="${esc(l.handle)}"></td>` : ""}<td><div style="display:flex;gap:10px;align-items:center">${avatarHtml(l,"width:32px;height:32px;font-size:13px;background:hsl("+hue(l.handle)+" 45% 40%)")}<div><div style="font-weight:650">${esc(l.name || "@" + l.handle)}</div><div class="muted" style="font-size:12px">@${esc(l.handle)}</div></div></div></td><td><span class="status ${esc(l.status)}">${esc(l.status || "queued")}</span> ${l.site_path && l.site_path.startsWith("http") ? '<span class="cloud-badge">☁️ R2</span>' : ''}</td><td>${esc(stageOf(l))}</td><td>${esc(l.area || "—")}</td><td>${esc(l.phone || "—")}</td></tr>`,
                 )
                 .join("") +
               `</tbody></table>`
@@ -2296,13 +2366,31 @@
         document.body.style.overflow = "hidden";
         S.nonce = Date.now();
         paintStudioChrome();
-        await loadLead(h, true);
+        const ldr = $("#deviceloader");
+        if (ldr) {
+          ldr.classList.remove("fade-out");
+          ldr.hidden = false;
+          $("#loaderhandle").textContent = `@${h}`;
+          $("#loaderstatus").textContent = "☁️ Connecting to Cloudflare R2…";
+          $("#loadersub").textContent = "Fetching mockup, assets & recordings";
+        }
+        $("#preview").hidden = true;
+        $("#previewempty").hidden = true;
+        setSyncIndicator(`Loading @${h} from R2…`);
+        try {
+          await loadLead(h, true);
+        } finally {
+          setSyncIndicator(null);
+        }
       }
       function closeStudio() {
         $("#studio").hidden = true;
         document.body.style.overflow = "";
         $("#preview").removeAttribute("src");
+        const ldr = $("#deviceloader");
+        if (ldr) ldr.hidden = true;
         $("#smenu").hidden = true;
+        setSyncIndicator(null);
         refresh(false);
       }
       function paintStudioChrome() {
@@ -2340,14 +2428,42 @@
           $("#ssub").textContent = `@${h}${l.area ? " · " + l.area : ""}`;
           $("#previewurl").textContent = l.site_path || "";
           const built = !!(l.site_path && l.site_path.length);
-          $("#preview").hidden = !built;
-          $("#previewempty").hidden = built;
-          if (built) {
+          const f = $("#preview");
+          const ldr = $("#deviceloader");
+          if (!built) {
+            if (ldr) ldr.hidden = true;
+            f.hidden = true;
+            $("#previewempty").hidden = false;
+          } else {
+            $("#previewempty").hidden = true;
             const base = `/preview/${enc(S.st.batch)}/${enc(h)}/index.html`;
-            const f = $("#preview");
             if (full || !f.dataset.base || f.dataset.base !== base + S.nonce) {
               f.dataset.base = base + S.nonce;
+              f.hidden = true;
+              if (ldr) {
+                ldr.classList.remove("fade-out");
+                ldr.hidden = false;
+                $("#loaderstatus").textContent = "Rendering website preview…";
+              }
+              f.onload = () => {
+                if (h === S.sel) {
+                  if (ldr) {
+                    ldr.classList.add("fade-out");
+                    setTimeout(() => { if (h === S.sel) ldr.hidden = true; }, 250);
+                  }
+                  f.hidden = false;
+                }
+              };
+              f.onerror = () => {
+                if (h === S.sel) {
+                  if (ldr) ldr.hidden = true;
+                  f.hidden = false;
+                }
+              };
               f.src = previewUrl(h);
+            } else {
+              if (ldr) ldr.hidden = true;
+              f.hidden = false;
             }
           }
           if (
@@ -3192,7 +3308,20 @@
         },
         reloadPreview: () => {
           S.nonce = Date.now();
-          if (S.sel && hasSite()) $("#preview").src = previewUrl(S.sel);
+          if (S.sel && hasSite()) {
+            const f = $("#preview");
+            const ldr = $("#deviceloader");
+            if (ldr) {
+              ldr.classList.remove("fade-out");
+              ldr.hidden = false;
+              $("#loaderstatus").textContent = "Reloading mockup…";
+              f.onload = () => {
+                ldr.classList.add("fade-out");
+                setTimeout(() => { ldr.hidden = true; }, 250);
+              };
+            }
+            f.src = previewUrl(S.sel);
+          }
         },
         toggleSide: () => {
           S.sideOpen = !S.sideOpen;

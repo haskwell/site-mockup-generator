@@ -90,7 +90,12 @@ def main() -> int:
     try:
         record = load_business(args.summary_json)
         logger.info("Updating Google Sheet from %s", args.summary_json)
-        action, row_or_serial = update_sheet(record, args.credentials, args.sheet_name)
+        creds_file = args.credentials
+        if not creds_file.is_file():
+            fallback_creds = Path(__file__).resolve().parents[1] / "config" / "creds.json"
+            if fallback_creds.is_file():
+                creds_file = fallback_creds
+        action, row_or_serial = update_sheet(record, creds_file, args.sheet_name)
     except Exception as exc:
         logger.exception("Google Sheets update failed: %s", exc)
         return 1

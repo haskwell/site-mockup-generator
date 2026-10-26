@@ -141,8 +141,10 @@ def process_account(user: str, root: Path, python: str, force: bool, logger: Log
         status("failed", "Scraper failed or was cancelled")
         logger.log("ERROR", f"{user}: scraper failed")
         return 1
+    creds_opt = options.get("credentials")
+    creds_file = Path(creds_opt).resolve() if creds_opt and Path(creds_opt).is_file() else (REPO / "config/creds.json").resolve()
     sheet_command = [python_bin, str(REPO / "src/update_sheet.py"), str(data / "business_data.json"),
-                     "--credentials", str(options.get("credentials", REPO / "config/creds.json")),
+                     "--credentials", str(creds_file),
                      "--sheet-name", str(options.get("sheet_name", "websites"))]
     if scrape_only:
         summary_command = [python_bin, str(REPO / "src/profile_summary.py"),
