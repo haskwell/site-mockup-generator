@@ -12,7 +12,7 @@ import sys
 import time
 from pathlib import Path
 from src.pipeline_common import Logger, MODEL, MIN_SIZE, TIMEOUT_SECONDS, account_handle, find_agy, get_venv_python, run_streaming
-from src.r2_storage import is_r2_configured, upload_site
+from src.r2_storage import is_r2_configured, upload_lead_assets, upload_lead_media, upload_site
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -157,6 +157,9 @@ def process_account(user: str, root: Path, python: str, force: bool, logger: Log
             status("failed", "Google Sheets update failed")
             logger.log("ERROR", f"{user}: Google Sheets update failed")
             return 1
+        if is_r2_configured():
+            logger.log("INFO", f"{user}: syncing scraped media to Cloudflare R2...")
+            upload_lead_media(account, root.name, user)
         status("scraped", "Scrape complete; added to Google Sheet")
         return 0
     agy_bin = find_agy()
@@ -240,8 +243,8 @@ def process_account(user: str, root: Path, python: str, force: bool, logger: Log
     size = index.stat().st_size
     logger.log("SUCCESS", f"{user}: done -> {index} ({size} bytes)")
     if is_r2_configured():
-        logger.log("INFO", f"{user}: syncing site files to Cloudflare R2...")
-        preview_url = upload_site(site, root.name, user)
+        logger.log("INFO", f"{user}: syncing site and lead assets to Cloudflare R2...")
+        preview_url = upload_lead_assets(account, root.name, user)
         if preview_url:
             logger.log("SUCCESS", f"{user}: published to R2 -> {preview_url}")
     status("done", f"Built {index}")

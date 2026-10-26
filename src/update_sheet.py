@@ -6,7 +6,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-from logging_config import get_logger
+try:
+    from logging_config import get_logger
+except ModuleNotFoundError:
+    from src.logging_config import get_logger
 
 logger = get_logger("update_sheet")
 

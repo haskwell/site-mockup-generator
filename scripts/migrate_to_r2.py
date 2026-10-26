@@ -154,6 +154,24 @@ def main() -> int:
                 acc_files += f_count
                 acc_bytes += b_count
 
+            # 4. Upload recordings (if any)
+            recordings_dir = account_dir / "recordings"
+            if recordings_dir.is_dir():
+                f_count, b_count = upload_directory_to_r2(s3, bucket, recordings_dir, f"{batch_name}/{handle}/recordings")
+                acc_files += f_count
+                acc_bytes += b_count
+
+            # 5. Upload account-level metadata files (DESIGN.md, selected_posts.json)
+            for meta_name, ct in [("DESIGN.md", "text/markdown"), ("selected_posts.json", "application/json")]:
+                meta_file = account_dir / meta_name
+                if meta_file.is_file():
+                    key = f"{batch_name}/{handle}/{meta_name}"
+                    size = meta_file.stat().st_size
+                    with meta_file.open("rb") as f:
+                        s3.put_object(Bucket=bucket, Key=key, Body=f, ContentType=ct)
+                    acc_files += 1
+                    acc_bytes += size
+
             if acc_files > 0:
                 accounts_processed += 1
                 total_files += acc_files

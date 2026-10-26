@@ -11,7 +11,10 @@ import argparse
 import pathlib
 import random
 
-from logging_config import get_logger
+try:
+    from logging_config import get_logger
+except ModuleNotFoundError:
+    from src.logging_config import get_logger
 
 logger = get_logger("design")
 

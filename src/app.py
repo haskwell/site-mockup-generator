@@ -17,10 +17,13 @@ from src.r2_storage import (
     download_lead_folder,
     download_recording,
     download_site,
+    get_lead_json,
+    get_lead_text,
     get_preview_url,
     get_recording_url,
     is_r2_configured,
     list_recordings,
+    upload_file,
     upload_recording,
 )
 from tempfile import gettempdir
@@ -235,8 +238,18 @@ def run_worker(handles,batch,force,rescrape,scrape_only,jid):
         with connect() as d:
             row=d.execute("SELECT locked_by,locked_at FROM leads WHERE batch=? AND handle=?",(batch,current)).fetchone()
             if row and row.get("locked_by") and row.get("locked_by")!=user:
-                emit(current,"failed",f"Account currently locked by {row['locked_by']}",batch)
-                return "failed"
+                locked_at=row.get("locked_at") or ""
+                is_stale=False
+                if locked_at:
+                    try:
+                        dt_lock=dt.datetime.fromisoformat(locked_at.replace(" ","T")).replace(tzinfo=dt.timezone.utc)
+                        now_utc=dt.datetime.now(dt.timezone.utc)
+                        if (now_utc - dt_lock).total_seconds() > 15 * 60:
+                            is_stale=True
+                    except Exception:pass
+                if not is_stale:
+                    emit(current,"failed",f"Account currently locked by {row['locked_by']}",batch)
+                    return "failed"
             d.execute("INSERT OR IGNORE INTO leads(batch,handle) VALUES(?,?)",(batch,current))
             d.execute("UPDATE leads SET locked_by=?,locked_at=CURRENT_TIMESTAMP WHERE batch=? AND handle=?",(user,batch,current))
         emit(current,"queued","In queue",batch)
@@ -246,7 +259,8 @@ def run_worker(handles,batch,force,rescrape,scrape_only,jid):
             py=os.environ.get("PIPELINE_PYTHON") or get_venv_python(REPO)
             selected_file=root/current/"selected_posts.json"
             try:selected_photos=json.loads(selected_file.read_text())
-            except Exception:selected_photos=None
+            except Exception:
+                selected_photos=get_lead_json(batch,current,"selected_posts.json") if is_r2_configured() else None
             rc=process_account(current,root,py,force,Log(),emit=lambda h,s,l:emit(h,s,l,batch),cancel_event=token,options={**conf,"preserve_summary":True,"rescrape":rescrape,"scrape_only":scrape_only,"selected_photos":selected_photos,"auth_path":str(REPO/"config/auth.json")})
             if rc==2:emit(current,"done","Already built; skipped",batch)
             elif rc!=0:emit(current,"failed","Build failed or cancelled",batch)
@@ -316,11 +330,19 @@ def lead(handle:str,batch:str|None=None):
     except Exception:pass
     try:summary=json.loads((data/"business_data.json").read_text())
     except Exception:pass
+    if not profile and is_r2_configured():
+        profile=get_lead_json(batch,handle,"profile_data.json") or {}
+    if not summary and is_r2_configured():
+        summary=get_lead_json(batch,handle,"business_data.json") or []
     for post in profile.get("posts",[]):post["preview"]=f"/media/{batch}/{handle}/{post.get('web_path','')}"
     design=account/"DESIGN.md"
+    design_content=design.read_text() if design.exists() else ((get_lead_text(batch,handle,"DESIGN.md") if is_r2_configured() else "") or "")
     selected_file=root_for(batch)/handle/"selected_posts.json"
     try:selected=json.loads(selected_file.read_text())
-    except Exception:selected=[Path(p.get("web_path","")).name for p in profile.get("posts",[])]
+    except Exception:
+        selected=get_lead_json(batch,handle,"selected_posts.json") if is_r2_configured() else None
+        if selected is None:
+            selected=[Path(p.get("web_path","")).name for p in profile.get("posts",[])]
     recordings={}
     local_recs=account/"recordings"
     if local_recs.is_dir():
@@ -332,7 +354,13 @@ def lead(handle:str,batch:str|None=None):
         for r2_rec in list_recordings(batch,handle):
             for s in ["desktop","tablet","phone"]:
                 if f"-{s}." in r2_rec:recordings[s]=r2_rec
-    return {"lead":dict(r),"profile":profile,"summary":summary,"revisions":rev,"design":design.read_text() if design.exists() else "","selected_photos":selected,"recordings":recordings}
+    lead_dict=dict(r)
+    if is_r2_configured():
+        sp=lead_dict.get("site_path") or ""
+        if not sp or (sp.startswith("/") and not Path(sp).exists()):
+            r2_url=get_preview_url(batch,handle,"index.html")
+            if r2_url:lead_dict["site_path"]=r2_url
+    return {"lead":lead_dict,"profile":profile,"summary":summary,"revisions":rev,"design":design_content,"selected_photos":selected,"recordings":recordings}
 
 @app.post("/api/lead/{handle}/recording")
 async def save_recording(handle:str,request:Request,batch:str|None=None,screen:str="desktop",extension:str="webm"):
@@ -394,13 +422,30 @@ def get_recording(handle:str,screen:str,batch:str|None=None,download:bool=False)
 @app.put("/api/lead/{handle}/photos")
 def save_photos(handle:str,b:PhotoSelection,batch:str|None=None):
     handle=clean_handle(handle);batch=clean_batch(batch or selected_batch);account=root_for(batch)/handle;profile_path=account/f"{handle}_data"/"profile_data.json"
+    posts=[]
     try:posts=json.loads(profile_path.read_text()).get("posts",[])
-    except Exception:raise HTTPException(404,"Scraped profile not found")
+    except Exception:
+        if is_r2_configured():
+            prof=get_lead_json(batch,handle,"profile_data.json")
+            if prof and isinstance(prof,dict):
+                posts=prof.get("posts",[])
+    if not posts:raise HTTPException(404,"Scraped profile not found")
     valid={Path(p.get("web_path","")).name for p in posts};files=set(b.files)
     if not files:raise HTTPException(400,"Select at least one photo")
     if not files<=valid:raise HTTPException(400,"Selection contains unknown post files")
-    (account/"selected_posts.json").write_text(json.dumps(sorted(files)),encoding="utf-8")
+    account.mkdir(parents=True,exist_ok=True)
+    target_file=account/"selected_posts.json"
+    target_file.write_text(json.dumps(sorted(files)),encoding="utf-8")
+    if is_r2_configured():
+        upload_file(target_file,f"{batch}/{handle}/selected_posts.json","application/json")
     return {"saved":len(files)}
+
+@app.post("/api/lead/{handle}/unlock")
+def unlock_lead(handle:str,batch:str|None=None):
+    handle=clean_handle(handle);batch=clean_batch(batch or selected_batch)
+    with connect() as d:
+        d.execute("UPDATE leads SET locked_by='',locked_at='' WHERE batch=? AND handle=?",(batch,handle))
+    return {"unlocked":True}
 
 @app.post("/api/lead/delete")
 def delete_leads(b:BulkInput,batch:str|None=None):
@@ -440,9 +485,14 @@ def edit_lead(handle:str,b:LeadEdit,batch:str|None=None):
         delete_lead_assets(batch,handle)
     data.parent.mkdir(parents=True,exist_ok=True)
     try:records=json.loads(data.read_text())
-    except Exception:records=[]
+    except Exception:
+        records=get_lead_json(batch,handle,"business_data.json") if is_r2_configured() else []
+        if not isinstance(records,list):records=[]
     rec=records[0] if records else {};rec.update({"handle":handle,"name":b.name,"phone":b.phone,"area":b.area,"followers":b.followers})
-    data.write_text(json.dumps([rec],ensure_ascii=False,indent=2)+"\n");return {"saved":True}
+    data.write_text(json.dumps([rec],ensure_ascii=False,indent=2)+"\n")
+    if is_r2_configured():
+        upload_file(data,f"{batch}/{handle}/media/business_data.json","application/json")
+    return {"saved":True}
 
 @app.post("/api/revision/{handle}")
 def add_revision(handle:str,b:Revision,batch:str|None=None):
@@ -579,8 +629,14 @@ def preview(batch:str,handle:str,path:str="index.html"):
 def media(batch:str,handle:str,path:str):
     handle=clean_handle(handle);batch=clean_batch(batch)
     base=(root_for(batch)/handle/f"{handle}_data").resolve();target=(base/path).resolve()
-    if not target.is_relative_to(base) or not target.is_file():raise HTTPException(404,"Not found")
-    return FileResponse(target)
+    if target.is_file() and target.is_relative_to(base):
+        return FileResponse(target)
+    if is_r2_configured():
+        public_base=os.environ.get("R2_PUBLIC_URL","").strip().rstrip("/")
+        if public_base:
+            from fastapi.responses import RedirectResponse
+            return RedirectResponse(f"{public_base}/{batch}/{handle}/media/{path.lstrip('/')}",status_code=302)
+    raise HTTPException(404,"Not found")
 
 if __name__=="__main__":
     import uvicorn

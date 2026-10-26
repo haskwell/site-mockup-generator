@@ -10,7 +10,7 @@ import shutil
 import sys
 from pathlib import Path
 from src.pipeline_common import Logger, MODEL, MIN_SIZE, TIMEOUT_SECONDS, account_handle, find_agy, run_streaming
-from src.r2_storage import is_r2_configured, download_site, upload_site
+from src.r2_storage import download_site, get_lead_text, is_r2_configured, upload_file, upload_site
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -79,9 +79,20 @@ def revise(user: str, revision: str, root: Path, accounts: set[str], logger: Log
     if not site_index.is_file():
         logger.log("ERROR", f"{user}: existing site not found at {site_index}")
         return 1
-    if not (account / "DESIGN.md").is_file():
-        logger.log("ERROR", f"{user}: DESIGN.md not found in {account}")
-        return 1
+    design_file = account / "DESIGN.md"
+    if not design_file.is_file() and is_r2_configured():
+        cloud_design = get_lead_text(root.name, user, "DESIGN.md")
+        if cloud_design:
+            account.mkdir(parents=True, exist_ok=True)
+            design_file.write_text(cloud_design, encoding="utf-8")
+            logger.log("INFO", f"{user}: fetched DESIGN.md from Cloudflare R2")
+    if not design_file.is_file():
+        try:
+            design_file.write_text(f"# Design Direction for {user}\nClean, modern, responsive website.\n", encoding="utf-8")
+            logger.log("WARN", f"{user}: DESIGN.md missing; created fallback design direction")
+        except Exception:
+            logger.log("ERROR", f"{user}: DESIGN.md not found in {account}")
+            return 1
     agy_bin = find_agy()
     if not agy_bin:
         message = "agy executable not found on PATH or at ~/.local/bin/agy"
@@ -139,6 +150,8 @@ def revise(user: str, revision: str, root: Path, accounts: set[str], logger: Log
     if is_r2_configured():
         logger.log("INFO", f"{user}: uploading revised site to Cloudflare R2...")
         upload_site(account / "site", root.name, user)
+        if design_file.is_file():
+            upload_file(design_file, f"{root.name}/{user}/DESIGN.md", "text/markdown")
     report("done", f"Revision complete: {size} bytes")
     return 0
 

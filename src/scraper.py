@@ -15,7 +15,10 @@ from playwright.sync_api import Page, sync_playwright
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
-from logging_config import get_logger
+try:
+    from logging_config import get_logger
+except ModuleNotFoundError:
+    from src.logging_config import get_logger
 
 try:
     from dotenv import load_dotenv

@@ -1,6 +1,7 @@
 """Cloudflare R2 (S3-compatible) storage manager for mockups and media assets."""
 from __future__ import annotations
 
+import json
 import mimetypes
 import os
 from pathlib import Path
@@ -139,6 +140,36 @@ def download_recording(batch: str, handle: str, filename: str, dest_path: Path) 
         return False
 
 
+def get_lead_json(batch: str, handle: str, filename: str) -> Any:
+    """Fetch and parse a JSON file from R2 (e.g. profile_data.json or business_data.json)."""
+    if not is_r2_configured():
+        return None
+    bucket = os.environ["R2_BUCKET_NAME"].strip()
+    s3 = get_s3_client()
+    for key in [f"{batch}/{handle}/media/{filename}", f"{batch}/{handle}/{filename}"]:
+        try:
+            resp = s3.get_object(Bucket=bucket, Key=key)
+            return json.loads(resp["Body"].read().decode("utf-8"))
+        except Exception:
+            continue
+    return None
+
+
+def get_lead_text(batch: str, handle: str, filename: str) -> str | None:
+    """Fetch text content of a file from R2 (e.g. DESIGN.md)."""
+    if not is_r2_configured():
+        return None
+    bucket = os.environ["R2_BUCKET_NAME"].strip()
+    s3 = get_s3_client()
+    for key in [f"{batch}/{handle}/media/{filename}", f"{batch}/{handle}/{filename}"]:
+        try:
+            resp = s3.get_object(Bucket=bucket, Key=key)
+            return resp["Body"].read().decode("utf-8")
+        except Exception:
+            continue
+    return None
+
+
 def download_lead_folder(batch: str, handle: str, dest_dir: Path) -> bool:
     """Download all files for an account from R2 into a local directory."""
     if not is_r2_configured():
@@ -225,6 +256,54 @@ def download_site(batch: str, handle: str, dest_dir: Path) -> bool:
                 f.write(resp["Body"].read())
 
     return found_any
+
+
+def upload_lead_media(account_dir: Path, batch: str, handle: str) -> int:
+    """Upload scraped data directory {handle}_data/ to {batch}/{handle}/media in R2."""
+    if not is_r2_configured():
+        return 0
+    bucket = os.environ["R2_BUCKET_NAME"].strip()
+    s3 = get_s3_client()
+    data_dir = account_dir / f"{handle}_data"
+    if not data_dir.is_dir():
+        return 0
+    uploaded = 0
+    for item in data_dir.rglob("*"):
+        if item.is_file():
+            rel_path = item.relative_to(data_dir).as_posix()
+            r2_key = f"{batch}/{handle}/media/{rel_path}"
+            ct = guess_content_type(item)
+            try:
+                with item.open("rb") as f:
+                    s3.put_object(Bucket=bucket, Key=r2_key, Body=f, ContentType=ct)
+                uploaded += 1
+            except Exception:
+                pass
+    return uploaded
+
+
+def upload_lead_assets(account_dir: Path, batch: str, handle: str) -> str | None:
+    """Upload all lead assets (site/, DESIGN.md, selected_posts.json, media) to R2."""
+    if not is_r2_configured():
+        return None
+
+    site_dir = account_dir / "site"
+    preview_url = upload_site(site_dir, batch, handle) if site_dir.is_dir() else None
+
+    # Upload DESIGN.md
+    design_file = account_dir / "DESIGN.md"
+    if design_file.is_file():
+        upload_file(design_file, f"{batch}/{handle}/DESIGN.md", "text/markdown")
+
+    # Upload selected_posts.json
+    selected_file = account_dir / "selected_posts.json"
+    if selected_file.is_file():
+        upload_file(selected_file, f"{batch}/{handle}/selected_posts.json", "application/json")
+
+    # Upload scraped media and profile data
+    upload_lead_media(account_dir, batch, handle)
+
+    return preview_url
 
 
 def delete_lead_assets(batch: str, handle: str) -> int:
