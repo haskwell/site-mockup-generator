@@ -28,6 +28,13 @@ class TestLoggingImports(unittest.TestCase):
         self.assertIsNotNone(src.update_sheet.get_logger)
         self.assertIsNotNone(src.design.get_logger)
 
+    def test_home_utf8_decoding(self):
+        """Verify that home() reads web/index.html in UTF-8 without charmap/cp1252 errors."""
+        from src.app import home
+        html = home()
+        self.assertTrue(len(html) > 1000)
+        self.assertIn("<!doctype html>", html.lower())
+
 
 class TestLockTTLAndUnlock(unittest.TestCase):
     def setUp(self):

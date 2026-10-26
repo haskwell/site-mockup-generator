@@ -128,7 +128,7 @@ def parse_accounts(text):
     return out
 
 @app.get("/",response_class=HTMLResponse)
-def home(): return (WEB/"index.html").read_text()
+def home(): return (WEB/"index.html").read_text(encoding="utf-8")
 
 @app.get("/api/state")
 def state(batch:str|None=None):
@@ -157,20 +157,20 @@ def state(batch:str|None=None):
                 summary_path=account/f"{handle}_data"/"business_data.json"
                 name=phone=area=followers=""
                 try:
-                    profile=json.loads(profile_path.read_text());name=profile.get("name","");followers=profile.get("followers","")
+                    profile=json.loads(profile_path.read_text(encoding="utf-8"));name=profile.get("name","");followers=profile.get("followers","")
                 except Exception:pass
                 try:
-                    record=json.loads(summary_path.read_text())[0];name=record.get("name") or name;phone=record.get("phone","");area=record.get("area","")
+                    record=json.loads(summary_path.read_text(encoding="utf-8"))[0];name=record.get("name") or name;phone=record.get("phone","");area=record.get("area","")
                 except Exception:pass
                 d.execute("INSERT OR IGNORE INTO leads(batch,handle,name,phone,area,followers,status,site_path,qa) VALUES(?,?,?,?,? ,?,'done',?,'available')",(batch,handle,name,phone,area,followers,str(site)))
     with connect() as d:
         leads=[dict(r) for r in d.execute("SELECT * FROM leads WHERE batch=? ORDER BY updated_at DESC,handle",(batch,))]
     a=REPO/"config/accounts.txt"; auth=REPO/"config/auth.json"
-    return {"batch":batch,"batches":batches,"settings":conf,"leads":leads,"accounts":a.read_text() if a.exists() else "","auth_exists":auth.exists(),"auth_mtime":dt.datetime.fromtimestamp(auth.stat().st_mtime).isoformat(timespec="minutes") if auth.exists() else ""}
+    return {"batch":batch,"batches":batches,"settings":conf,"leads":leads,"accounts":a.read_text(encoding="utf-8") if a.exists() else "","auth_exists":auth.exists(),"auth_mtime":dt.datetime.fromtimestamp(auth.stat().st_mtime).isoformat(timespec="minutes") if auth.exists() else ""}
 
 @app.post("/api/accounts")
 def save_accounts(b:Accounts):
-    handles=parse_accounts(b.text); p=REPO/"config/accounts.txt";p.parent.mkdir(exist_ok=True);p.write_text("".join(h+"\n" for h in handles))
+    handles=parse_accounts(b.text); p=REPO/"config/accounts.txt";p.parent.mkdir(exist_ok=True);p.write_text("".join(h+"\n" for h in handles),encoding="utf-8")
     b.batch=clean_batch(b.batch or selected_batch)
     with connect() as d:
         for h in handles:d.execute("INSERT OR IGNORE INTO leads(batch,handle) VALUES(?,?)",(b.batch or selected_batch,h))
@@ -258,7 +258,7 @@ def run_worker(handles,batch,force,rescrape,scrape_only,jid):
                 def log(self,level,msg):emit(current,"log",f"{level}: {msg}",batch)
             py=os.environ.get("PIPELINE_PYTHON") or get_venv_python(REPO)
             selected_file=root/current/"selected_posts.json"
-            try:selected_photos=json.loads(selected_file.read_text())
+            try:selected_photos=json.loads(selected_file.read_text(encoding="utf-8"))
             except Exception:
                 selected_photos=get_lead_json(batch,current,"selected_posts.json") if is_r2_configured() else None
             rc=process_account(current,root,py,force,Log(),emit=lambda h,s,l:emit(h,s,l,batch),cancel_event=token,options={**conf,"preserve_summary":True,"rescrape":rescrape,"scrape_only":scrape_only,"selected_photos":selected_photos,"auth_path":str(REPO/"config/auth.json")})
@@ -267,8 +267,8 @@ def run_worker(handles,batch,force,rescrape,scrape_only,jid):
             prof=root/current/f"{current}_data"/"profile_data.json";summ=root/current/f"{current}_data"/"business_data.json"
             name=area=phone=followers=""
             try:
-                p=json.loads(prof.read_text());followers=p.get("followers","");name=p.get("name","")
-                r=json.loads(summ.read_text())[0];name=r.get("name") or name;area=r.get("area","");phone=r.get("phone","")
+                p=json.loads(prof.read_text(encoding="utf-8"));followers=p.get("followers","");name=p.get("name","")
+                r=json.loads(summ.read_text(encoding="utf-8"))[0];name=r.get("name") or name;area=r.get("area","");phone=r.get("phone","")
             except Exception:pass
             site_index=root/current/"site"/"index.html"
             preview_url=get_preview_url(batch,current,"index.html")
@@ -290,7 +290,7 @@ def run_worker(handles,batch,force,rescrape,scrape_only,jid):
 @app.post("/api/run")
 def run(b:Run,batch:str|None=None):
     batch=clean_batch(batch or selected_batch)
-    p=REPO/"config/accounts.txt";handles=b.handles or parse_accounts(p.read_text() if p.exists() else "")
+    p=REPO/"config/accounts.txt";handles=b.handles or parse_accounts(p.read_text(encoding="utf-8") if p.exists() else "")
     return queue_run(handles,batch,b.force,b.rescrape,b.scrape_only)
 
 @app.post("/api/cancel")
@@ -326,9 +326,9 @@ def lead(handle:str,batch:str|None=None):
         rev=[dict(x) for x in d.execute("SELECT * FROM revisions WHERE batch=? AND handle=? ORDER BY id DESC",(batch,handle))]
     if not r:raise HTTPException(404,"Lead not found")
     account=root_for(batch)/handle;data=account/f"{handle}_data";profile={};summary=[]
-    try:profile=json.loads((data/"profile_data.json").read_text())
+    try:profile=json.loads((data/"profile_data.json").read_text(encoding="utf-8"))
     except Exception:pass
-    try:summary=json.loads((data/"business_data.json").read_text())
+    try:summary=json.loads((data/"business_data.json").read_text(encoding="utf-8"))
     except Exception:pass
     if not profile and is_r2_configured():
         profile=get_lead_json(batch,handle,"profile_data.json") or {}
@@ -336,9 +336,9 @@ def lead(handle:str,batch:str|None=None):
         summary=get_lead_json(batch,handle,"business_data.json") or []
     for post in profile.get("posts",[]):post["preview"]=f"/media/{batch}/{handle}/{post.get('web_path','')}"
     design=account/"DESIGN.md"
-    design_content=design.read_text() if design.exists() else ((get_lead_text(batch,handle,"DESIGN.md") if is_r2_configured() else "") or "")
+    design_content=design.read_text(encoding="utf-8") if design.exists() else ((get_lead_text(batch,handle,"DESIGN.md") if is_r2_configured() else "") or "")
     selected_file=root_for(batch)/handle/"selected_posts.json"
-    try:selected=json.loads(selected_file.read_text())
+    try:selected=json.loads(selected_file.read_text(encoding="utf-8"))
     except Exception:
         selected=get_lead_json(batch,handle,"selected_posts.json") if is_r2_configured() else None
         if selected is None:
@@ -423,7 +423,7 @@ def get_recording(handle:str,screen:str,batch:str|None=None,download:bool=False)
 def save_photos(handle:str,b:PhotoSelection,batch:str|None=None):
     handle=clean_handle(handle);batch=clean_batch(batch or selected_batch);account=root_for(batch)/handle;profile_path=account/f"{handle}_data"/"profile_data.json"
     posts=[]
-    try:posts=json.loads(profile_path.read_text()).get("posts",[])
+    try:posts=json.loads(profile_path.read_text(encoding="utf-8")).get("posts",[])
     except Exception:
         if is_r2_configured():
             prof=get_lead_json(batch,handle,"profile_data.json")
@@ -484,12 +484,12 @@ def edit_lead(handle:str,b:LeadEdit,batch:str|None=None):
     if b.stage in {"lost","not_interested","dropped"}:
         delete_lead_assets(batch,handle)
     data.parent.mkdir(parents=True,exist_ok=True)
-    try:records=json.loads(data.read_text())
+    try:records=json.loads(data.read_text(encoding="utf-8"))
     except Exception:
         records=get_lead_json(batch,handle,"business_data.json") if is_r2_configured() else []
         if not isinstance(records,list):records=[]
     rec=records[0] if records else {};rec.update({"handle":handle,"name":b.name,"phone":b.phone,"area":b.area,"followers":b.followers})
-    data.write_text(json.dumps([rec],ensure_ascii=False,indent=2)+"\n")
+    data.write_text(json.dumps([rec],ensure_ascii=False,indent=2)+"\n",encoding="utf-8")
     if is_r2_configured():
         upload_file(data,f"{batch}/{handle}/media/business_data.json","application/json")
     return {"saved":True}
