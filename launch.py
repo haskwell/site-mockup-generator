@@ -80,11 +80,16 @@ def main() -> int:
     log_file = (log_dir / "server.log").open("a", encoding="utf-8")
     server_kwargs: dict = {
         "cwd": REPO,
+        "stdin": subprocess.DEVNULL,  # pythonw has no stdin to inherit
         "stdout": log_file,
         "stderr": subprocess.STDOUT,
     }
     if os.name == "nt":
-        server_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+        # CREATE_NO_WINDOW stops the console from flashing up when
+        # launched via pythonw.exe
+        server_kwargs["creationflags"] = (
+            subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
+        )
     server = subprocess.Popen([python, str(REPO / "app.py")], **server_kwargs)
 
     try:
