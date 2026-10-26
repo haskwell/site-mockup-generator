@@ -11,7 +11,7 @@ import shutil
 import sys
 import time
 from pathlib import Path
-from src.pipeline_common import Logger, MODEL, MIN_SIZE, TIMEOUT_SECONDS, account_handle, find_agy, run_streaming
+from src.pipeline_common import Logger, MODEL, MIN_SIZE, TIMEOUT_SECONDS, account_handle, find_agy, get_venv_python, run_streaming
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -270,7 +270,7 @@ def main() -> int:
         if not users:
             logger.log("ERROR", f"No accounts found in {accounts}")
             return 1
-        python = str(REPO / ".venv/bin/python") if (REPO / ".venv/bin/python").is_file() and not os.environ.get("PIPELINE_PYTHON") else os.environ.get("PIPELINE_PYTHON", "python3")
+        python = os.environ.get("PIPELINE_PYTHON") or get_venv_python(REPO)
         ok, skipped, failed = [], [], []
         for i, user in enumerate(users, 1):
             logger.log("INFO", f"=== [{i}/{len(users)}] @{user} ===")

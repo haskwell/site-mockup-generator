@@ -10,8 +10,10 @@ import sys
 import time
 import urllib.error
 import urllib.request
+import webbrowser
 from pathlib import Path
 
+from src.pipeline_common import get_venv_python, kill_process_tree
 
 REPO = Path(__file__).resolve().parent
 URL = "http://127.0.0.1:8765"
@@ -26,50 +28,78 @@ def server_is_running() -> bool:
         return False
 
 
-def main() -> int:
-    chromium = shutil.which("chromium") or shutil.which("chromium-browser")
-    if not chromium:
-        print("Error: Chromium executable not found on PATH.", file=sys.stderr)
-        return 1
+def find_browser() -> str | None:
+    for name in ["chromium", "chromium-browser", "chrome", "google-chrome", "msedge"]:
+        path = shutil.which(name)
+        if path:
+            return path
+    if os.name == "nt":
+        candidates = [
+            Path(os.environ.get("PROGRAMFILES", "C:\\Program Files")) / "Google/Chrome/Application/chrome.exe",
+            Path(os.environ.get("PROGRAMFILES(X86)", "C:\\Program Files (x86)")) / "Google/Chrome/Application/chrome.exe",
+            Path(os.environ.get("PROGRAMFILES(X86)", "C:\\Program Files (x86)")) / "Microsoft/Edge/Application/msedge.exe",
+            Path(os.environ.get("PROGRAMFILES", "C:\\Program Files")) / "Microsoft/Edge/Application/msedge.exe",
+        ]
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        if local_app_data:
+            candidates.append(Path(local_app_data) / "Google/Chrome/Application/chrome.exe")
+        for cand in candidates:
+            if cand.is_file():
+                return str(cand)
+    return None
 
-    profile = Path.home() / ".cache" / "studio-profile"
-    browser_command = [
-        chromium,
-        f"--app={URL}",
-        f"--user-data-dir={profile}",
-        "--window-size=1500,800",
-    ]
+
+def open_browser(profile: Path, browser_bin: str | None) -> int:
+    if browser_bin:
+        cmd = [
+            browser_bin,
+            f"--app={URL}",
+            f"--user-data-dir={profile}",
+            "--window-size=1500,800",
+        ]
+        return subprocess.run(cmd, check=False).returncode
+    webbrowser.open(URL)
+    return 0
+
+
+def main() -> int:
+    browser_bin = find_browser()
+    if os.name == "nt":
+        cache_base = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / ".cache")))
+    else:
+        cache_base = Path.home() / ".cache"
+    profile = cache_base / "studio-profile"
 
     # Match launch.sh: if a dashboard is already running, open it and exit.
     if server_is_running():
-        return subprocess.run(browser_command, check=False).returncode
+        return open_browser(profile, browser_bin)
 
-    venv_python = REPO / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
-    python = str(venv_python) if venv_python.is_file() else sys.executable
+    python = get_venv_python(REPO)
     log_dir = REPO / "logs"
     log_dir.mkdir(exist_ok=True)
     log_file = (log_dir / "server.log").open("a", encoding="utf-8")
-    server = subprocess.Popen(
-        [python, str(REPO / "app.py")],
-        cwd=REPO,
-        stdout=log_file,
-        stderr=subprocess.STDOUT,
-    )
+    server_kwargs: dict = {
+        "cwd": REPO,
+        "stdout": log_file,
+        "stderr": subprocess.STDOUT,
+    }
+    if os.name == "nt":
+        server_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+    server = subprocess.Popen([python, str(REPO / "app.py")], **server_kwargs)
 
     try:
         while not server_is_running():
             if server.poll() is not None:
                 return 1
             time.sleep(0.3)
-        return subprocess.run(browser_command, check=False).returncode
+        return open_browser(profile, browser_bin)
     finally:
         if server.poll() is None:
-            server.terminate()
+            kill_process_tree(server)
             try:
                 server.wait(timeout=5)
             except subprocess.TimeoutExpired:
-                server.kill()
-                server.wait()
+                pass
         log_file.close()
 
 

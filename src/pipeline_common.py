@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import datetime as dt
 import os
+import queue
 import re
-import signal
-import selectors
 import shutil
+import signal
 import subprocess
 import sys
+import threading
+import time
 from pathlib import Path
 
 MODEL = "gemini-3.8-flash-medium"
@@ -16,14 +18,69 @@ MIN_SIZE = 600
 TIMEOUT_SECONDS = 900
 
 
+def get_venv_python(repo_dir: Path) -> str:
+    """Return the virtual environment's python executable or fallback to sys.executable."""
+    venv_python = repo_dir / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    if venv_python.is_file():
+        return str(venv_python)
+    return sys.executable
+
+
+def kill_process_tree(proc: subprocess.Popen) -> None:
+    """Terminate the process and all of its child processes cross-platform."""
+    if os.name == "nt":
+        try:
+            subprocess.run(
+                ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+    else:
+        try:
+            os.killpg(proc.pid, signal.SIGTERM)
+            proc.wait(timeout=5)
+        except (subprocess.TimeoutExpired, ProcessLookupError):
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except ProcessLookupError:
+                pass
+        except Exception:
+            try:
+                os.killpg(proc.pid, signal.SIGKILL)
+            except Exception:
+                pass
+
+
 def find_agy() -> str | None:
-    """Find agy on PATH or in the standard per-user executable directory."""
+    """Find agy on PATH or in standard per-user executable directories."""
     executable = shutil.which("agy")
     if executable:
         return executable
-    user_executable = Path.home() / ".local" / "bin" / "agy"
-    if user_executable.is_file() and os.access(user_executable, os.X_OK):
-        return str(user_executable)
+    if os.name == "nt":
+        candidates = [
+            Path.home() / ".local" / "bin" / "agy.exe",
+            Path.home() / ".local" / "bin" / "agy.cmd",
+            Path.home() / ".local" / "bin" / "agy",
+        ]
+        local_app_data = os.environ.get("LOCALAPPDATA")
+        if local_app_data:
+            candidates.extend([
+                Path(local_app_data) / "Programs" / "agy" / "agy.exe",
+                Path(local_app_data) / "Programs" / "agy" / "bin" / "agy.exe",
+            ])
+        for cand in candidates:
+            if cand.is_file():
+                return str(cand)
+    else:
+        user_executable = Path.home() / ".local" / "bin" / "agy"
+        if user_executable.is_file() and os.access(user_executable, os.X_OK):
+            return str(user_executable)
     return None
 
 
@@ -66,84 +123,86 @@ def account_handle(value: str) -> str:
 def run_streaming(command: list[str], cwd: Path, logger: Logger | None = None,
                   log_path: Path | None = None, timeout: int | None = None,
                   prefix: str = "", cancel_event=None) -> tuple[int, bool]:
-    """Stream output as it arrives; kill the whole process group on timeout."""
+    """Stream output as it arrives; kill the whole process group on timeout or cancellation."""
+    popen_kwargs: dict = {
+        "cwd": cwd,
+        "stdout": subprocess.PIPE,
+        "stderr": subprocess.STDOUT,
+        "text": True,
+        "errors": "replace",
+        "bufsize": 1,
+    }
+    if os.name == "nt":
+        popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+    else:
+        popen_kwargs["start_new_session"] = True
+
     try:
-        proc = subprocess.Popen(command, cwd=cwd, stdout=subprocess.PIPE,
-                                stderr=subprocess.STDOUT, text=True, errors="replace",
-                                bufsize=1, start_new_session=True)
+        proc = subprocess.Popen(command, **popen_kwargs)
     except OSError as exc:
         (logger.log("ERROR", f"Could not run {command[0]}: {exc}") if logger else print(exc, file=sys.stderr))
         return 127, False
-    import time
+
     deadline = None if timeout is None else time.monotonic() + timeout
     output_file = log_path.open("w", encoding="utf-8") if log_path else None
     timed_out = False
+
+    output_queue: queue.Queue[str | None] = queue.Queue()
+
+    def reader() -> None:
+        try:
+            assert proc.stdout is not None
+            for raw_line in iter(proc.stdout.readline, ""):
+                output_queue.put(raw_line)
+        except Exception:
+            pass
+        finally:
+            output_queue.put(None)
+
+    reader_thread = threading.Thread(target=reader, daemon=True)
+    reader_thread.start()
+
     try:
-        assert proc.stdout is not None
-        selector = selectors.DefaultSelector()
-        selector.register(proc.stdout, selectors.EVENT_READ)
-        pending = ""
         while True:
             if cancel_event is not None and cancel_event.is_set():
-                try:
-                    os.killpg(proc.pid, signal.SIGTERM)
-                    proc.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    os.killpg(proc.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
-                try:
-                    os.killpg(proc.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
+                kill_process_tree(proc)
                 return 130, False
+
             remaining = None if deadline is None else max(0, deadline - time.monotonic())
             if remaining == 0:
                 timed_out = True
-                try:
-                    os.killpg(proc.pid, signal.SIGTERM)
-                    proc.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    os.killpg(proc.pid, signal.SIGKILL)
-                except ProcessLookupError:
-                    pass
+                kill_process_tree(proc)
                 break
-            ready = selector.select(0.25 if remaining is None else min(0.25, remaining))
-            if ready:
-                raw = os.read(proc.stdout.fileno(), 8192)
-                if not raw:
-                    break
-                chunk = raw.decode("utf-8", "replace")
-                pending += chunk
-                chunks = pending.split("\n")
-                pending = chunks.pop()
-                for line in chunks:
-                    line = line.rstrip("\r")
-                    if output_file:
-                        output_file.write(line + "\n")
-                        output_file.flush()
-                    if logger:
-                        logger.log("INFO", prefix + line)
-                    else:
-                        print(line, flush=True)
-            if proc.poll() is not None and not ready:
-                if pending:
-                    if output_file:
-                        output_file.write(pending + "\n")
-                    if logger:
-                        logger.log("INFO", prefix + pending)
-                    else:
-                        print(pending, flush=True)
-                    pending = ""
-                break
-        if timed_out:
+
+            poll_timeout = 0.25 if remaining is None else min(0.25, remaining)
             try:
-                os.killpg(proc.pid, signal.SIGKILL)
-            except ProcessLookupError:
-                pass
+                line = output_queue.get(timeout=poll_timeout)
+            except queue.Empty:
+                if proc.poll() is not None:
+                    break
+                continue
+
+            if line is None:
+                break
+
+            clean_line = line.rstrip("\r\n")
+            if output_file:
+                output_file.write(clean_line + "\n")
+                output_file.flush()
+            if logger:
+                logger.log("INFO", prefix + clean_line)
+            else:
+                print(clean_line, flush=True)
+
+        if timed_out:
+            kill_process_tree(proc)
+
         return (124 if timed_out else proc.wait()), timed_out
     finally:
         if output_file:
             output_file.close()
         if proc.stdout:
-            proc.stdout.close()
+            try:
+                proc.stdout.close()
+            except Exception:
+                pass

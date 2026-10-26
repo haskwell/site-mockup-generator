@@ -9,7 +9,7 @@ from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from pydantic import BaseModel, Field
-from src.pipeline_common import MODEL, TIMEOUT_SECONDS, account_handle, find_agy, run_streaming
+from src.pipeline_common import MODEL, TIMEOUT_SECONDS, account_handle, find_agy, get_venv_python, run_streaming
 from src.run import process_account, validate_site
 
 REPO=Path(__file__).resolve().parents[1]; WEB=REPO/"web"
@@ -204,7 +204,7 @@ def run_worker(handles,batch,force,rescrape,scrape_only,jid):
         try:
             class Log:
                 def log(self,level,msg):emit(current,"log",f"{level}: {msg}",batch)
-            py=os.environ.get("PIPELINE_PYTHON") or (str(REPO/".venv/bin/python") if (REPO/".venv/bin/python").is_file() else sys.executable)
+            py=os.environ.get("PIPELINE_PYTHON") or get_venv_python(REPO)
             selected_file=root/current/"selected_posts.json"
             try:selected_photos=json.loads(selected_file.read_text())
             except Exception:selected_photos=None
