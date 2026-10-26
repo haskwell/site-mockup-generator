@@ -1,4 +1,5 @@
 """Shared pipeline settings, logging, account parsing, and subprocess helpers."""
+
 from __future__ import annotations
 
 import datetime as dt
@@ -20,7 +21,9 @@ TIMEOUT_SECONDS = 900
 
 def get_venv_python(repo_dir: Path) -> str:
     """Return the virtual environment's python executable or fallback to sys.executable."""
-    venv_python = repo_dir / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    venv_python = (
+        repo_dir / ".venv" / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+    )
     if venv_python.is_file():
         return str(venv_python)
     return sys.executable
@@ -32,8 +35,10 @@ def kill_process_tree(proc: subprocess.Popen) -> None:
         try:
             subprocess.run(
                 ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                stdin=subprocess.DEVNULL,
                 stdout=subprocess.DEVNULL,
                 stderr=subprocess.DEVNULL,
+                creationflags=subprocess.CREATE_NO_WINDOW,  # no console flash
                 check=False,
             )
         except Exception:
@@ -70,10 +75,12 @@ def find_agy() -> str | None:
         ]
         local_app_data = os.environ.get("LOCALAPPDATA")
         if local_app_data:
-            candidates.extend([
-                Path(local_app_data) / "Programs" / "agy" / "agy.exe",
-                Path(local_app_data) / "Programs" / "agy" / "bin" / "agy.exe",
-            ])
+            candidates.extend(
+                [
+                    Path(local_app_data) / "Programs" / "agy" / "agy.exe",
+                    Path(local_app_data) / "Programs" / "agy" / "bin" / "agy.exe",
+                ]
+            )
         for cand in candidates:
             if cand.is_file():
                 return str(cand)
@@ -88,7 +95,12 @@ class Logger:
     def __init__(self, path: Path):
         self.file = path.open("a", encoding="utf-8")
         self.color = sys.stdout.isatty() and not os.environ.get("NO_COLOR")
-        self.colors = {"INFO": "\033[36m", "SUCCESS": "\033[32m", "WARN": "\033[33m", "ERROR": "\033[31m"}
+        self.colors = {
+            "INFO": "\033[36m",
+            "SUCCESS": "\033[32m",
+            "WARN": "\033[33m",
+            "ERROR": "\033[31m",
+        }
 
     def log(self, level: str, message: str) -> None:
         stamp = dt.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -107,6 +119,7 @@ def account_handle(value: str) -> str:
     value = value.strip()
     if value.startswith(("https://", "http://")):
         from urllib.parse import urlparse
+
         parsed = urlparse(value)
         if parsed.hostname not in {"instagram.com", "www.instagram.com"}:
             raise ValueError(f"unsupported account URL: {value}")
@@ -120,9 +133,15 @@ def account_handle(value: str) -> str:
     return value
 
 
-def run_streaming(command: list[str], cwd: Path, logger: Logger | None = None,
-                  log_path: Path | None = None, timeout: int | None = None,
-                  prefix: str = "", cancel_event=None) -> tuple[int, bool]:
+def run_streaming(
+    command: list[str],
+    cwd: Path,
+    logger: Logger | None = None,
+    log_path: Path | None = None,
+    timeout: int | None = None,
+    prefix: str = "",
+    cancel_event=None,
+) -> tuple[int, bool]:
     """Stream output as it arrives; kill the whole process group on timeout or cancellation."""
     popen_kwargs: dict = {
         "cwd": cwd,
@@ -133,14 +152,20 @@ def run_streaming(command: list[str], cwd: Path, logger: Logger | None = None,
         "bufsize": 1,
     }
     if os.name == "nt":
-        popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+        popen_kwargs["creationflags"] = (
+            subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
+        )
     else:
         popen_kwargs["start_new_session"] = True
 
     try:
         proc = subprocess.Popen(command, **popen_kwargs)
     except OSError as exc:
-        (logger.log("ERROR", f"Could not run {command[0]}: {exc}") if logger else print(exc, file=sys.stderr))
+        (
+            logger.log("ERROR", f"Could not run {command[0]}: {exc}")
+            if logger
+            else print(exc, file=sys.stderr)
+        )
         return 127, False
 
     deadline = None if timeout is None else time.monotonic() + timeout
@@ -168,7 +193,9 @@ def run_streaming(command: list[str], cwd: Path, logger: Logger | None = None,
                 kill_process_tree(proc)
                 return 130, False
 
-            remaining = None if deadline is None else max(0, deadline - time.monotonic())
+            remaining = (
+                None if deadline is None else max(0, deadline - time.monotonic())
+            )
             if remaining == 0:
                 timed_out = True
                 kill_process_tree(proc)
