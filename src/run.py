@@ -12,6 +12,7 @@ import sys
 import time
 from pathlib import Path
 from src.pipeline_common import Logger, MODEL, MIN_SIZE, TIMEOUT_SECONDS, account_handle, find_agy, get_venv_python, run_streaming
+from src.r2_storage import is_r2_configured, upload_site
 
 
 REPO = Path(__file__).resolve().parents[1]
@@ -238,6 +239,11 @@ def process_account(user: str, root: Path, python: str, force: bool, logger: Log
         return 1
     size = index.stat().st_size
     logger.log("SUCCESS", f"{user}: done -> {index} ({size} bytes)")
+    if is_r2_configured():
+        logger.log("INFO", f"{user}: syncing site files to Cloudflare R2...")
+        preview_url = upload_site(site, root.name, user)
+        if preview_url:
+            logger.log("SUCCESS", f"{user}: published to R2 -> {preview_url}")
     status("done", f"Built {index}")
     rc, _ = run_streaming(sheet_command, REPO, logger) if options.get("sync_sheet", True) else (0, False)
     if rc:

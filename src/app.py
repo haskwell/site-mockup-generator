@@ -11,6 +11,8 @@ from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from pydantic import BaseModel, Field
 from src.pipeline_common import MODEL, TIMEOUT_SECONDS, account_handle, find_agy, get_venv_python, run_streaming
 from src.run import process_account, validate_site
+from src.d1_client import get_current_user, get_db_connection, is_d1_configured
+from src.r2_storage import delete_lead_assets, get_preview_url, is_r2_configured
 
 REPO=Path(__file__).resolve().parents[1]; WEB=REPO/"web"
 DB=Path(os.environ.get("DASHBOARD_DB",REPO/"dashboard.sqlite3"))
@@ -19,33 +21,41 @@ app=FastAPI(title="Studio",docs_url=None,redoc_url=None)
 events=[]; subscribers=set(); event_lock=threading.Lock(); job_lock=threading.Lock(); active_job=None
 revision_queue=queue.Queue(); revision_active=False; revision_pending=0
 def newest_batch():
-    base=Path(DEFAULTS["websites_root"])
     dates=[]
     try:
-        for entry in base.iterdir():
-            if entry.is_dir():
-                try:dates.append(dt.date.fromisoformat(entry.name).isoformat())
+        with connect() as d:
+            rows=d.execute("SELECT DISTINCT batch FROM leads").fetchall()
+            for r in rows:
+                b=r["batch"]
+                try:dates.append(dt.date.fromisoformat(b).isoformat())
                 except ValueError:pass
-    except OSError:pass
+    except Exception:pass
+    if not dates:
+        base=Path(DEFAULTS["websites_root"])
+        try:
+            for entry in base.iterdir():
+                if entry.is_dir():
+                    try:dates.append(dt.date.fromisoformat(entry.name).isoformat())
+                    except ValueError:pass
+        except OSError:pass
     return max(dates) if dates else dt.date.today().isoformat()
 
 selected_batch=newest_batch()
 
-class ClosingConnection(sqlite3.Connection):
-    def __exit__(self, exc_type, exc, tb):
-        try: return super().__exit__(exc_type,exc,tb)
-        finally: self.close()
-
 def connect():
-    c=sqlite3.connect(DB,timeout=10,factory=ClosingConnection); c.row_factory=sqlite3.Row; return c
+    return get_db_connection(DB)
 
 def init_db():
     DB.parent.mkdir(parents=True,exist_ok=True)
     with connect() as d:
-        d.executescript("""CREATE TABLE IF NOT EXISTS leads(batch TEXT,handle TEXT,name TEXT DEFAULT '',phone TEXT DEFAULT '',area TEXT DEFAULT '',followers TEXT DEFAULT '',status TEXT DEFAULT 'queued',error TEXT DEFAULT '',site_path TEXT DEFAULT '',notes TEXT DEFAULT '',stage TEXT DEFAULT 'new',follow_up TEXT DEFAULT '',price TEXT DEFAULT '',qa TEXT DEFAULT '',created_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,PRIMARY KEY(batch,handle));
+        d.executescript("""CREATE TABLE IF NOT EXISTS leads(batch TEXT,handle TEXT,name TEXT DEFAULT '',phone TEXT DEFAULT '',area TEXT DEFAULT '',followers TEXT DEFAULT '',status TEXT DEFAULT 'queued',error TEXT DEFAULT '',site_path TEXT DEFAULT '',notes TEXT DEFAULT '',stage TEXT DEFAULT 'new',follow_up TEXT DEFAULT '',price TEXT DEFAULT '',qa TEXT DEFAULT '',created_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,locked_by TEXT DEFAULT '',locked_at TEXT DEFAULT '',PRIMARY KEY(batch,handle));
         CREATE TABLE IF NOT EXISTS revisions(id INTEGER PRIMARY KEY AUTOINCREMENT,batch TEXT,handle TEXT,request TEXT,status TEXT DEFAULT 'pending',created_at TEXT DEFAULT CURRENT_TIMESTAMP,applied_at TEXT,backup_path TEXT DEFAULT '');
         CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT);
         CREATE TABLE IF NOT EXISTS logs(id INTEGER PRIMARY KEY AUTOINCREMENT,batch TEXT,handle TEXT,status TEXT,line TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP);""")
+        try:d.execute("ALTER TABLE leads ADD COLUMN locked_by TEXT DEFAULT ''")
+        except Exception:pass
+        try:d.execute("ALTER TABLE leads ADD COLUMN locked_at TEXT DEFAULT ''")
+        except Exception:pass
         for k,v in DEFAULTS.items(): d.execute("INSERT OR IGNORE INTO settings VALUES(?,?)",(k,json.dumps(v)))
 
 @app.on_event("startup")
@@ -106,7 +116,15 @@ def home(): return (WEB/"index.html").read_text()
 @app.get("/api/state")
 def state(batch:str|None=None):
     batch=clean_batch(batch or selected_batch); conf=settings(); base=Path(conf["websites_root"]).expanduser().resolve();root=base/batch
-    batches=sorted((p.name for p in base.iterdir() if p.is_dir()),reverse=True) if base.exists() else []
+    db_batches=set()
+    try:
+        with connect() as d:
+            for r in d.execute("SELECT DISTINCT batch FROM leads").fetchall():
+                db_batches.add(r["batch"])
+    except Exception:pass
+    disk_batches=set(p.name for p in base.iterdir() if p.is_dir()) if base.exists() else set()
+    batches=sorted(db_batches | disk_batches,reverse=True)
+    if batch not in batches:batches.insert(0,batch)
     # Existing CLI-built batches predate the dashboard database. Discover them
     # on selection and seed lead rows without modifying any site files.
     if root.is_dir():
@@ -199,7 +217,14 @@ def run_worker(handles,batch,force,rescrape,scrape_only,jid):
         with job_lock:active_job=None
         return
     def build_one(current):
-        with connect() as d:d.execute("INSERT OR IGNORE INTO leads(batch,handle) VALUES(?,?)",(batch,current))
+        user=get_current_user()
+        with connect() as d:
+            row=d.execute("SELECT locked_by,locked_at FROM leads WHERE batch=? AND handle=?",(batch,current)).fetchone()
+            if row and row.get("locked_by") and row.get("locked_by")!=user:
+                emit(current,"failed",f"Account currently locked by {row['locked_by']}",batch)
+                return "failed"
+            d.execute("INSERT OR IGNORE INTO leads(batch,handle) VALUES(?,?)",(batch,current))
+            d.execute("UPDATE leads SET locked_by=?,locked_at=CURRENT_TIMESTAMP WHERE batch=? AND handle=?",(user,batch,current))
         emit(current,"queued","In queue",batch)
         try:
             class Log:
@@ -217,11 +242,15 @@ def run_worker(handles,batch,force,rescrape,scrape_only,jid):
                 p=json.loads(prof.read_text());followers=p.get("followers","");name=p.get("name","")
                 r=json.loads(summ.read_text())[0];name=r.get("name") or name;area=r.get("area","");phone=r.get("phone","")
             except Exception:pass
-            site_index=root/current/"site"/"index.html";site_path=str(site_index) if site_index.is_file() else ""
-            qa="passed" if site_path and not validate_site(site_index.parent) else "pending"
-            with connect() as d:d.execute("UPDATE leads SET name=CASE WHEN name='' THEN ? ELSE name END,phone=CASE WHEN phone='' THEN ? ELSE phone END,area=CASE WHEN area='' THEN ? ELSE area END,followers=?,site_path=?,qa=?,updated_at=CURRENT_TIMESTAMP WHERE batch=? AND handle=?",(name,phone,area,followers,site_path,qa,batch,current))
+            site_index=root/current/"site"/"index.html"
+            preview_url=get_preview_url(batch,current,"index.html")
+            site_path=preview_url or (str(site_index) if site_index.is_file() else "")
+            qa="passed" if (site_index.is_file() and not validate_site(site_index.parent)) or preview_url else "pending"
+            with connect() as d:d.execute("UPDATE leads SET name=CASE WHEN name='' THEN ? ELSE name END,phone=CASE WHEN phone='' THEN ? ELSE phone END,area=CASE WHEN area='' THEN ? ELSE area END,followers=?,site_path=?,qa=?,locked_by='',locked_at='',updated_at=CURRENT_TIMESTAMP WHERE batch=? AND handle=?",(name,phone,area,followers,site_path,qa,batch,current))
             return "scraped" if rc==0 and scrape_only else "skipped" if rc==2 else "built" if rc==0 else "failed"
-        except Exception as e:emit(current,"failed",str(e),batch);return "failed"
+        except Exception as e:
+            with connect() as d:d.execute("UPDATE leads SET locked_by='',locked_at='' WHERE batch=? AND handle=?",(batch,current))
+            emit(current,"failed",str(e),batch);return "failed"
     workers=1
     with ThreadPoolExecutor(max_workers=workers) as pool:
         futures=[pool.submit(build_one,h) for h in handles]
@@ -319,6 +348,7 @@ def delete_leads(b:BulkInput,batch:str|None=None):
         if b.mode=="folder":
             if account.exists():shutil.rmtree(account)
         elif site.is_relative_to(account) and site.exists():shutil.rmtree(site)
+        delete_lead_assets(batch,handle)
         with connect() as d:
             d.execute("DELETE FROM leads WHERE batch=? AND handle=?",(batch,handle))
             d.execute("DELETE FROM revisions WHERE batch=? AND handle=?",(batch,handle))
@@ -338,6 +368,8 @@ def export_leads(batch:str|None=None):
 def edit_lead(handle:str,b:LeadEdit,batch:str|None=None):
     handle=clean_handle(handle);batch=clean_batch(batch or selected_batch);data=root_for(batch)/handle/f"{handle}_data"/"business_data.json"
     with connect() as d:d.execute("UPDATE leads SET name=?,phone=?,area=?,followers=?,notes=?,stage=?,follow_up=?,price=?,updated_at=CURRENT_TIMESTAMP WHERE batch=? AND handle=?",(b.name,b.phone,b.area,b.followers,b.notes,b.stage,b.follow_up,b.price,batch,handle))
+    if b.stage in {"lost","not_interested","dropped"}:
+        delete_lead_assets(batch,handle)
     data.parent.mkdir(parents=True,exist_ok=True)
     try:records=json.loads(data.read_text())
     except Exception:records=[]
@@ -441,6 +473,10 @@ def login():
 @app.get("/preview/{batch}/{handle}/{path:path}")
 def preview(batch:str,handle:str,path:str="index.html"):
     handle=clean_handle(handle);batch=clean_batch(batch)
+    r2_url=get_preview_url(batch,handle,path)
+    if r2_url:
+        from fastapi.responses import RedirectResponse
+        return RedirectResponse(r2_url,status_code=302)
     base=(root_for(batch)/handle/"site").resolve();target=(base/path).resolve()
     if not target.is_relative_to(base) or not target.is_file():raise HTTPException(404,"Not found")
     return FileResponse(target)

@@ -10,6 +10,7 @@ import shutil
 import sys
 from pathlib import Path
 from src.pipeline_common import Logger, MODEL, MIN_SIZE, TIMEOUT_SECONDS, account_handle, find_agy, run_streaming
+from src.r2_storage import is_r2_configured, download_site, upload_site
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -72,6 +73,9 @@ def revise(user: str, revision: str, root: Path, accounts: set[str], logger: Log
         return 1
     account = root / user
     site_index = account / "site/index.html"
+    if not site_index.is_file() and is_r2_configured():
+        logger.log("INFO", f"{user}: pulling site files from Cloudflare R2 for revision...")
+        download_site(root.name, user, account / "site")
     if not site_index.is_file():
         logger.log("ERROR", f"{user}: existing site not found at {site_index}")
         return 1
@@ -132,6 +136,9 @@ def revise(user: str, revision: str, root: Path, accounts: set[str], logger: Log
         report("failed", "; ".join(errors))
         return 1
     logger.log("SUCCESS", f"{user}: revision complete -> {site_index} ({size} bytes)")
+    if is_r2_configured():
+        logger.log("INFO", f"{user}: uploading revised site to Cloudflare R2...")
+        upload_site(account / "site", root.name, user)
     report("done", f"Revision complete: {size} bytes")
     return 0
 
