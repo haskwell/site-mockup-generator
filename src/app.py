@@ -162,6 +162,9 @@ def parse_accounts(text):
 @app.get("/",response_class=HTMLResponse)
 def home(): return (WEB/"index.html").read_text(encoding="utf-8")
 
+@app.get("/assets/studio.png")
+def studio_logo(): return FileResponse(REPO/"assets"/"studio.png")
+
 @app.get("/api/state")
 def state(batch:str|None=None):
     batch=clean_batch(batch or selected_batch); conf=settings(); base=Path(conf["websites_root"]).expanduser().resolve();root=base/batch
