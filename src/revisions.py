@@ -148,12 +148,12 @@ def revise(user: str, revision: str, root: Path, accounts: set[str], logger: Log
         logger.log("ERROR", f"{user}: agy exited with status {code}; revision failed (see {agy_log})")
         report("failed", f"agy exited with status {code}")
         return 1
-    size = site_index.stat().st_size
-    if size < MIN_SIZE:
+    size = site_index.stat().st_size if site_index.is_file() else 0
+    if not site_index.is_file() or size < MIN_SIZE:
         shutil.rmtree(account / "site", ignore_errors=True)
         shutil.copytree(backup, account / "site")
-        logger.log("ERROR", f"{user}: index.html is smaller than {MIN_SIZE} bytes after revision (see {agy_log})")
-        report("failed", f"index.html is smaller than {MIN_SIZE} bytes")
+        logger.log("ERROR", f"{user}: index.html is missing or smaller than {MIN_SIZE} bytes after revision (see {agy_log})")
+        report("failed", f"index.html is missing or smaller than {MIN_SIZE} bytes")
         return 1
     from src.run import validate_site
     errors = validate_site(account / "site")
@@ -183,7 +183,8 @@ def main() -> int:
         if not re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}", date):
             logger.log("ERROR", "Date must use YYYY-MM-DD format.")
             return 1
-        root = Path(os.environ.get("WEBSITES_ROOT", str(Path.home() / "websites" / date)))
+        base_root = Path(os.environ.get("WEBSITES_ROOT", Path.home() / "websites")).expanduser().resolve()
+        root = base_root if (base_root.name == date and base_root.is_dir() and not (base_root / date).is_dir()) else base_root / date
         if not root.is_dir():
             logger.log("ERROR", f"Websites directory not found: {root}")
             return 1

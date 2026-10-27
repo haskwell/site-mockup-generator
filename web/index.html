@@ -1833,7 +1833,7 @@
               <label class="field">Websites root<input id="sroot" /></label>
               <label class="field">agy model<input id="smodel" /></label>
               <label class="field"
-                >Timeout (seconds)<input id="stimeout" type="number"
+                >Timeout (seconds)<input id="stimeout" type="number" min="1"
               /></label>
               <label class="field"
                 >Parallel builds<input
@@ -2412,14 +2412,6 @@
         if (S.view !== "settings" || !$("#sroot").dataset.filled) {
           fillSettings();
         }
-        $("#authstate").textContent = S.st.auth_exists
-          ? "Session saved · " + S.st.auth_mtime
-          : "No session";
-        render();
-        if (reload && S.sel && !$("#studio").hidden)
-          await loadLead(S.sel, false);
-        await jobStatus();
-      }
         $("#authstate").textContent = S.st.auth_exists
           ? "Session saved · " + S.st.auth_mtime
           : "No session";
@@ -3096,13 +3088,33 @@
         drawSwatches();
       }
       async function saveSettings() {
+        const timeout = parseInt($("#stimeout").value, 10);
+        const parallelism = parseInt($("#sparallel").value, 10);
+        const max_posts = parseInt($("#sposts").value, 10);
+        const attempts = parseInt($("#sattempts").value, 10);
+        if (!Number.isFinite(timeout) || timeout < 1) {
+          toast("Timeout must be at least 1 second");
+          return;
+        }
+        if (!Number.isFinite(parallelism) || parallelism < 1) {
+          toast("Parallel builds must be at least 1");
+          return;
+        }
+        if (!Number.isFinite(max_posts) || max_posts < 1) {
+          toast("Maximum posts must be at least 1");
+          return;
+        }
+        if (!Number.isFinite(attempts) || attempts < 1) {
+          toast("Retry attempts must be at least 1");
+          return;
+        }
         const values = {
           websites_root: $("#sroot").value,
           model: $("#smodel").value,
-          timeout: +$("#stimeout").value,
-          parallelism: +$("#sparallel").value,
-          max_posts: +$("#sposts").value,
-          attempts: +$("#sattempts").value,
+          timeout,
+          parallelism,
+          max_posts,
+          attempts,
           sheet_name: $("#ssheet").value,
           credentials: $("#screds").value,
           browser: $("#sbrowser").value,
@@ -3255,12 +3267,12 @@
             } else {
               toast(`Recording saved as ${S.sel}-${P.device}.${ext}`);
             }
+            const st = stageOf(S.ld?.lead || {});
+            if (st === "new" || st === "built") await setStage("recorded");
           } catch (e) {
             setSyncIndicator(null);
             toast(`Download saved; server upload failed: ${e.message}`);
           }
-          const st = stageOf(S.ld?.lead || {});
-          if (st === "new" || st === "built") setStage("recorded");
           if (S.sel) loadLead(S.sel, true);
         };
         P.rec.start(1000);
@@ -3682,7 +3694,7 @@
           $("#smenu").hidden = true;
           if (S.sel)
             window.open(
-              `/preview/${enc(S.st.batch)}/${enc(S.sel)}/index.html`,
+              previewUrl(S.sel),
               "_blank",
             );
         },
@@ -3785,8 +3797,11 @@
 
           setSyncIndicator(`Deleting recording for @${S.sel}…`);
           try {
+            const recordingUrl = targetScreen === "all"
+              ? `${leadUrl(S.sel)}/recording${bq()}`
+              : `${leadUrl(S.sel)}/recording/${targetScreen}${bq()}`;
             await api(
-              `${leadUrl(S.sel)}/recording/${targetScreen}?${bq().slice(1)}`,
+              recordingUrl,
               { method: "DELETE" },
             );
             toast("Recording deleted");

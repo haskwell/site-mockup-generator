@@ -2,7 +2,11 @@
 """Upsert a profile_summary.py business record in the ``websites`` sheet."""
 
 import argparse
+import contextlib
 import json
+import os
+import tempfile
+import threading
 from pathlib import Path
 from typing import Any
 
@@ -12,6 +16,43 @@ except ModuleNotFoundError:
     from src.logging_config import get_logger
 
 logger = get_logger("update_sheet")
+_sheet_thread_lock = threading.Lock()
+
+
+@contextlib.contextmanager
+def _sheet_lock():
+    """Serialize Google Sheets reads and appends across local threads and worker processes."""
+    lock_path = Path(tempfile.gettempdir()) / "studio_google_sheets.lock"
+    with _sheet_thread_lock:
+        lock_file = None
+        try:
+            lock_file = lock_path.open("a+", encoding="utf-8")
+            if os.name == "nt":
+                import msvcrt
+                msvcrt.locking(lock_file.fileno(), msvcrt.LK_LOCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(lock_file.fileno(), fcntl.LOCK_EX)
+        except Exception:
+            pass
+        try:
+            yield
+        finally:
+            if lock_file is not None:
+                try:
+                    if os.name == "nt":
+                        import msvcrt
+                        lock_file.seek(0)
+                        msvcrt.locking(lock_file.fileno(), msvcrt.LK_UNLCK, 1)
+                    else:
+                        import fcntl
+                        fcntl.flock(lock_file.fileno(), fcntl.LOCK_UN)
+                except Exception:
+                    pass
+                try:
+                    lock_file.close()
+                except Exception:
+                    pass
 
 
 def load_business(path: Path) -> dict[str, Any]:
@@ -49,41 +90,41 @@ def update_sheet(record: dict[str, Any], credentials: Path, sheet_name: str = "w
     client = gspread.authorize(auth)
     worksheet = client.open(sheet_name).sheet1
 
-    handle = str(record["handle"]).strip().lstrip("@").casefold()
-    rows = worksheet.get("A:F")
-    matching_row = None
-    highest_serial = 0
-    for row_number, row in enumerate(rows[1:], start=2):
-        padded = row + [""] * (6 - len(row))
-        if str(padded[0]).strip().isdigit():
-            highest_serial = max(highest_serial, int(str(padded[0]).strip()))
-        if str(padded[2]).strip().lstrip("@").casefold() == handle:
-            matching_row = row_number
+    with _sheet_lock():
+        handle = str(record["handle"]).strip().lstrip("@").casefold()
+        rows = worksheet.get("A:F")
+        matching_row = None
+        highest_serial = 0
+        for row_number, row in enumerate(rows[1:], start=2):
+            padded = row + [""] * (6 - len(row))
+            if str(padded[0]).strip().isdigit():
+                highest_serial = max(highest_serial, int(str(padded[0]).strip()))
+            if str(padded[2]).strip().lstrip("@").casefold() == handle:
+                matching_row = row_number
 
-    values = [
-        record.get("name", ""),
-        str(record.get("handle", "")).strip().lstrip("@"),
-        record.get("phone", ""),
-        record.get("area", ""),
-        record.get("followers", ""),
-    ]
-    if matching_row is not None:
-        # RAW prevents phone numbers being coerced to numbers or formulas.
-        worksheet.update(range_name=f"B{matching_row}:F{matching_row}", values=[values], value_input_option="RAW")
-        return "updated", matching_row
+        values = [
+            record.get("name", ""),
+            str(record.get("handle", "")).strip().lstrip("@"),
+            record.get("phone", ""),
+            record.get("area", ""),
+            record.get("followers", ""),
+        ]
+        if matching_row is not None:
+            # RAW prevents phone numbers being coerced to numbers or formulas.
+            worksheet.update(range_name=f"B{matching_row}:F{matching_row}", values=[values], value_input_option="RAW")
+            return "updated", matching_row
 
-    # Guard serial-number race: re-read column A right before appending to avoid duplicate serials
-    try:
-        col_a = worksheet.col_values(1)
-        latest_serials = [int(v.strip()) for v in col_a[1:] if str(v).strip().isdigit()]
-        if latest_serials:
-            highest_serial = max(highest_serial, max(latest_serials))
-    except Exception:
-        pass
+        try:
+            col_a = worksheet.col_values(1)
+            latest_serials = [int(v.strip()) for v in col_a[1:] if str(v).strip().isdigit()]
+            if latest_serials:
+                highest_serial = max(highest_serial, max(latest_serials))
+        except Exception:
+            pass
 
-    serial = highest_serial + 1
-    worksheet.append_row([serial, *values], value_input_option="RAW")
-    return "added", serial
+        serial = highest_serial + 1
+        worksheet.append_row([serial, *values], value_input_option="RAW")
+        return "added", serial
 
 
 def main() -> int:

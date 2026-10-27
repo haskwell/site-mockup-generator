@@ -13,9 +13,10 @@ from starlette.background import BackgroundTask
 from pydantic import BaseModel, Field
 from src.pipeline_common import MODEL, TIMEOUT_SECONDS, account_handle, find_agy, get_venv_python, run_streaming
 from src.run import process_account, validate_site
-from src.d1_client import get_current_user, get_db_connection, is_d1_configured, is_d1_offline, set_d1_offline
+from src.d1_client import get_current_user, get_db_connection, is_d1_configured, is_d1_offline, set_d1_offline, sync_local_to_d1
 from src.r2_storage import (
     delete_lead_assets,
+    delete_site_assets,
     delete_recording,
     download_lead_folder,
     download_recording,
@@ -104,9 +105,12 @@ def init_db():
         except Exception:pass
         for k,v in DEFAULTS.items(): d.execute("INSERT OR IGNORE INTO settings VALUES(?,?)",(k,json.dumps(v)))
 
+    set_d1_offline(False)
     try:
         with connect() as d:
             _run_schema(d)
+            if is_d1_configured() and DB.is_file():
+                sync_local_to_d1(DB, d, DEFAULTS)
     except Exception as exc:
         if is_d1_configured():
             import logging
@@ -114,6 +118,10 @@ def init_db():
             set_d1_offline(True)
             with connect() as d:
                 _run_schema(d)
+                try:
+                    d.execute("INSERT OR REPLACE INTO settings(key,value) VALUES('_d1_offline_pending','true')")
+                except Exception:
+                    pass
         else:
             raise
 
@@ -152,11 +160,17 @@ def resolve_websites_root(root_str: str | None = None) -> Path:
 def settings():
     try:
         with connect() as d: rows=d.execute("SELECT key,value FROM settings").fetchall()
-        conf = {r["key"]:json.loads(r["value"]) for r in rows}
+        conf = {r["key"]:json.loads(r["value"]) for r in rows if not str(r["key"]).startswith("_")}
     except Exception:
         conf = dict(DEFAULTS)
     for k, v in DEFAULTS.items():
         if k not in conf: conf[k] = v
+    for num_key in ("timeout", "parallelism", "max_posts", "attempts"):
+        val = conf.get(num_key)
+        if isinstance(val, bool) or not isinstance(val, (int, float)) or int(val) < 1:
+            conf[num_key] = DEFAULTS[num_key]
+        else:
+            conf[num_key] = int(val)
     conf["credentials"] = str(resolve_credentials_path(conf.get("credentials")))
     conf["websites_root"] = str(resolve_websites_root(conf.get("websites_root")))
     return conf
@@ -286,9 +300,33 @@ def export_accounts():
 
 @app.put("/api/settings")
 def save_settings(b:SettingsBody):
+    cleaned: dict[str, Any] = {}
+    for k, v in b.values.items():
+        if k not in DEFAULTS:
+            continue
+        if k in {"timeout", "parallelism", "max_posts", "attempts"}:
+            if v is None or v == "" or isinstance(v, bool):
+                raise HTTPException(400, f"{k} must be a positive integer")
+            try:
+                iv = int(v)
+            except (TypeError, ValueError):
+                raise HTTPException(400, f"{k} must be a positive integer")
+            if iv < 1:
+                raise HTTPException(400, f"{k} must be at least 1")
+            cleaned[k] = iv
+        else:
+            cleaned[k] = v
     with connect() as d:
-        for k,v in b.values.items():
-            if k in DEFAULTS:d.execute("INSERT INTO settings VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(k,json.dumps(v)))
+        for k, v in cleaned.items():
+            d.execute("INSERT INTO settings VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(k,json.dumps(v)))
+        if is_d1_offline() and cleaned:
+            try:
+                row = d.execute("SELECT value FROM settings WHERE key='_dirty_settings'").fetchone()
+                dirty = set(json.loads(row["value"])) if row else set()
+                dirty.update(cleaned.keys())
+                d.execute("INSERT INTO settings VALUES('_dirty_settings',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(json.dumps(sorted(dirty)),))
+            except Exception:
+                pass
     return settings()
 
 @app.post("/api/sheets/test")
@@ -322,15 +360,16 @@ def queue_run(handles,batch,force,rescrape,scrape_only=False):
     global active_job
     with job_lock:
         if active_job or revision_active or not revision_queue.empty():raise HTTPException(409,"A batch or revision is already running or queued")
-        jid=str(uuid.uuid4());active_job={"id":jid,"batch":batch,"handles":handles,"started":time.time(),"cancel":None}
-    threading.Thread(target=run_worker,args=(handles,batch,force,rescrape,scrape_only,jid),daemon=True).start();return {"job_id":jid,"handles":handles}
+        jid=str(uuid.uuid4());token=threading.Event();active_job={"id":jid,"batch":batch,"handles":handles,"started":time.time(),"cancel":token}
+    threading.Thread(target=run_worker,args=(handles,batch,force,rescrape,scrape_only,jid,token),daemon=True).start();return {"job_id":jid,"handles":handles}
 
-def run_worker(handles,batch,force,rescrape,scrape_only,jid):
+def run_worker(handles,batch,force,rescrape,scrape_only,jid,token=None):
     global active_job
-    token=threading.Event()
     with job_lock:
         if not active_job or active_job["id"]!=jid:return
-        active_job["cancel"]=token
+        if token is None:
+            token=active_job.get("cancel") or threading.Event()
+            active_job["cancel"]=token
     conf=settings();root=root_for(batch);counts={"scraped":0,"failed":0} if scrape_only else {"built":0,"skipped":0,"failed":0}
     try:root.mkdir(parents=True,exist_ok=True)
     except Exception as exc:
@@ -419,6 +458,7 @@ def stream(request:Request):
             raise HTTPException(503, "Too many active subscribers")
         q=queue.Queue(maxsize=200)
         subscribers.add(q);history=events[-80:]
+    def gen():
         try:
             for x in history:yield "data: "+json.dumps(x)+"\n\n"
             while True:
@@ -588,7 +628,10 @@ def delete_lead_recording_screen(handle:str,screen:str,batch:str|None=None):
 
     deleted_r2=0
     if is_r2_configured():
-        deleted_r2=delete_recording(batch,handle,screen=screen)
+        try:
+            deleted_r2=delete_recording(batch,handle,screen=screen)
+        except Exception as exc:
+            raise HTTPException(502,f"Failed to delete recording from R2: {exc}")
 
     remaining={}
     if recordings_dir.is_dir():
@@ -643,7 +686,10 @@ def delete_lead_recording_all(handle:str,batch:str|None=None):
 
     deleted_r2=0
     if is_r2_configured():
-        deleted_r2=delete_recording(batch,handle,screen=None)
+        try:
+            deleted_r2=delete_recording(batch,handle,screen=None)
+        except Exception as exc:
+            raise HTTPException(502,f"Failed to delete recordings from R2: {exc}")
 
     new_stage = None
     with connect() as d:
@@ -708,10 +754,22 @@ def delete_leads(b:BulkInput,batch:str|None=None):
         if b.mode=="folder":
             if account.exists():shutil.rmtree(account)
         elif site.is_relative_to(account) and site.exists():shutil.rmtree(site)
-        delete_lead_assets(batch,handle)
+        if b.mode == "folder":
+            delete_lead_assets(batch,handle)
+        else:
+            delete_site_assets(batch,handle)
         with connect() as d:
             d.execute("DELETE FROM leads WHERE batch=? AND handle=?",(batch,handle))
             d.execute("DELETE FROM revisions WHERE batch=? AND handle=?",(batch,handle))
+            if is_d1_offline():
+                try:
+                    row = d.execute("SELECT value FROM settings WHERE key='_deleted_leads'").fetchone()
+                    deleted_list = json.loads(row["value"]) if row else []
+                    if [batch, handle] not in deleted_list:
+                        deleted_list.append([batch, handle])
+                    d.execute("INSERT INTO settings VALUES('_deleted_leads',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(json.dumps(deleted_list),))
+                except Exception:
+                    pass
         removed.append(handle)
     return {"removed":removed}
 
@@ -764,8 +822,8 @@ def add_revision(handle:str,b:Revision,batch:str|None=None):
 
 def revision_worker(handle,batch,rid,text):
     account=root_for(batch)/handle;backup_dir=account/"backups"
+    before=set(backup_dir.glob("site_before_revision_*") if backup_dir.exists() else [])
     try:
-        before=set(backup_dir.glob("site_before_revision_*") if backup_dir.exists() else [])
         class Log:
             def log(self,level,msg):emit(handle,"log",f"{level}: {msg}",batch)
         from src.revisions import revise
@@ -776,7 +834,12 @@ def revision_worker(handle,batch,rid,text):
         status="applied" if rc==0 else "failed"
         with connect() as d:d.execute("UPDATE revisions SET status=?,applied_at=CASE WHEN ?='applied' THEN CURRENT_TIMESTAMP ELSE applied_at END,backup_path=? WHERE id=?",(status,status,str(backup or ""),rid))
     except Exception as e:
-        with connect() as d:d.execute("UPDATE revisions SET status='failed' WHERE id=?",(rid,))
+        created=list(set(backup_dir.glob("site_before_revision_*"))-before) if backup_dir.exists() else []
+        backup=max(created,key=lambda p:p.stat().st_mtime) if created else None
+        if backup and backup.is_dir() and not (account/"site"/"index.html").is_file():
+            shutil.rmtree(account/"site",ignore_errors=True)
+            shutil.copytree(backup,account/"site")
+        with connect() as d:d.execute("UPDATE revisions SET status='failed',backup_path=CASE WHEN ? != '' THEN ? ELSE backup_path END WHERE id=?",(str(backup or ""),str(backup or ""),rid))
         emit(handle,"failed",str(e),batch)
     finally:
         global revision_active,revision_pending
@@ -857,7 +920,14 @@ def zip_site(handle:str,batch:str|None=None,mode:str="site"):
     target=None
     if mode=="site":
         site=account/"site"
-        if site.is_dir() and (site/"index.html").is_file():
+        site_index=site/"index.html"
+        local_ok=site.is_dir() and site_index.is_file()
+        r2_newer=False
+        if is_r2_configured() and local_ok:
+            r2_mtime=get_r2_mtime(f"{batch}/{handle}/site/index.html")
+            if r2_mtime is not None and r2_mtime > site_index.stat().st_mtime:
+                r2_newer=True
+        if local_ok and not r2_newer:
             target=shutil.make_archive(archive_base,"zip",site)
         elif is_r2_configured():
             temp_site=Path(gettempdir())/f"r2_site_{batch}_{handle}_{uuid.uuid4().hex}"
@@ -867,7 +937,14 @@ def zip_site(handle:str,batch:str|None=None,mode:str="site"):
             shutil.rmtree(temp_site,ignore_errors=True)
         if not target:raise HTTPException(404,"Website files not found")
     else:
-        if account.is_dir():
+        site_index=account/"site"/"index.html"
+        local_ok=account.is_dir()
+        r2_newer=False
+        if is_r2_configured() and local_ok:
+            r2_mtime=get_r2_mtime(f"{batch}/{handle}/site/index.html")
+            if r2_mtime is not None and (not site_index.is_file() or r2_mtime > site_index.stat().st_mtime):
+                r2_newer=True
+        if local_ok and not r2_newer:
             target=shutil.make_archive(archive_base,"zip",account)
         elif is_r2_configured():
             temp_lead=Path(gettempdir())/f"r2_lead_{batch}_{handle}_{uuid.uuid4().hex}"
@@ -923,7 +1000,7 @@ window.addEventListener('message', function(e) {
 });
 </script>"""
 
-@app.get("/preview/{batch}/{handle}/{path:path}")
+@app.api_route("/preview/{batch}/{handle}/{path:path}", methods=["GET", "HEAD"])
 def preview(batch:str,handle:str,path:str="index.html"):
     handle=clean_handle(handle);batch=clean_batch(batch)
     clean_path=Path(path).as_posix().lstrip("/")
@@ -932,7 +1009,7 @@ def preview(batch:str,handle:str,path:str="index.html"):
     base=(root_for(batch)/handle/"site").resolve()
     target=(base/clean_path).resolve()
     local_exists=target.is_file() and target.is_relative_to(base)
-    headers={"Content-Security-Policy":"sandbox allow-scripts allow-forms;","Cache-Control":"private, max-age=1800"}
+    headers={"Content-Security-Policy":"sandbox allow-scripts allow-forms;","Cache-Control":"private, no-cache"}
 
     if is_r2_configured():
         r2_key=f"{batch}/{handle}/site/{clean_path}"
@@ -979,13 +1056,29 @@ def media(batch:str,handle:str,path:str):
         raise HTTPException(400,"Invalid path")
     base=(root_for(batch)/handle/f"{handle}_data").resolve()
     target=(base/clean_path).resolve()
-    if target.is_file() and target.is_relative_to(base):
-        return FileResponse(target)
+    local_exists=target.is_file() and target.is_relative_to(base)
+    headers={"Cache-Control":"private, no-cache"}
     if is_r2_configured():
-        obj=get_r2_object(f"{batch}/{handle}/media/{clean_path}")
-        if obj:
-            body,ct=obj
-            return Response(content=body,media_type=ct,headers={"Cache-Control":"private, max-age=86400"})
+        r2_key=f"{batch}/{handle}/media/{clean_path}"
+        if local_exists:
+            r2_mtime=get_r2_mtime(r2_key)
+            if r2_mtime is not None and r2_mtime > target.stat().st_mtime:
+                obj=get_r2_object(r2_key)
+                if obj:
+                    body,ct=obj
+                    try:
+                        target.parent.mkdir(parents=True,exist_ok=True)
+                        target.write_bytes(body)
+                        os.utime(target,(r2_mtime,r2_mtime))
+                    except Exception:pass
+                    return Response(content=body,media_type=ct,headers=headers)
+        else:
+            obj=get_r2_object(r2_key)
+            if obj:
+                body,ct=obj
+                return Response(content=body,media_type=ct,headers=headers)
+    if local_exists:
+        return FileResponse(target,headers=headers)
     raise HTTPException(404,"Not found")
 
 if __name__=="__main__":

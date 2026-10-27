@@ -157,6 +157,8 @@ def run_streaming(
     cancel_event=None,
 ) -> tuple[int, bool]:
     """Stream output as it arrives; kill the whole process group on timeout or cancellation."""
+    if cancel_event is not None and cancel_event.is_set():
+        return 130, False
     popen_kwargs: dict = {
         "cwd": cwd,
         "stdout": subprocess.PIPE,

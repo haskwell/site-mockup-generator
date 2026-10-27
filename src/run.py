@@ -48,7 +48,7 @@ def validate_site(site: Path) -> list[str]:
             attrs = dict(attrs)
             if tag in {"html", "head", "body"}:
                 self.tags.add(tag)
-            if tag in {"img", "script", "source"} and attrs.get("src"):
+            if tag in {"img", "script", "source", "video"} and attrs.get("src"):
                 self.refs.append(attrs["src"])
             if tag == "img" and attrs.get("srcset"):
                 self.refs.extend(candidate.strip().split()[0] for candidate in attrs["srcset"].split(",") if candidate.strip())
@@ -131,7 +131,7 @@ def process_account(user: str, root: Path, python: str, force: bool, logger: Log
         return 1
 
     index = site / "index.html"
-    if not force and not options.get("scrape_only") and index.is_file() and index.stat().st_size >= MIN_SIZE:
+    if not force and not options.get("rescrape") and not options.get("scrape_only") and index.is_file() and index.stat().st_size >= MIN_SIZE:
         logger.log("INFO", f"{user}: site already built, skipping (use FORCE=1 to rebuild)")
         return 2
 
@@ -175,7 +175,15 @@ def process_account(user: str, root: Path, python: str, force: bool, logger: Log
             return 1
         if is_r2_configured():
             logger.log("INFO", f"{user}: syncing scraped media to Cloudflare R2...")
-            upload_lead_media(account, root.name, user)
+            try:
+                expected = sum(1 for item in data.rglob("*") if item.is_file()) if data.is_dir() else 0
+                uploaded = upload_lead_media(account, root.name, user)
+                if uploaded < expected or (expected == 0 and uploaded == 0):
+                    raise RuntimeError(f"partial or empty R2 media upload ({uploaded}/{expected} files)")
+            except Exception as exc:
+                status("failed", f"R2 media sync failed: {exc}")
+                logger.log("ERROR", f"{user}: R2 media sync failed: {exc}")
+                return 1
         status("scraped", "Scrape complete; added to Google Sheet")
         return 0
     agy_bin = find_agy()
@@ -195,7 +203,7 @@ def process_account(user: str, root: Path, python: str, force: bool, logger: Log
             logger.log("ERROR", f"{user}: {error}")
             return 1
     try:
-        if force and site.exists():
+        if (force or options.get("rescrape")) and site.exists():
             shutil.rmtree(site)
         (site / "assets").mkdir(parents=True, exist_ok=True)
         images = glob.glob(str(data / "posts/web/*.webp"))
@@ -262,9 +270,14 @@ def process_account(user: str, root: Path, python: str, force: bool, logger: Log
     logger.log("SUCCESS", f"{user}: done -> {index} ({size} bytes)")
     if is_r2_configured():
         logger.log("INFO", f"{user}: syncing site and lead assets to Cloudflare R2...")
-        preview_url = upload_lead_assets(account, root.name, user)
-        if preview_url:
-            logger.log("SUCCESS", f"{user}: published to R2 -> {preview_url}")
+        try:
+            preview_url = upload_lead_assets(account, root.name, user)
+            if preview_url:
+                logger.log("SUCCESS", f"{user}: published to R2 -> {preview_url}")
+        except Exception as exc:
+            status("failed", f"R2 sync failed: {exc}")
+            logger.log("ERROR", f"{user}: R2 sync failed: {exc}")
+            return 1
     status("done", f"Built {index}")
     rc, _ = run_streaming(sheet_command, REPO, logger) if options.get("sync_sheet", True) else (0, False)
     if rc:

@@ -175,11 +175,15 @@ class ClosingLocalConnection(sqlite3.Connection):
 
 
 _d1_offline = False
+_was_offline = False
+_syncing_d1 = False
 
 
 def set_d1_offline(offline: bool = True) -> None:
     """Mark Cloudflare D1 as unreachable/offline to force local SQLite fallback."""
-    global _d1_offline
+    global _d1_offline, _was_offline
+    if offline:
+        _was_offline = True
     _d1_offline = offline
 
 
@@ -201,8 +205,245 @@ def is_d1_configured() -> bool:
     return bool(account_id and api_token and database_id)
 
 
+def sync_local_to_d1(
+    local_db_path: Path | None = None,
+    d1_conn: Any | None = None,
+    default_settings: dict[str, Any] | None = None,
+) -> int:
+    """Merge local SQLite changes recorded during offline fallback back into Cloudflare D1."""
+    global _was_offline, _syncing_d1
+    if _syncing_d1:
+        return 0
+    db_file = local_db_path or Path(os.environ.get("DASHBOARD_DB", REPO / "dashboard.sqlite3"))
+    if not db_file.is_file():
+        _was_offline = False
+        return 0
+
+    _syncing_d1 = True
+    synced = 0
+    own_d1 = False
+    try:
+        if d1_conn is None:
+            if not is_d1_configured():
+                return 0
+            account_id = os.environ["CLOUDFLARE_ACCOUNT_ID"].strip()
+            api_token = os.environ["CLOUDFLARE_API_TOKEN"].strip()
+            database_id = (
+                os.environ.get("D1_DATABASE_ID", "").strip()
+                or os.environ.get("CLOUDFLARE_D1_DATABASE_ID", "").strip()
+            )
+            d1_conn = D1Connection(account_id, database_id, api_token)
+            own_d1 = True
+
+        if isinstance(d1_conn, sqlite3.Connection):
+            return 0
+
+        local_conn = sqlite3.connect(db_file, timeout=15)
+        local_conn.row_factory = sqlite3.Row
+        try:
+            tables = {
+                r[0]
+                for r in local_conn.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'"
+                ).fetchall()
+            }
+            local_settings: dict[str, str] = {}
+            if "settings" in tables:
+                local_settings = {
+                    r["key"]: r["value"]
+                    for r in local_conn.execute("SELECT key, value FROM settings").fetchall()
+                }
+
+            deleted_leads: list[list[str]] = []
+            if "_deleted_leads" in local_settings:
+                try:
+                    deleted_leads = json.loads(local_settings["_deleted_leads"])
+                except Exception:
+                    deleted_leads = []
+            deleted_set = {(b, h) for b, h in deleted_leads if isinstance(b, str) and isinstance(h, str)}
+            for b, h in deleted_set:
+                try:
+                    d1_conn.execute("DELETE FROM leads WHERE batch=? AND handle=?", (b, h))
+                    d1_conn.execute("DELETE FROM revisions WHERE batch=? AND handle=?", (b, h))
+                    synced += 1
+                except Exception:
+                    pass
+
+            if "leads" in tables:
+                local_leads = [dict(r) for r in local_conn.execute("SELECT * FROM leads").fetchall()]
+                if local_leads:
+                    try:
+                        remote_rows = {
+                            (r["batch"], r["handle"]): dict(r)
+                            for r in d1_conn.execute("SELECT * FROM leads").fetchall()
+                        }
+                    except Exception:
+                        remote_rows = {}
+                    for lead in local_leads:
+                        key = (lead.get("batch", ""), lead.get("handle", ""))
+                        if key in deleted_set:
+                            continue
+                        remote = remote_rows.get(key)
+                        should_sync = False
+                        if remote is None:
+                            should_sync = True
+                        else:
+                            l_ts = str(lead.get("updated_at") or "")
+                            r_ts = str(remote.get("updated_at") or "")
+                            if l_ts > r_ts or (l_ts == r_ts and lead != remote):
+                                should_sync = True
+                        if should_sync:
+                            cols = list(lead.keys())
+                            placeholders = ",".join("?" for _ in cols)
+                            col_names = ",".join(cols)
+                            d1_conn.execute(
+                                f"INSERT OR REPLACE INTO leads({col_names}) VALUES({placeholders})",
+                                list(lead.values()),
+                            )
+                            synced += 1
+
+            if "revisions" in tables:
+                local_revs = [dict(r) for r in local_conn.execute("SELECT * FROM revisions").fetchall()]
+                if local_revs:
+                    try:
+                        remote_revs = [
+                            dict(r) for r in d1_conn.execute("SELECT * FROM revisions").fetchall()
+                        ]
+                    except Exception:
+                        remote_revs = []
+                    remote_by_id = {r.get("id"): r for r in remote_revs}
+                    remote_by_sig = {
+                        (r.get("batch"), r.get("handle"), r.get("request"), r.get("created_at")): r
+                        for r in remote_revs
+                    }
+                    for rev in local_revs:
+                        if (rev.get("batch", ""), rev.get("handle", "")) in deleted_set:
+                            continue
+                        sig = (
+                            rev.get("batch"),
+                            rev.get("handle"),
+                            rev.get("request"),
+                            rev.get("created_at"),
+                        )
+                        if sig in remote_by_sig:
+                            rem = remote_by_sig[sig]
+                            if (
+                                rev.get("status") != rem.get("status")
+                                or rev.get("applied_at") != rem.get("applied_at")
+                                or rev.get("backup_path") != rem.get("backup_path")
+                            ):
+                                d1_conn.execute(
+                                    "UPDATE revisions SET status=?, applied_at=?, backup_path=? WHERE id=?",
+                                    (
+                                        rev.get("status"),
+                                        rev.get("applied_at"),
+                                        rev.get("backup_path", ""),
+                                        rem["id"],
+                                    ),
+                                )
+                                synced += 1
+                        elif rev.get("id") not in remote_by_id:
+                            cols = list(rev.keys())
+                            placeholders = ",".join("?" for _ in cols)
+                            d1_conn.execute(
+                                f"INSERT OR REPLACE INTO revisions({','.join(cols)}) VALUES({placeholders})",
+                                list(rev.values()),
+                            )
+                            synced += 1
+                        else:
+                            cols = [k for k in rev.keys() if k != "id"]
+                            placeholders = ",".join("?" for _ in cols)
+                            d1_conn.execute(
+                                f"INSERT INTO revisions({','.join(cols)}) VALUES({placeholders})",
+                                [rev[k] for k in cols],
+                            )
+                            synced += 1
+
+            if "settings" in tables and local_settings:
+                try:
+                    remote_settings = {
+                        r["key"]: r["value"]
+                        for r in d1_conn.execute("SELECT key, value FROM settings").fetchall()
+                    }
+                except Exception:
+                    remote_settings = {}
+                try:
+                    dirty_keys = set(json.loads(local_settings.get("_dirty_settings", "[]")))
+                except Exception:
+                    dirty_keys = set()
+                defaults_map = default_settings or {}
+                for k, v in local_settings.items():
+                    if k.startswith("_"):
+                        continue
+                    is_default = k in defaults_map and v == json.dumps(defaults_map[k])
+                    if k not in remote_settings or (
+                        v != remote_settings[k] and (k in dirty_keys or not is_default)
+                    ):
+                        d1_conn.execute(
+                            "INSERT OR REPLACE INTO settings(key, value) VALUES(?, ?)", (k, v)
+                        )
+                        synced += 1
+
+            if "logs" in tables:
+                local_logs = [dict(r) for r in local_conn.execute("SELECT * FROM logs").fetchall()]
+                if local_logs:
+                    try:
+                        remote_logs = [
+                            dict(r) for r in d1_conn.execute("SELECT * FROM logs").fetchall()
+                        ]
+                    except Exception:
+                        remote_logs = []
+                    remote_log_sigs = {
+                        (r.get("batch"), r.get("handle"), r.get("status"), r.get("line"), r.get("created_at"))
+                        for r in remote_logs
+                    }
+                    remote_log_ids = {r.get("id") for r in remote_logs}
+                    for lg in local_logs:
+                        sig = (
+                            lg.get("batch"),
+                            lg.get("handle"),
+                            lg.get("status"),
+                            lg.get("line"),
+                            lg.get("created_at"),
+                        )
+                        if sig not in remote_log_sigs:
+                            if lg.get("id") not in remote_log_ids:
+                                cols = list(lg.keys())
+                                placeholders = ",".join("?" for _ in cols)
+                                d1_conn.execute(
+                                    f"INSERT OR REPLACE INTO logs({','.join(cols)}) VALUES({placeholders})",
+                                    list(lg.values()),
+                                )
+                            else:
+                                cols = [k for k in lg.keys() if k != "id"]
+                                placeholders = ",".join("?" for _ in cols)
+                                d1_conn.execute(
+                                    f"INSERT INTO logs({','.join(cols)}) VALUES({placeholders})",
+                                    [lg[k] for k in cols],
+                                )
+                            synced += 1
+
+            if "settings" in tables:
+                for meta_key in ("_d1_offline_pending", "_dirty_settings", "_deleted_leads"):
+                    if meta_key in local_settings:
+                        local_conn.execute("DELETE FROM settings WHERE key=?", (meta_key,))
+                local_conn.commit()
+            _was_offline = False
+        finally:
+            local_conn.close()
+    finally:
+        if own_d1 and d1_conn is not None:
+            try:
+                d1_conn.close()
+            except Exception:
+                pass
+        _syncing_d1 = False
+    return synced
+
+
 def get_db_connection(local_db_path: Path | None = None) -> D1Connection | ClosingLocalConnection:
     """Return a Cloudflare D1 connection if configured, otherwise fallback to local SQLite."""
+    db_file = local_db_path or Path(os.environ.get("DASHBOARD_DB", REPO / "dashboard.sqlite3"))
     if is_d1_configured():
         account_id = os.environ["CLOUDFLARE_ACCOUNT_ID"].strip()
         api_token = os.environ["CLOUDFLARE_API_TOKEN"].strip()
@@ -210,9 +451,14 @@ def get_db_connection(local_db_path: Path | None = None) -> D1Connection | Closi
             os.environ.get("D1_DATABASE_ID", "").strip()
             or os.environ.get("CLOUDFLARE_D1_DATABASE_ID", "").strip()
         )
-        return D1Connection(account_id, database_id, api_token)
+        d1_conn = D1Connection(account_id, database_id, api_token)
+        if _was_offline and not _syncing_d1 and db_file.is_file():
+            try:
+                sync_local_to_d1(db_file, d1_conn)
+            except Exception:
+                pass
+        return d1_conn
 
-    db_file = local_db_path or Path(os.environ.get("DASHBOARD_DB", REPO / "dashboard.sqlite3"))
     db_file.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(db_file, timeout=15, factory=ClosingLocalConnection)
     conn.row_factory = sqlite3.Row

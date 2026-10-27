@@ -16,13 +16,34 @@ from pathlib import Path
 from src.pipeline_common import get_venv_python, kill_process_tree
 
 REPO = Path(__file__).resolve().parent
-URL = "http://127.0.0.1:8765"
+try:
+    from dotenv import load_dotenv
+    load_dotenv(REPO / ".env")
+except Exception:
+    pass
+
+PORT = int(os.environ.get("PORT", 8765))
+URL = f"http://127.0.0.1:{PORT}"
 STATE_URL = f"{URL}/api/state"
+
+
+def _current_url() -> str:
+    port_env = os.environ.get("PORT")
+    if port_env:
+        return f"http://127.0.0.1:{int(port_env)}"
+    return URL
+
+
+def _current_state_url() -> str:
+    port_env = os.environ.get("PORT")
+    if port_env:
+        return f"http://127.0.0.1:{int(port_env)}/api/state"
+    return STATE_URL
 
 
 def server_is_running() -> bool:
     try:
-        with urllib.request.urlopen(STATE_URL, timeout=1):
+        with urllib.request.urlopen(_current_state_url(), timeout=1):
             return True
     except (urllib.error.URLError, TimeoutError):
         return False
@@ -50,15 +71,16 @@ def find_browser() -> str | None:
 
 
 def open_browser(profile: Path, browser_bin: str | None) -> int:
+    target_url = _current_url()
     if browser_bin:
         cmd = [
             browser_bin,
-            f"--app={URL}",
+            f"--app={target_url}",
             f"--user-data-dir={profile}",
             "--window-size=1500,800",
         ]
         return subprocess.run(cmd, check=False).returncode
-    webbrowser.open(URL)
+    webbrowser.open(target_url)
     return 0
 
 

@@ -225,22 +225,22 @@ def delete_recording(batch: str, handle: str, screen: str | None = None) -> int:
     prefix = f"{batch}/{handle}/recordings/"
     paginator = s3.get_paginator("list_objects_v2")
     deleted_count = 0
-    try:
-        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
-            objects = []
-            for obj in page.get("Contents", []):
-                key = obj["Key"]
-                filename = key[len(prefix):]
-                if screen and screen != "all":
-                    if f"-{screen}." in filename or filename.startswith(f"{handle}-{screen}.") or filename.startswith(f"{screen}."):
-                        objects.append({"Key": key})
-                else:
+    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+        objects = []
+        for obj in page.get("Contents", []):
+            key = obj["Key"]
+            filename = key[len(prefix):]
+            if screen and screen != "all":
+                if f"-{screen}." in filename or filename.startswith(f"{handle}-{screen}.") or filename.startswith(f"{screen}."):
                     objects.append({"Key": key})
-            if objects:
-                s3.delete_objects(Bucket=bucket, Delete={"Objects": objects})
-                deleted_count += len(objects)
-    except Exception:
-        pass
+            else:
+                objects.append({"Key": key})
+        if objects:
+            resp = s3.delete_objects(Bucket=bucket, Delete={"Objects": objects})
+            if isinstance(resp, dict) and resp.get("Errors"):
+                err_msg = "; ".join(str(e.get("Message") or e.get("Code") or e) for e in resp["Errors"])
+                raise RuntimeError(f"R2 delete_objects failed: {err_msg}")
+            deleted_count += len(objects)
     return deleted_count
 
 
@@ -298,7 +298,6 @@ def download_lead_folder(batch: str, handle: str, dest_dir: Path) -> bool:
     try:
         for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
             for obj in page.get("Contents", []):
-                found_any = True
                 key = obj["Key"]
                 rel_path = key[len(prefix):]
                 if not rel_path or rel_path.endswith("/"):
@@ -308,8 +307,9 @@ def download_lead_folder(batch: str, handle: str, dest_dir: Path) -> bool:
                 resp = s3.get_object(Bucket=bucket, Key=key)
                 with target_path.open("wb") as f:
                     f.write(resp["Body"].read())
+                found_any = True
     except Exception:
-        pass
+        return False
     return found_any
 
 
@@ -358,18 +358,21 @@ def download_site(batch: str, handle: str, dest_dir: Path) -> bool:
     pages = paginator.paginate(Bucket=bucket, Prefix=prefix)
 
     found_any = False
-    for page in pages:
-        for obj in page.get("Contents", []):
-            found_any = True
-            key = obj["Key"]
-            rel_path = key[len(prefix):]
-            if not rel_path or rel_path.endswith("/"):
-                continue
-            target_path = dest_dir / rel_path
-            target_path.parent.mkdir(parents=True, exist_ok=True)
-            resp = s3.get_object(Bucket=bucket, Key=key)
-            with target_path.open("wb") as f:
-                f.write(resp["Body"].read())
+    try:
+        for page in pages:
+            for obj in page.get("Contents", []):
+                key = obj["Key"]
+                rel_path = key[len(prefix):]
+                if not rel_path or rel_path.endswith("/"):
+                    continue
+                target_path = dest_dir / rel_path
+                target_path.parent.mkdir(parents=True, exist_ok=True)
+                resp = s3.get_object(Bucket=bucket, Key=key)
+                with target_path.open("wb") as f:
+                    f.write(resp["Body"].read())
+                found_any = True
+    except Exception:
+        return False
 
     return found_any
 
@@ -389,12 +392,9 @@ def upload_lead_media(account_dir: Path, batch: str, handle: str) -> int:
             rel_path = item.relative_to(data_dir).as_posix()
             r2_key = f"{batch}/{handle}/media/{rel_path}"
             ct = guess_content_type(item)
-            try:
-                with item.open("rb") as f:
-                    s3.put_object(Bucket=bucket, Key=r2_key, Body=f, ContentType=ct)
-                uploaded += 1
-            except Exception:
-                pass
+            with item.open("rb") as f:
+                s3.put_object(Bucket=bucket, Key=r2_key, Body=f, ContentType=ct)
+            uploaded += 1
     return uploaded
 
 
@@ -417,9 +417,35 @@ def upload_lead_assets(account_dir: Path, batch: str, handle: str) -> str | None
         upload_file(selected_file, f"{batch}/{handle}/selected_posts.json", "application/json")
 
     # Upload scraped media and profile data
-    upload_lead_media(account_dir, batch, handle)
+    data_dir = account_dir / f"{handle}_data"
+    if data_dir.is_dir():
+        expected = sum(1 for item in data_dir.rglob("*") if item.is_file())
+        uploaded = upload_lead_media(account_dir, batch, handle)
+        if uploaded < expected:
+            raise RuntimeError(f"partial R2 media upload ({uploaded}/{expected} files)")
 
     return preview_url
+
+
+def delete_site_assets(batch: str, handle: str) -> int:
+    """Delete only generated site files under {batch}/{handle}/site/ from R2."""
+    if not is_r2_configured():
+        return 0
+
+    bucket = os.environ["R2_BUCKET_NAME"].strip()
+    s3 = get_s3_client()
+    prefix = f"{batch}/{handle}/site/"
+
+    paginator = s3.get_paginator("list_objects_v2")
+    deleted_count = 0
+
+    for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+        objects = [{"Key": obj["Key"]} for obj in page.get("Contents", [])]
+        if objects:
+            s3.delete_objects(Bucket=bucket, Delete={"Objects": objects})
+            deleted_count += len(objects)
+
+    return deleted_count
 
 
 def delete_lead_assets(batch: str, handle: str) -> int:
