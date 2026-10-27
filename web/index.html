@@ -382,6 +382,15 @@
         width: auto;
         padding: 7px 10px;
       }
+      .top input[type="date"].loading-date {
+        opacity: 0.65;
+        cursor: wait;
+        animation: datePulse 1.4s ease-in-out infinite;
+      }
+      @keyframes datePulse {
+        0%, 100% { opacity: 0.55; }
+        50% { opacity: 0.95; }
+      }
       .pill {
         display: inline-flex;
         align-items: center;
@@ -1528,18 +1537,137 @@
         align-items: center;
         justify-content: center;
         position: relative;
-        min-height: 280px;
+        width: 100%;
+        aspect-ratio: 16 / 9;
+        min-height: 440px;
         max-height: calc(85vh - 120px);
         overflow: hidden;
       }
       #v-player {
         width: 100%;
-        height: auto;
+        height: 100%;
         max-height: calc(85vh - 120px);
         display: block;
         background: #000;
         outline: none;
         object-fit: contain;
+        opacity: 0;
+        transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      #v-player.v-ready {
+        opacity: 1;
+      }
+      .video-placeholder {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: radial-gradient(circle at center, #1e2533 0%, #0d1017 100%);
+        z-index: 2;
+        transition: opacity 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        pointer-events: none;
+      }
+      .video-placeholder.v-hidden {
+        opacity: 0;
+        pointer-events: none;
+      }
+      .video-placeholder-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 16px;
+        text-align: center;
+        max-width: 340px;
+        padding: 24px;
+        position: relative;
+        z-index: 2;
+      }
+      .video-placeholder-visual {
+        position: relative;
+        width: 76px;
+        height: 76px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .v-pulse-ring {
+        position: absolute;
+        inset: -6px;
+        border-radius: 50%;
+        border: 2px solid var(--accent, #6366f1);
+        opacity: 0.35;
+        animation: vPulse 2.2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+      }
+      .v-pulse-ring.delay {
+        animation-delay: 0.8s;
+      }
+      @keyframes vPulse {
+        0% { transform: scale(0.85); opacity: 0.85; }
+        50% { transform: scale(1.18); opacity: 0.25; }
+        100% { transform: scale(1.42); opacity: 0; }
+      }
+      .v-placeholder-icon {
+        width: 56px;
+        height: 56px;
+        border-radius: 16px;
+        background: var(--float, #222a20);
+        border: 1px solid var(--line2, rgba(255, 255, 255, 0.16));
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: var(--accent, #c9ed78);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+        position: relative;
+        z-index: 2;
+      }
+      .v-placeholder-spinner {
+        position: absolute;
+        inset: 0;
+        border-radius: 50%;
+        border: 3px solid rgba(255, 255, 255, 0.08);
+        border-top-color: var(--accent, #c9ed78);
+        animation: vSpin 1s linear infinite;
+        z-index: 1;
+      }
+      @keyframes vSpin {
+        to { transform: rotate(360deg); }
+      }
+      .v-placeholder-title {
+        font-family: var(--display, inherit);
+        font-size: 15px;
+        font-weight: 650;
+        color: var(--text, #eef3e8);
+        letter-spacing: -0.01em;
+      }
+      .v-placeholder-sub {
+        font-size: 12px;
+        color: var(--muted, #a3b09b);
+        margin-top: 2px;
+      }
+      .v-placeholder-bar {
+        width: 140px;
+        height: 3px;
+        background: rgba(255, 255, 255, 0.08);
+        border-radius: 3px;
+        overflow: hidden;
+        position: relative;
+        margin-top: 4px;
+      }
+      .v-placeholder-progress {
+        position: absolute;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        width: 45%;
+        background: var(--accent, #c9ed78);
+        border-radius: 3px;
+        animation: vIndeterminate 1.5s ease-in-out infinite;
+      }
+      @keyframes vIndeterminate {
+        0% { transform: translateX(-100%); }
+        100% { transform: translateX(250%); }
       }
       .video-footer {
         display: flex;
@@ -1704,8 +1832,8 @@
             ><span class="dot" style="background:var(--accent)"></span><span id="synctext">Uploading…</span></span
           >
         </header>
-        <div id="offlinebanner" hidden style="background:#dc2626;color:#fff;padding:8px 16px;margin:8px 24px 0 24px;border-radius:var(--r);font-size:12px;font-weight:600;display:flex;align-items:center;gap:8px;">
-          <span>⚠️</span> <span>Cloudflare D1 is unreachable. Operating in offline fallback mode using local SQLite.</span>
+        <div id="offlinebanner" hidden style="background:#d97706;color:#fff;padding:8px 16px;margin:8px 24px 0 24px;border-radius:var(--r);font-size:12px;font-weight:600;display:flex;align-items:center;gap:8px;">
+          <span>ℹ️</span> <span>Local Mode is active (using local SQLite and local storage). Cloud sync is manual.</span>
         </div>
 
         <section class="view" id="view-pipeline">
@@ -1882,6 +2010,9 @@
                 ><input id="ssync" type="checkbox" /> Sync Google Sheets after
                 build</label
               >
+              <label class="opt"
+                ><input id="slocalmode" type="checkbox" /> Offline / Local mode (use local SQLite &amp; local storage)</label
+              >
             </div>
             <div style="margin-top: 16px">
               <button class="primary" data-act="saveSettings">
@@ -1910,10 +2041,11 @@
             </div>
           </div>
           <div class="sec">
-            <h2>Data</h2>
+            <h2>Data &amp; Cloud</h2>
             <div style="display: flex; gap: 8px; flex-wrap: wrap">
               <button data-act="exportCsv">Export leads CSV</button>
               <button data-act="exportAccounts">Export account list</button>
+              <button data-act="syncD1">Sync Local DB to Cloudflare D1</button>
             </div>
           </div>
         </section>
@@ -2172,7 +2304,26 @@
           <div class="spacer"></div>
           <button class="iconbtn sm ghost" data-act="closeVideo" aria-label="Close">✕</button>
         </div>
-        <div class="video-viewport">
+        <div class="video-viewport" id="v-viewport">
+          <div class="video-placeholder" id="v-placeholder">
+            <div class="video-placeholder-content">
+              <div class="video-placeholder-visual">
+                <div class="v-pulse-ring"></div>
+                <div class="v-pulse-ring delay"></div>
+                <div class="v-placeholder-spinner"></div>
+                <div class="v-placeholder-icon" id="v-ph-icon">
+                  <svg class="i" viewBox="0 0 24 24" style="width:28px;height:28px" aria-hidden="true"><rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/></svg>
+                </div>
+              </div>
+              <div class="v-placeholder-text">
+                <div class="v-placeholder-title" id="v-ph-title">Loading recording…</div>
+                <div class="v-placeholder-sub" id="v-ph-sub">Preparing video stream…</div>
+              </div>
+              <div class="v-placeholder-bar">
+                <div class="v-placeholder-progress"></div>
+              </div>
+            </div>
+          </div>
           <video id="v-player" controls playsinline preload="metadata"></video>
         </div>
         <div class="video-footer">
@@ -2277,6 +2428,7 @@
         job: { active: false, handles: [] },
         sideOpen: true,
         logZoom: 11,
+        loadingBatch: true,
       };
 
       /* ---------- theme ---------- */
@@ -2403,22 +2555,36 @@
 
       /* ---------- data ---------- */
       async function refresh(reload) {
-        S.st = await api("/api/state" + bq());
-        $("#batch").value = S.st.batch;
-        if ($("#offlinebanner")) $("#offlinebanner").hidden = !S.st.d1_offline;
-        if (document.activeElement !== $("#accounts"))
-          $("#accounts").value = S.st.accounts || "";
-        const s = S.st.settings || {};
-        if (S.view !== "settings" || !$("#sroot").dataset.filled) {
-          fillSettings();
+        try {
+          S.st = await api("/api/state" + bq());
+          S.loadingBatch = false;
+          $("#batch").value = S.st.batch;
+          $("#batch").disabled = false;
+          $("#batch").classList.remove("loading-date");
+          $("#batch").title = `Batch date: ${S.st.batch}`;
+          setSyncIndicator(null);
+          if ($("#offlinebanner")) $("#offlinebanner").hidden = !(S.st.local_mode || S.st.d1_offline);
+          if (document.activeElement !== $("#accounts"))
+            $("#accounts").value = S.st.accounts || "";
+          const s = S.st.settings || {};
+          if (S.view !== "settings" || !$("#sroot").dataset.filled) {
+            fillSettings();
+          }
+          $("#authstate").textContent = S.st.auth_exists
+            ? "Session saved · " + S.st.auth_mtime
+            : "No session";
+          render();
+          if (reload && S.sel && !$("#studio").hidden)
+            await loadLead(S.sel, false);
+          await jobStatus();
+        } catch (e) {
+          S.loadingBatch = false;
+          $("#batch").disabled = false;
+          $("#batch").classList.remove("loading-date");
+          setSyncIndicator(null);
+          await jobStatus();
+          throw e;
         }
-        $("#authstate").textContent = S.st.auth_exists
-          ? "Session saved · " + S.st.auth_mtime
-          : "No session";
-        render();
-        if (reload && S.sel && !$("#studio").hidden)
-          await loadLead(S.sel, false);
-        await jobStatus();
       }
       async function jobStatus() {
         try {
@@ -2482,6 +2648,10 @@
         renderSelbar();
       }
       function renderChips() {
+        if (S.loadingBatch) {
+          $("#statuschips").innerHTML = `<span class="chip on" style="opacity:0.75;cursor:wait"><span>📅 Finding latest date…</span></span>`;
+          return;
+        }
         const counts = {};
         (S.st.leads || []).forEach(
           (l) => (counts[l.status] = (counts[l.status] || 0) + 1),
@@ -2534,6 +2704,14 @@
               .join("")
           : "";
         const root = $("#pipeline");
+        if (S.loadingBatch) {
+          root.innerHTML = `<div class="empty" style="padding: 70px 16px;">
+            <div class="loader-spinner" style="margin: 0 auto 16px;"></div>
+            <h3 style="font-size: 16px; margin-bottom: 6px; color: var(--text);">📅 Finding latest date…</h3>
+            <div class="muted" style="font-size: 13px;">Connecting to database and loading the newest batch</div>
+          </div>`;
+          return;
+        }
         if (!(S.st.leads || []).length) {
           root.innerHTML = `<div class="empty"><h3>No leads yet</h3>Add Instagram accounts in Batch to start building sites.<br><br><button class="primary" data-act="view" data-v="batch">Add accounts</button></div>`;
           return;
@@ -3085,6 +3263,7 @@
         $("#scaptions").checked = !!s.captions;
         $("#sheaded").checked = !!s.headed;
         $("#ssync").checked = !!s.sync_sheet;
+        if ($("#slocalmode")) $("#slocalmode").checked = !!s.local_mode;
         drawSwatches();
       }
       async function saveSettings() {
@@ -3121,6 +3300,7 @@
           captions: $("#scaptions").checked,
           headed: $("#sheaded").checked,
           sync_sheet: $("#ssync").checked,
+          local_mode: $("#slocalmode") ? $("#slocalmode").checked : false,
         };
         try {
           S.st.settings = await api("/api/settings", {
@@ -3310,6 +3490,53 @@
         screen: "desktop",
         recordings: {},
       };
+
+      function showVideoPlaceholder(screen) {
+        const ph = $("#v-placeholder");
+        const player = $("#v-player");
+        if (player) player.classList.remove("v-ready");
+        if (!ph) return;
+        ph.classList.remove("v-hidden");
+        const s = screen || "desktop";
+        const name = s.charAt(0).toUpperCase() + s.slice(1);
+        const iconName = s === "desktop" ? "monitor" : s;
+        if ($("#v-ph-icon")) $("#v-ph-icon").innerHTML = ic(iconName, 26);
+        if ($("#v-ph-title")) $("#v-ph-title").textContent = `Loading ${name} recording…`;
+        if ($("#v-ph-sub")) $("#v-ph-sub").textContent = "Preparing video stream…";
+        const bar = $(".v-placeholder-bar", ph);
+        if (bar) bar.hidden = false;
+      }
+
+      function hideVideoPlaceholder() {
+        const ph = $("#v-placeholder");
+        const player = $("#v-player");
+        if (player) player.classList.add("v-ready");
+        if (ph) ph.classList.add("v-hidden");
+      }
+
+      function showVideoError(msg) {
+        const ph = $("#v-placeholder");
+        const player = $("#v-player");
+        if (player) player.classList.remove("v-ready");
+        if (!ph) return;
+        ph.classList.remove("v-hidden");
+        if ($("#v-ph-icon")) $("#v-ph-icon").innerHTML = ic("trash", 24);
+        if ($("#v-ph-title")) $("#v-ph-title").textContent = "Recording not ready";
+        if ($("#v-ph-sub")) $("#v-ph-sub").textContent = msg || "Video stream is currently unavailable.";
+        const bar = $(".v-placeholder-bar", ph);
+        if (bar) bar.hidden = true;
+      }
+
+      const vpInit = $("#v-player");
+      if (vpInit) {
+        vpInit.addEventListener("loadeddata", hideVideoPlaceholder);
+        vpInit.addEventListener("canplay", hideVideoPlaceholder);
+        vpInit.addEventListener("playing", hideVideoPlaceholder);
+        vpInit.addEventListener("error", () => {
+          showVideoError("Could not load recording from server.");
+        });
+      }
+
       async function openVideoPlayer(handle, preferredDevice) {
         if (!handle) return;
         V.handle = handle;
@@ -3377,6 +3604,7 @@
         );
         const name = screen.charAt(0).toUpperCase() + screen.slice(1);
         $("#v-meta").textContent = `${name} demo recording`;
+        showVideoPlaceholder(screen);
         const player = $("#v-player");
         player.src = `${leadUrl(V.handle)}/recording/${screen}?${bq().slice(1)}`;
         player.play().catch(() => {});
@@ -3391,6 +3619,8 @@
         player.pause();
         player.removeAttribute("src");
         player.load();
+        player.classList.remove("v-ready");
+        showVideoPlaceholder(V.screen);
         $("#videomodal").hidden = true;
         if ($("#studio").hidden && $("#present").hidden) {
           document.body.style.overflow = "";
@@ -3637,6 +3867,16 @@
           [$("#logs"), $("#revisionlogs")].forEach((box) => box.style.fontSize = `${S.logZoom}px`);
         },
         saveSettings,
+        syncD1: async () => {
+          try {
+            toast("Syncing local changes to Cloudflare D1…");
+            const res = await api("/api/sync/d1", { method: "POST" });
+            toast(`Synced ${res.synced || 0} item(s) to Cloudflare D1!`);
+            await refresh(false);
+          } catch (e) {
+            toast("Sync failed: " + e.message);
+          }
+        },
         login: async () => {
           try {
             await api("/api/auth/login", { method: "POST" });
@@ -4150,13 +4390,14 @@
         const b = $("#batch").value;
         S.sel = "";
         S.checked.clear();
-        setSyncIndicator(`☁️ Loading batch ${b} from R2…`);
+        S.loadingBatch = true;
+        setSyncIndicator(`☁️ Loading batch ${b}…`);
         const root = $("#pipeline");
         if (root && S.view === "pipeline") {
           root.innerHTML = `<div class="empty" style="padding: 70px 16px;">
             <div class="loader-spinner" style="margin: 0 auto 16px;"></div>
-            <h3 style="font-size: 16px; margin-bottom: 6px; color: var(--text);">☁️ Connecting to Cloudflare R2…</h3>
-            <div class="muted" style="font-size: 13px;">Pulling leads and mockups for ${esc(b)}</div>
+            <h3 style="font-size: 16px; margin-bottom: 6px; color: var(--text);">☁️ Loading batch ${esc(b)}…</h3>
+            <div class="muted" style="font-size: 13px;">Pulling leads and mockups from database</div>
           </div>`;
         }
         $("#batch").disabled = true;
@@ -4281,6 +4522,13 @@
       );
       setPalette(localStorage.getItem("studio-palette") || "studio");
       paintStudioChrome();
+      S.loadingBatch = true;
+      $("#batch").disabled = true;
+      $("#batch").classList.add("loading-date");
+      $("#batch").title = "Finding latest date from database…";
+      setSyncIndicator("📅 Finding latest date…");
+      $("#jobpill").classList.add("run");
+      $("#jobtext").textContent = "Finding date…";
       setView("pipeline");
       if ("Notification" in window && Notification.permission === "default")
         Notification.requestPermission();

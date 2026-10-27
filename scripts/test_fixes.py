@@ -252,9 +252,9 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
             self.assertTrue(any("--force" in call.args[0] for call in mock_run.call_args_list))
 
     def test_3_offline_d1_changes_merged_back_on_restart(self):
-        """Bug 3: Offline SQLite changes made while D1 is unreachable are merged back when D1 recovers."""
+        """Bug 3: Offline SQLite changes made in manual local mode are merged when manual sync is invoked."""
         from src.app import init_db
-        from src.d1_client import set_d1_offline, is_d1_offline, D1Row, D1Cursor
+        from src.d1_client import set_local_mode, is_local_mode, sync_local_to_d1, D1Row, D1Cursor
         env = {
             "CLOUDFLARE_ACCOUNT_ID": "acc123",
             "CLOUDFLARE_API_TOKEN": "tok123",
@@ -263,10 +263,10 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
         }
         with patch.dict(os.environ, env):
             with patch("src.app.DB", self.db_path):
-                # 1. Startup with D1 unreachable -> falls back to local SQLite
-                with patch("src.d1_client.D1Connection._query", side_effect=RuntimeError("D1 down")):
-                    init_db()
-                    self.assertTrue(is_d1_offline())
+                # 1. Manually enable local mode
+                set_local_mode(True)
+                init_db()
+                self.assertTrue(is_local_mode())
 
                 # Make offline edits in local SQLite
                 conn = sqlite3.connect(self.db_path)
@@ -279,15 +279,20 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
                 conn.commit()
                 conn.close()
 
-                # 2. Next restart with D1 reachable -> merges offline changes into D1
+                # Turn off local mode
+                set_local_mode(False)
+                self.assertFalse(is_local_mode())
+
+                # 2. Manual sync merges offline changes into D1
                 d1_queries = []
                 def fake_d1_query(sql, params=None):
                     d1_queries.append((sql, params))
                     return D1Cursor([])
 
                 with patch("src.d1_client.D1Connection._query", side_effect=fake_d1_query):
-                    init_db()
-                    self.assertFalse(is_d1_offline())
+                    from src.d1_client import D1Connection
+                    d1 = D1Connection("acc123", "db123", "tok123")
+                    sync_local_to_d1(self.db_path, d1)
                     self.assertTrue(
                         any("INSERT OR REPLACE INTO leads" in q[0] and "offline_lead" in (q[1] or []) for q in d1_queries)
                     )

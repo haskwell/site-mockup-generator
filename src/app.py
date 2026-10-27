@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Local dashboard for building and revising profile sites."""
 from __future__ import annotations
-import datetime as dt, json, os, queue, shutil, sqlite3, threading, time, uuid, webbrowser, sys
+import datetime as dt, json, os, queue, shutil, sqlite3, threading, time, uuid, webbrowser, sys, asyncio
 import csv, io
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from contextlib import asynccontextmanager
@@ -13,7 +13,16 @@ from starlette.background import BackgroundTask
 from pydantic import BaseModel, Field
 from src.pipeline_common import MODEL, TIMEOUT_SECONDS, account_handle, find_agy, get_venv_python, run_streaming
 from src.run import process_account, validate_site
-from src.d1_client import get_current_user, get_db_connection, is_d1_configured, is_d1_offline, set_d1_offline, sync_local_to_d1
+from src.d1_client import (
+    get_current_user,
+    get_db_connection,
+    is_d1_configured,
+    is_d1_offline,
+    is_local_mode,
+    set_d1_offline,
+    set_local_mode,
+    sync_local_to_d1,
+)
 from src.r2_storage import (
     delete_lead_assets,
     delete_site_assets,
@@ -40,7 +49,7 @@ from tempfile import gettempdir
 
 REPO=Path(__file__).resolve().parents[1]; WEB=REPO/"web"
 DB=Path(os.environ.get("DASHBOARD_DB",REPO/"dashboard.sqlite3"))
-DEFAULTS={"websites_root":"websites","model":MODEL,"timeout":TIMEOUT_SECONDS,"parallelism":1,"max_posts":18,"captions":True,"headed":False,"attempts":3,"credentials":"config/creds.json","sheet_name":"websites","browser":"","sync_sheet":True}
+DEFAULTS={"websites_root":"websites","model":MODEL,"timeout":TIMEOUT_SECONDS,"parallelism":1,"max_posts":18,"captions":True,"headed":False,"attempts":3,"credentials":"config/creds.json","sheet_name":"websites","browser":"","sync_sheet":True,"local_mode":False}
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -63,6 +72,10 @@ async def security_middleware(request: Request, call_next):
     return await call_next(request)
 events=[]; subscribers=set(); event_lock=threading.Lock(); job_lock=threading.Lock(); active_job=None
 revision_queue=queue.Queue(); revision_active=False; revision_pending=0
+
+def connect():
+    return get_db_connection(DB)
+
 def newest_batch():
     dates=[]
     try:
@@ -71,8 +84,10 @@ def newest_batch():
             for r in rows:
                 b=r["batch"]
                 try:dates.append(dt.date.fromisoformat(b).isoformat())
-                except ValueError:pass
-    except Exception:pass
+                except (ValueError, TypeError):pass
+    except Exception as exc:
+        import logging
+        logging.getLogger("uvicorn.error").debug("Could not query batches from db: %s", exc)
     if not dates:
         base=Path(DEFAULTS["websites_root"])
         try:
@@ -83,47 +98,51 @@ def newest_batch():
         except OSError:pass
     return max(dates) if dates else dt.date.today().isoformat()
 
-selected_batch=newest_batch()
+_cached_selected_batch: str | None = None
 
-def connect():
-    return get_db_connection(DB)
+def get_selected_batch() -> str:
+    global _cached_selected_batch
+    if _cached_selected_batch is None:
+        _cached_selected_batch = newest_batch()
+    return _cached_selected_batch
+
+class _LazySelectedBatch:
+    def __str__(self) -> str:
+        return get_selected_batch()
+    def __repr__(self) -> str:
+        return repr(get_selected_batch())
+    def __bool__(self) -> bool:
+        return bool(get_selected_batch())
+    def __eq__(self, other: Any) -> bool:
+        return str(self) == other
+    def __hash__(self) -> int:
+        return hash(str(self))
+
+selected_batch = _LazySelectedBatch()
 
 def init_db():
-    DB.parent.mkdir(parents=True,exist_ok=True)
-    def _run_schema(d):
-        d.executescript("""CREATE TABLE IF NOT EXISTS leads(batch TEXT,handle TEXT,name TEXT DEFAULT '',phone TEXT DEFAULT '',area TEXT DEFAULT '',followers TEXT DEFAULT '',status TEXT DEFAULT 'queued',error TEXT DEFAULT '',site_path TEXT DEFAULT '',notes TEXT DEFAULT '',stage TEXT DEFAULT 'new',follow_up TEXT DEFAULT '',price TEXT DEFAULT '',qa TEXT DEFAULT '',created_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,locked_by TEXT DEFAULT '',locked_at TEXT DEFAULT '',PRIMARY KEY(batch,handle));
-        CREATE TABLE IF NOT EXISTS revisions(id INTEGER PRIMARY KEY AUTOINCREMENT,batch TEXT,handle TEXT,request TEXT,status TEXT DEFAULT 'pending',created_at TEXT DEFAULT CURRENT_TIMESTAMP,applied_at TEXT,backup_path TEXT DEFAULT '');
-        CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT);
-        CREATE TABLE IF NOT EXISTS logs(id INTEGER PRIMARY KEY AUTOINCREMENT,batch TEXT,handle TEXT,status TEXT,line TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP);""")
-        try:d.execute("ALTER TABLE leads ADD COLUMN locked_by TEXT DEFAULT ''")
-        except Exception:pass
-        try:d.execute("ALTER TABLE leads ADD COLUMN locked_at TEXT DEFAULT ''")
-        except Exception:pass
-        try:d.execute("ALTER TABLE leads ADD COLUMN has_recording INTEGER DEFAULT 0")
-        except Exception:pass
-        try:d.execute("UPDATE leads SET site_path = '/preview/' || batch || '/' || handle || '/index.html' WHERE site_path LIKE 'http%'")
-        except Exception:pass
-        for k,v in DEFAULTS.items(): d.execute("INSERT OR IGNORE INTO settings VALUES(?,?)",(k,json.dumps(v)))
-
-    set_d1_offline(False)
     try:
         with connect() as d:
-            _run_schema(d)
-            if is_d1_configured() and DB.is_file():
-                sync_local_to_d1(DB, d, DEFAULTS)
-    except Exception as exc:
-        if is_d1_configured():
-            import logging
-            logging.getLogger("uvicorn.error").warning("Cloudflare D1 unreachable at startup (%s); falling back to local SQLite.", exc)
-            set_d1_offline(True)
-            with connect() as d:
-                _run_schema(d)
-                try:
-                    d.execute("INSERT OR REPLACE INTO settings(key,value) VALUES('_d1_offline_pending','true')")
-                except Exception:
-                    pass
-        else:
-            raise
+            if not isinstance(d, sqlite3.Connection) and not is_local_mode():
+                # When cloud D1 is active, absolutely no queries run at startup: tables already exist.
+                return
+            DB.parent.mkdir(parents=True, exist_ok=True)
+            d.executescript("""CREATE TABLE IF NOT EXISTS leads(batch TEXT,handle TEXT,name TEXT DEFAULT '',phone TEXT DEFAULT '',area TEXT DEFAULT '',followers TEXT DEFAULT '',status TEXT DEFAULT 'queued',error TEXT DEFAULT '',site_path TEXT DEFAULT '',notes TEXT DEFAULT '',stage TEXT DEFAULT 'new',follow_up TEXT DEFAULT '',price TEXT DEFAULT '',qa TEXT DEFAULT '',created_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,locked_by TEXT DEFAULT '',locked_at TEXT DEFAULT '',has_recording INTEGER DEFAULT 0,PRIMARY KEY(batch,handle));
+            CREATE TABLE IF NOT EXISTS revisions(id INTEGER PRIMARY KEY AUTOINCREMENT,batch TEXT,handle TEXT,request TEXT,status TEXT DEFAULT 'pending',created_at TEXT DEFAULT CURRENT_TIMESTAMP,applied_at TEXT,backup_path TEXT DEFAULT '');
+            CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT);
+            CREATE TABLE IF NOT EXISTS logs(id INTEGER PRIMARY KEY AUTOINCREMENT,batch TEXT,handle TEXT,status TEXT,line TEXT,created_at TEXT DEFAULT CURRENT_TIMESTAMP);""")
+            try:d.execute("ALTER TABLE leads ADD COLUMN locked_by TEXT DEFAULT ''")
+            except Exception:pass
+            try:d.execute("ALTER TABLE leads ADD COLUMN locked_at TEXT DEFAULT ''")
+            except Exception:pass
+            try:d.execute("ALTER TABLE leads ADD COLUMN has_recording INTEGER DEFAULT 0")
+            except Exception:pass
+            try:d.execute("UPDATE leads SET site_path = '/preview/' || batch || '/' || handle || '/index.html' WHERE site_path LIKE 'http%'")
+            except Exception:pass
+            for k,v in DEFAULTS.items():
+                d.execute("INSERT OR IGNORE INTO settings VALUES(?,?)",(k,json.dumps(v)))
+    except Exception:
+        pass
 
 def resolve_credentials_path(path_str: str | None = None) -> Path:
     env_creds = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
@@ -171,15 +190,19 @@ def settings():
             conf[num_key] = DEFAULTS[num_key]
         else:
             conf[num_key] = int(val)
+    conf["local_mode"] = bool(conf.get("local_mode", False) or is_local_mode())
     conf["credentials"] = str(resolve_credentials_path(conf.get("credentials")))
     conf["websites_root"] = str(resolve_websites_root(conf.get("websites_root")))
     return conf
 
 def clean_batch(batch):
+    batch_str = str(batch)
     try:
-        if dt.date.fromisoformat(batch).isoformat()!=batch:raise ValueError
-    except ValueError:raise HTTPException(400,"Batch must use YYYY-MM-DD")
-    return batch
+        if dt.date.fromisoformat(batch_str).isoformat() != batch_str:
+            raise ValueError
+    except ValueError:
+        raise HTTPException(400, "Batch must use YYYY-MM-DD")
+    return batch_str
 
 def clean_handle(handle):
     try:valid=account_handle(handle)
@@ -223,6 +246,33 @@ def parse_accounts(text):
         except ValueError as e:raise HTTPException(400,str(e))
         if h.casefold() not in seen:out.append(h);seen.add(h.casefold())
     return out
+
+@app.get("/api/ping")
+def ping():
+    return {"status": "ok"}
+
+@app.post("/api/sync/d1")
+def sync_d1():
+    account_id = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
+    api_token = os.environ.get("CLOUDFLARE_API_TOKEN", "").strip()
+    database_id = (
+        os.environ.get("D1_DATABASE_ID", "").strip()
+        or os.environ.get("CLOUDFLARE_D1_DATABASE_ID", "").strip()
+    )
+    if not (account_id and api_token and database_id):
+        raise HTTPException(400, "Cloudflare D1 credentials are not configured in .env")
+    from src.d1_client import D1Connection
+    d1 = D1Connection(account_id, database_id, api_token)
+    try:
+        synced = sync_local_to_d1(DB, d1, DEFAULTS)
+    except Exception as exc:
+        raise HTTPException(500, f"Sync to D1 failed: {exc}")
+    finally:
+        try:
+            d1.close()
+        except Exception:
+            pass
+    return {"synced": synced}
 
 @app.get("/",response_class=HTMLResponse)
 def home(): return (WEB/"index.html").read_text(encoding="utf-8")
@@ -284,7 +334,7 @@ def state(batch:str|None=None):
                         pass
         l["has_recording"] = 1 if has_rec else 0
     a=REPO/"config/accounts.txt"; auth=REPO/"config/auth.json"
-    return {"batch":batch,"batches":batches,"settings":conf,"leads":leads,"accounts":a.read_text(encoding="utf-8") if a.exists() else "","auth_exists":auth.exists(),"auth_mtime":dt.datetime.fromtimestamp(auth.stat().st_mtime).isoformat(timespec="minutes") if auth.exists() else "","d1_offline":is_d1_offline()}
+    return {"batch":batch,"batches":batches,"settings":conf,"leads":leads,"accounts":a.read_text(encoding="utf-8") if a.exists() else "","auth_exists":auth.exists(),"auth_mtime":dt.datetime.fromtimestamp(auth.stat().st_mtime).isoformat(timespec="minutes") if auth.exists() else "","local_mode":is_local_mode(),"d1_offline":is_local_mode()}
 
 @app.post("/api/accounts")
 def save_accounts(b:Accounts):
@@ -314,12 +364,15 @@ def save_settings(b:SettingsBody):
             if iv < 1:
                 raise HTTPException(400, f"{k} must be at least 1")
             cleaned[k] = iv
+        elif k == "local_mode":
+            cleaned[k] = bool(v)
+            set_local_mode(bool(v))
         else:
             cleaned[k] = v
     with connect() as d:
         for k, v in cleaned.items():
             d.execute("INSERT INTO settings VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(k,json.dumps(v)))
-        if is_d1_offline() and cleaned:
+        if is_local_mode() and cleaned:
             try:
                 row = d.execute("SELECT value FROM settings WHERE key='_dirty_settings'").fetchone()
                 dirty = set(json.loads(row["value"])) if row else set()
@@ -457,13 +510,30 @@ def stream(request:Request):
         if len(subscribers) >= 50:
             raise HTTPException(503, "Too many active subscribers")
         q=queue.Queue(maxsize=200)
-        subscribers.add(q);history=events[-80:]
-    def gen():
+        subscribers.add(q);history=list(events[-80:])
+    async def gen():
         try:
             for x in history:yield "data: "+json.dumps(x)+"\n\n"
             while True:
-                try:yield "data: "+json.dumps(q.get(timeout=15))+"\n\n"
-                except queue.Empty:yield ": keepalive\n\n"
+                if hasattr(request, "is_disconnected") and callable(request.is_disconnected):
+                    try:
+                        res = request.is_disconnected()
+                        if asyncio.iscoroutine(res):
+                            if await res:
+                                break
+                        elif isinstance(res, bool) and res:
+                            break
+                    except Exception:
+                        pass
+                try:
+                    item = q.get_nowait()
+                    yield "data: "+json.dumps(item)+"\n\n"
+                except queue.Empty:
+                    try:
+                        item = await asyncio.to_thread(q.get, True, 0.5)
+                        yield "data: "+json.dumps(item)+"\n\n"
+                    except queue.Empty:
+                        yield ": keepalive\n\n"
         finally:
             with event_lock:subscribers.discard(q)
     return StreamingResponse(gen(),media_type="text/event-stream",headers={"Cache-Control":"no-cache"})

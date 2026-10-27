@@ -117,7 +117,7 @@ class D1Connection:
                     clean_params.append(p)
 
         payload = {"sql": sql, "params": clean_params}
-        resp = self.session.post(self.endpoint, json=payload, timeout=20)
+        resp = self.session.post(self.endpoint, json=payload, timeout=10)
         if not resp.ok:
             raise RuntimeError(f"Cloudflare D1 query failed ({resp.status_code}): {resp.text}")
 
@@ -174,27 +174,59 @@ class ClosingLocalConnection(sqlite3.Connection):
             self.close()
 
 
-_d1_offline = False
-_was_offline = False
 _syncing_d1 = False
 
 
+def is_local_mode() -> bool:
+    """Return True if local mode is manually enabled via environment or settings."""
+    env_mode = os.environ.get("LOCAL_MODE", "").strip().lower()
+    if env_mode in {"1", "true", "yes"}:
+        return True
+    if env_mode in {"0", "false", "no"}:
+        return False
+    try:
+        db_file = Path(os.environ.get("DASHBOARD_DB", REPO / "dashboard.sqlite3"))
+        if db_file.is_file():
+            with sqlite3.connect(db_file, timeout=2) as conn:
+                conn.row_factory = sqlite3.Row
+                row = conn.execute("SELECT value FROM settings WHERE key='local_mode'").fetchone()
+                if row:
+                    return bool(json.loads(row["value"]))
+    except Exception:
+        pass
+    return False
+
+
+def set_local_mode(enabled: bool) -> None:
+    """Manually persist local mode toggle in local SQLite settings."""
+    try:
+        db_file = Path(os.environ.get("DASHBOARD_DB", REPO / "dashboard.sqlite3"))
+        db_file.parent.mkdir(parents=True, exist_ok=True)
+        with sqlite3.connect(db_file, timeout=5) as conn:
+            conn.execute("CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT)")
+            conn.execute(
+                "INSERT INTO settings(key, value) VALUES('local_mode', ?) "
+                "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                (json.dumps(enabled),),
+            )
+            conn.commit()
+    except Exception:
+        pass
+
+
 def set_d1_offline(offline: bool = True) -> None:
-    """Mark Cloudflare D1 as unreachable/offline to force local SQLite fallback."""
-    global _d1_offline, _was_offline
-    if offline:
-        _was_offline = True
-    _d1_offline = offline
+    """Deprecated alias for set_local_mode; offline fallback is removed."""
+    set_local_mode(offline)
 
 
 def is_d1_offline() -> bool:
-    """Return True if D1 is currently marked offline."""
-    return _d1_offline
+    """Deprecated alias for is_local_mode; offline fallback is removed."""
+    return is_local_mode()
 
 
 def is_d1_configured() -> bool:
-    """Return True if Cloudflare D1 environment variables are set and not marked offline."""
-    if _d1_offline:
+    """Return True if Cloudflare D1 environment variables are set and local_mode is not enabled."""
+    if is_local_mode():
         return False
     account_id = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
     api_token = os.environ.get("CLOUDFLARE_API_TOKEN", "").strip()
@@ -210,13 +242,12 @@ def sync_local_to_d1(
     d1_conn: Any | None = None,
     default_settings: dict[str, Any] | None = None,
 ) -> int:
-    """Merge local SQLite changes recorded during offline fallback back into Cloudflare D1."""
-    global _was_offline, _syncing_d1
+    """Merge local SQLite changes back into Cloudflare D1 on manual request."""
+    global _syncing_d1
     if _syncing_d1:
         return 0
     db_file = local_db_path or Path(os.environ.get("DASHBOARD_DB", REPO / "dashboard.sqlite3"))
     if not db_file.is_file():
-        _was_offline = False
         return 0
 
     _syncing_d1 = True
@@ -428,7 +459,6 @@ def sync_local_to_d1(
                     if meta_key in local_settings:
                         local_conn.execute("DELETE FROM settings WHERE key=?", (meta_key,))
                 local_conn.commit()
-            _was_offline = False
         finally:
             local_conn.close()
     finally:
@@ -442,24 +472,24 @@ def sync_local_to_d1(
 
 
 def get_db_connection(local_db_path: Path | None = None) -> D1Connection | ClosingLocalConnection:
-    """Return a Cloudflare D1 connection if configured, otherwise fallback to local SQLite."""
+    """Return Cloudflare D1 connection by default. Return local SQLite only if local mode is manually enabled."""
     db_file = local_db_path or Path(os.environ.get("DASHBOARD_DB", REPO / "dashboard.sqlite3"))
-    if is_d1_configured():
-        account_id = os.environ["CLOUDFLARE_ACCOUNT_ID"].strip()
-        api_token = os.environ["CLOUDFLARE_API_TOKEN"].strip()
-        database_id = (
-            os.environ.get("D1_DATABASE_ID", "").strip()
-            or os.environ.get("CLOUDFLARE_D1_DATABASE_ID", "").strip()
-        )
-        d1_conn = D1Connection(account_id, database_id, api_token)
-        if _was_offline and not _syncing_d1 and db_file.is_file():
-            try:
-                sync_local_to_d1(db_file, d1_conn)
-            except Exception:
-                pass
-        return d1_conn
+    if is_local_mode():
+        db_file.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(db_file, timeout=15, factory=ClosingLocalConnection)
+        conn.row_factory = sqlite3.Row
+        return conn
 
-    db_file.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db_file, timeout=15, factory=ClosingLocalConnection)
-    conn.row_factory = sqlite3.Row
-    return conn
+    if not is_d1_configured():
+        raise RuntimeError(
+            "Cloudflare D1 credentials are not configured in .env. "
+            "Please configure Cloudflare D1 or manually enable Local Mode in Settings."
+        )
+
+    account_id = os.environ["CLOUDFLARE_ACCOUNT_ID"].strip()
+    api_token = os.environ["CLOUDFLARE_API_TOKEN"].strip()
+    database_id = (
+        os.environ.get("D1_DATABASE_ID", "").strip()
+        or os.environ.get("CLOUDFLARE_D1_DATABASE_ID", "").strip()
+    )
+    return D1Connection(account_id, database_id, api_token)

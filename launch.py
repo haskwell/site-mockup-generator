@@ -25,6 +25,7 @@ except Exception:
 PORT = int(os.environ.get("PORT", 8765))
 URL = f"http://127.0.0.1:{PORT}"
 STATE_URL = f"{URL}/api/state"
+PING_URL = f"{URL}/api/ping"
 
 
 def _current_url() -> str:
@@ -41,9 +42,16 @@ def _current_state_url() -> str:
     return STATE_URL
 
 
+def _current_ping_url() -> str:
+    port_env = os.environ.get("PORT")
+    if port_env:
+        return f"http://127.0.0.1:{int(port_env)}/api/ping"
+    return PING_URL
+
+
 def server_is_running() -> bool:
     try:
-        with urllib.request.urlopen(_current_state_url(), timeout=1):
+        with urllib.request.urlopen(_current_ping_url(), timeout=1):
             return True
     except (urllib.error.URLError, TimeoutError):
         return False

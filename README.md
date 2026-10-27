@@ -22,13 +22,13 @@ Scrapes Instagram profile data, extracts business information, and uses `agy` to
    Install and authenticate `agy` separately. It must be accessible on your system `PATH` or at `~/.local/bin/agy`. The generator invokes `agy` to design and revise site mockups.
 
 4. **Accounts and Credentials**:
-   - Accounts: Put Instagram handles or profile URLs (one per line) in [config/accounts.txt](file:///home/frost/code/python/test/config/accounts.txt).
-   - Saved Instagram session (optional): [config/auth.json](file:///home/frost/code/python/test/config/auth.json) (can be generated directly from the dashboard login tool).
-   - Google Sheets credentials (optional): Service account JSON at [config/creds.json](file:///home/frost/code/python/test/config/creds.json).
+   - Accounts: Put Instagram handles or profile URLs (one per line) in [config/accounts.txt](config/accounts.txt).
+   - Saved Instagram session (optional): [config/auth.json](config/auth.json) (can be generated directly from the dashboard login tool).
+   - Google Sheets credentials (optional): Service account JSON at [config/creds.json](config/creds.json).
 
 ## Storage Modes: Local vs. Cloud
 
-- **Local mode (default)**: When Cloudflare variables in `.env` are left blank, Studio runs fully local and offline. Lead data and revisions are saved to [dashboard.sqlite3](file:///home/frost/code/python/test/dashboard.sqlite3), and website mockups are stored under `WEBSITES_ROOT`.
+- **Local mode (default)**: When Cloudflare variables in `.env` are left blank, Studio runs fully local and offline. Lead data and revisions are saved to [dashboard.sqlite3](dashboard.sqlite3), and website mockups are stored under `WEBSITES_ROOT`.
 - **Cloud mode (Cloudflare D1 + R2)**: For multi-user teams, specify Cloudflare D1 and R2 variables in `.env`:
   - `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `D1_DATABASE_ID`
   - `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`
@@ -49,7 +49,7 @@ Start the dashboard with `python app.py` and open `http://127.0.0.1:8765`.
 ## Launchers & Setup
 
 - **Desktop Launcher**: Run `python launch.py` for a dedicated desktop window launcher with system tray integration.
-- **Windows Shortcuts**: Run `launch-setup.bat` (or [launch-setup.ps1](file:///home/frost/code/python/test/launch-setup.ps1)) to generate desktop launch shortcuts pointing to your project directory.
+- **Windows Shortcuts**: Run `launch-setup.bat` (or [launch-setup.ps1](launch-setup.ps1)) to generate desktop launch shortcuts pointing to your project directory.
 - **Batch Command**: On Windows, double-click `launch.bat` to launch the dashboard server.
 
 ## Migration Scripts
@@ -87,7 +87,7 @@ python run.py [path/to/accounts.txt]
 Outputs sites to `<WEBSITES_ROOT>/YYYY-MM-DD/<handle>/site/index.html`. Set `WEBSITES_ROOT` in `.env` or settings (default: `~/websites`). Set `FORCE=1` to force rebuilds of previously built leads.
 
 ### Revise Sites via CLI
-Add revision instructions under handle headers in [config/REVISIONS.md](file:///home/frost/code/python/test/config/REVISIONS.md):
+Add revision instructions under handle headers in [config/REVISIONS.md](config/REVISIONS.md):
 ```markdown
 # example_handle
 Make the contact button larger and fix hero text alignment.
@@ -99,7 +99,7 @@ python revisions.py
 
 ## Important Notes & Security
 
-- **Pakistan-Tuned Extraction**: Contact extraction in [src/profile_summary.py](file:///home/frost/code/python/test/src/profile_summary.py) includes specialized pattern recognition for Pakistani phone formats (`03xx`, `+923xx`, `00923xx`) and major Pakistani cities (Lahore, Karachi, Islamabad, Rawalpindi, Faisalabad, etc.).
+- **Pakistan-Tuned Extraction**: Contact extraction in [src/profile_summary.py](src/profile_summary.py) includes specialized pattern recognition for Pakistani phone formats (`03xx`, `+923xx`, `00923xx`) and major Pakistani cities (Lahore, Karachi, Islamabad, Rawalpindi, Faisalabad, etc.).
 - **Local-Only Warning**: The dashboard server has **no authentication** and runs build tools with broad local permissions. **Do not bind the dashboard to `0.0.0.0` or expose it over the public internet.** It is strictly designed for local loopback use (`127.0.0.1` / `localhost`). Incoming requests with non-loopback Host headers are rejected to protect against DNS rebinding, and state-changing endpoints require custom anti-CSRF headers.
 - **Untrusted Input**: Instagram biographies, scraped profile text, and client revision instructions are untrusted inputs. Automated builds run with `--dangerously-skip-permissions` inside the local repository workspace.
 

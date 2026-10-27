@@ -42,8 +42,13 @@ def guess_content_type(file_path: Path) -> str:
     return guessed or "application/octet-stream"
 
 
+from src.d1_client import is_local_mode
+
+
 def is_r2_configured() -> bool:
-    """Return True if Cloudflare R2 credentials are set."""
+    """Return True if Cloudflare R2 credentials are set and local_mode is not enabled."""
+    if is_local_mode():
+        return False
     account_id = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
     access_key = os.environ.get("R2_ACCESS_KEY_ID", "").strip()
     secret_key = os.environ.get("R2_SECRET_ACCESS_KEY", "").strip()
