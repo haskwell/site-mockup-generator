@@ -5,6 +5,8 @@ import json
 import mimetypes
 import os
 from pathlib import Path
+import threading
+import time
 from typing import Any
 
 from dotenv import load_dotenv
@@ -88,18 +90,28 @@ def get_s3_client():
     return client
 
 
+_r2_mtime_cache: dict[str, tuple[float, float | None]] = {}  # key -> (monotonic_ts, mtime)
+_CACHE_TTL = 30.0  # seconds
+_r2_cache_lock = threading.Lock()
+
+
+def invalidate_r2_cache(key_prefix: str = "") -> None:
+    """Invalidate R2 mtime cache for keys matching prefix, or all if empty."""
+    with _r2_cache_lock:
+        if not key_prefix:
+            _r2_mtime_cache.clear()
+        else:
+            keys_to_del = [k for k in _r2_mtime_cache if k.startswith(key_prefix)]
+            for k in keys_to_del:
+                _r2_mtime_cache.pop(k, None)
+
+
 def has_r2_site(batch: str, handle: str) -> bool:
     """Return True if the site index.html exists in R2 for this lead."""
     if not is_r2_configured():
         return False
-    bucket = os.environ["R2_BUCKET_NAME"].strip()
-    s3 = get_s3_client()
     key = f"{batch}/{handle}/site/index.html"
-    try:
-        s3.head_object(Bucket=bucket, Key=key)
-        return True
-    except Exception:
-        return False
+    return get_r2_mtime(key) is not None
 
 
 def get_r2_object(key: str) -> tuple[bytes, str] | None:
@@ -112,23 +124,41 @@ def get_r2_object(key: str) -> tuple[bytes, str] | None:
         resp = s3.get_object(Bucket=bucket, Key=key)
         body = resp["Body"].read()
         ct = resp.get("ContentType") or guess_content_type(Path(key))
+        dt_val = resp.get("LastModified")
+        if dt_val:
+            with _r2_cache_lock:
+                _r2_mtime_cache[key] = (time.monotonic(), dt_val.timestamp())
         return body, ct
     except Exception:
         return None
 
 
-def get_r2_mtime(key: str) -> float | None:
-    """Return the LastModified epoch timestamp of an object in R2."""
+def get_r2_mtime(key: str, force_refresh: bool = False) -> float | None:
+    """Return the LastModified epoch timestamp of an object in R2 with TTL caching."""
     if not is_r2_configured():
         return None
+    now = time.monotonic()
+    if not force_refresh:
+        with _r2_cache_lock:
+            cached = _r2_mtime_cache.get(key)
+            if cached is not None:
+                cached_at, mtime = cached
+                if now - cached_at < _CACHE_TTL:
+                    return mtime
+
     bucket = os.environ["R2_BUCKET_NAME"].strip()
     s3 = get_s3_client()
+    mtime: float | None = None
     try:
         resp = s3.head_object(Bucket=bucket, Key=key)
         dt_val = resp.get("LastModified")
-        return dt_val.timestamp() if dt_val else None
+        mtime = dt_val.timestamp() if dt_val else None
     except Exception:
-        return None
+        mtime = None
+
+    with _r2_cache_lock:
+        _r2_mtime_cache[key] = (now, mtime)
+    return mtime
 
 
 def get_preview_url(batch: str, handle: str, path: str = "index.html", verify_exists: bool = False) -> str | None:
@@ -178,6 +208,7 @@ def upload_recording(local_path: Path, batch: str, handle: str, filename: str) -
     ct = guess_content_type(local_path)
     with local_path.open("rb") as f:
         s3.put_object(Bucket=bucket, Key=r2_key, Body=f, ContentType=ct)
+    invalidate_r2_cache(r2_key)
     name_parts = filename.rsplit(".", 1)[0].split("-")
     screen = name_parts[-1] if len(name_parts) > 1 else "desktop"
     return f"/api/lead/{handle}/recording/{screen}"
@@ -246,6 +277,8 @@ def delete_recording(batch: str, handle: str, screen: str | None = None) -> int:
                 err_msg = "; ".join(str(e.get("Message") or e.get("Code") or e) for e in resp["Errors"])
                 raise RuntimeError(f"R2 delete_objects failed: {err_msg}")
             deleted_count += len(objects)
+    if deleted_count:
+        invalidate_r2_cache(f"{batch}/{handle}/recordings/")
     return deleted_count
 
 
@@ -274,17 +307,21 @@ def get_lead_text(batch: str, handle: str, filename: str) -> str | None:
         return None
     bucket = os.environ["R2_BUCKET_NAME"].strip()
     s3 = get_s3_client()
-    keys_to_try = [
+    keys_to_try = list(dict.fromkeys([
         f"{batch}/{handle}/site/{filename}",
         f"{batch}/{handle}/{filename}",
         f"{batch}/{handle}/media/{filename}",
         f"{batch}/{handle}/site/{filename.lower()}",
         f"{batch}/{handle}/{filename.lower()}",
         f"{batch}/{handle}/media/{filename.lower()}",
-    ]
+    ]))
     for key in keys_to_try:
         try:
             resp = s3.get_object(Bucket=bucket, Key=key)
+            dt_val = resp.get("LastModified")
+            if dt_val:
+                with _r2_cache_lock:
+                    _r2_mtime_cache[key] = (time.monotonic(), dt_val.timestamp())
             return resp["Body"].read().decode("utf-8")
         except Exception:
             continue
@@ -327,6 +364,7 @@ def upload_file(local_path: Path, r2_key: str, content_type: str | None = None) 
     ct = content_type or guess_content_type(local_path)
     with local_path.open("rb") as f:
         s3.put_object(Bucket=bucket, Key=r2_key, Body=f, ContentType=ct)
+    invalidate_r2_cache(r2_key)
     return True
 
 
@@ -347,6 +385,7 @@ def upload_site(local_site_dir: Path, batch: str, handle: str) -> str | None:
             with item.open("rb") as f:
                 s3.put_object(Bucket=bucket, Key=r2_key, Body=f, ContentType=ct)
 
+    invalidate_r2_cache(f"{batch}/{handle}/site/")
     return get_preview_url(batch, handle, "index.html")
 
 

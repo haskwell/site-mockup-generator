@@ -451,8 +451,9 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
         self.assertEqual(observed_cancelled, [True])
 
     def test_8_and_12_frontend_recording_and_settings_validation(self):
-        """Bugs 8 & 12: Verify web/index.html only advances stage inside upload try-block and validates numeric settings."""
-        html = (REPO / "web" / "index.html").read_text(encoding="utf-8")
+        """Bugs 8 & 12: Verify web frontend only advances stage inside upload try-block and validates numeric settings."""
+        target_file = (REPO / "web" / "script.js") if (REPO / "web" / "script.js").exists() else (REPO / "web" / "index.html")
+        html = target_file.read_text(encoding="utf-8")
         # Bug 8: setStage("recorded") is inside the try block before catch (e)
         rec_idx = html.find('/recording?${qs}')
         set_stage_idx = html.find('setStage("recorded")', rec_idx)

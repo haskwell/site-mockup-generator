@@ -277,6 +277,12 @@ def sync_d1():
 @app.get("/",response_class=HTMLResponse)
 def home(): return (WEB/"index.html").read_text(encoding="utf-8")
 
+@app.get("/styles.css")
+def styles(): return FileResponse(WEB/"styles.css", media_type="text/css")
+
+@app.get("/script.js")
+def script(): return FileResponse(WEB/"script.js", media_type="application/javascript")
+
 @app.get("/assets/studio.png")
 def studio_logo(): return FileResponse(REPO/"assets"/"studio.png")
 
@@ -558,11 +564,9 @@ def lead(handle:str,batch:str|None=None):
                 design_content=cand.read_text(encoding="utf-8")
                 break
             except Exception:pass
-    if is_r2_configured():
-        r2_dmtime = get_r2_mtime(f"{batch}/{handle}/site/DESIGN.md") or get_r2_mtime(f"{batch}/{handle}/DESIGN.md")
-        local_cand = next((c for c in design_candidates if c.is_file()), None)
-        if local_cand and r2_dmtime and r2_dmtime > local_cand.stat().st_mtime:
-            design_content = None
+    local_cand = next((c for c in design_candidates if c.is_file()), None)
+    local_dmtime = local_cand.stat().st_mtime if local_cand else None
+
     selected_file=root_for(batch)/handle/"selected_posts.json"
     selected=None
     try:selected=json.loads(selected_file.read_text(encoding="utf-8"))
@@ -574,14 +578,23 @@ def lead(handle:str,batch:str|None=None):
             if f.is_file() and f.suffix.lower() in {".webm",".mp4"}:
                 for s in ["desktop","tablet","phone"]:
                     if f"-{s}." in f.name:recordings[s]=f.name
+    r2_mtime=None
     if is_r2_configured():
+        def resolve_design():
+            if local_dmtime is not None:
+                r2_dmtime = get_r2_mtime(f"{batch}/{handle}/site/DESIGN.md") or get_r2_mtime(f"{batch}/{handle}/DESIGN.md")
+                if not r2_dmtime or r2_dmtime <= local_dmtime:
+                    return design_content
+            return get_lead_text(batch, handle, "DESIGN.md") or design_content
+
         r2_tasks={}
-        with ThreadPoolExecutor(max_workers=5) as pool:
+        with ThreadPoolExecutor(max_workers=6) as pool:
             if not profile:r2_tasks["profile"]=pool.submit(get_lead_json,batch,handle,"profile_data.json")
             if not summary:r2_tasks["summary"]=pool.submit(get_lead_json,batch,handle,"business_data.json")
-            if design_content is None:r2_tasks["design"]=pool.submit(get_lead_text,batch,handle,"DESIGN.md")
+            r2_tasks["design"]=pool.submit(resolve_design)
             if selected is None:r2_tasks["selected"]=pool.submit(get_lead_json,batch,handle,"selected_posts.json")
             r2_tasks["recordings"]=pool.submit(list_recordings,batch,handle)
+            r2_tasks["site_mtime"]=pool.submit(get_r2_mtime,f"{batch}/{handle}/site/index.html")
             if "profile" in r2_tasks:
                 try:profile=r2_tasks["profile"].result() or {}
                 except Exception:profile={}
@@ -590,7 +603,7 @@ def lead(handle:str,batch:str|None=None):
                 except Exception:summary=[]
             if "design" in r2_tasks:
                 try:design_content=r2_tasks["design"].result() or ""
-                except Exception:design_content=""
+                except Exception:design_content=design_content or ""
             if "selected" in r2_tasks:
                 try:selected=r2_tasks["selected"].result()
                 except Exception:selected=None
@@ -600,6 +613,9 @@ def lead(handle:str,batch:str|None=None):
                 for r2_rec in r2_recs:
                     for s in ["desktop","tablet","phone"]:
                         if f"-{s}." in r2_rec:recordings[s]=r2_rec
+            if "site_mtime" in r2_tasks:
+                try:r2_mtime=r2_tasks["site_mtime"].result()
+                except Exception:r2_mtime=None
     if design_content is None:design_content=""
     for post in profile.get("posts",[]):post["preview"]=f"/media/{batch}/{handle}/{post.get('web_path','')}"
     if selected is None:selected=[Path(p.get("web_path","")).name for p in profile.get("posts",[])]
@@ -608,9 +624,12 @@ def lead(handle:str,batch:str|None=None):
     if is_r2_configured():
         sp=lead_dict.get("site_path") or ""
         if not sp or (sp.startswith("/") and not Path(sp).exists()):
-            r2_url=get_preview_url(batch,handle,"index.html",verify_exists=True)
-            if r2_url:lead_dict["site_path"]=r2_url
-        r2_mtime=get_r2_mtime(f"{batch}/{handle}/site/index.html")
+            if r2_mtime is not None:
+                lead_dict["site_path"]=f"/preview/{batch}/{handle}/index.html"
+            else:
+                r2_url=get_preview_url(batch,handle,"index.html",verify_exists=False)
+                if r2_url and has_r2_site(batch,handle):
+                    lead_dict["site_path"]=r2_url
         site_index=root_for(batch)/handle/"site"/"index.html"
         if r2_mtime and site_index.is_file() and r2_mtime > site_index.stat().st_mtime:
             cloud_newer=True
