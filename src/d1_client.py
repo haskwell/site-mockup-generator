@@ -174,8 +174,24 @@ class ClosingLocalConnection(sqlite3.Connection):
             self.close()
 
 
+_d1_offline = False
+
+
+def set_d1_offline(offline: bool = True) -> None:
+    """Mark Cloudflare D1 as unreachable/offline to force local SQLite fallback."""
+    global _d1_offline
+    _d1_offline = offline
+
+
+def is_d1_offline() -> bool:
+    """Return True if D1 is currently marked offline."""
+    return _d1_offline
+
+
 def is_d1_configured() -> bool:
-    """Return True if Cloudflare D1 environment variables are set."""
+    """Return True if Cloudflare D1 environment variables are set and not marked offline."""
+    if _d1_offline:
+        return False
     account_id = os.environ.get("CLOUDFLARE_ACCOUNT_ID", "").strip()
     api_token = os.environ.get("CLOUDFLARE_API_TOKEN", "").strip()
     database_id = (

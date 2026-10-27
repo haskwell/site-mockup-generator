@@ -4,14 +4,16 @@ from __future__ import annotations
 import datetime as dt, json, os, queue, shutil, sqlite3, threading, time, uuid, webbrowser, sys
 import csv, io
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
+from starlette.background import BackgroundTask
 from pydantic import BaseModel, Field
 from src.pipeline_common import MODEL, TIMEOUT_SECONDS, account_handle, find_agy, get_venv_python, run_streaming
 from src.run import process_account, validate_site
-from src.d1_client import get_current_user, get_db_connection, is_d1_configured
+from src.d1_client import get_current_user, get_db_connection, is_d1_configured, is_d1_offline, set_d1_offline
 from src.r2_storage import (
     delete_lead_assets,
     delete_recording,
@@ -25,18 +27,39 @@ from src.r2_storage import (
     get_r2_mtime,
     get_r2_object,
     get_recording_url,
+    get_s3_client,
     has_r2_site,
     is_r2_configured,
     list_recordings,
     upload_file,
     upload_recording,
+    upload_site,
 )
 from tempfile import gettempdir
 
 REPO=Path(__file__).resolve().parents[1]; WEB=REPO/"web"
 DB=Path(os.environ.get("DASHBOARD_DB",REPO/"dashboard.sqlite3"))
 DEFAULTS={"websites_root":"websites","model":MODEL,"timeout":TIMEOUT_SECONDS,"parallelism":1,"max_posts":18,"captions":True,"headed":False,"attempts":3,"credentials":"config/creds.json","sheet_name":"websites","browser":"","sync_sheet":True}
-app=FastAPI(title="Studio",docs_url=None,redoc_url=None)
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    init_db()
+    yield
+
+app=FastAPI(title="Studio",docs_url=None,redoc_url=None,lifespan=lifespan)
+
+@app.middleware("http")
+async def security_middleware(request: Request, call_next):
+    host = (request.headers.get("host") or "").split(":")[0].strip().lower()
+    if host not in {"127.0.0.1", "localhost", "testserver", "::1"}:
+        return Response("Invalid Host header", status_code=403)
+    if request.method in {"POST", "PUT", "DELETE", "PATCH"}:
+        if request.headers.get("X-Studio") != "1":
+            return Response("Missing or invalid X-Studio header", status_code=403)
+        ct = request.headers.get("Content-Type", "").strip().lower()
+        if not ct.startswith("application/json"):
+            return Response("Content-Type must be application/json", status_code=415)
+    return await call_next(request)
 events=[]; subscribers=set(); event_lock=threading.Lock(); job_lock=threading.Lock(); active_job=None
 revision_queue=queue.Queue(); revision_active=False; revision_pending=0
 def newest_batch():
@@ -66,7 +89,7 @@ def connect():
 
 def init_db():
     DB.parent.mkdir(parents=True,exist_ok=True)
-    with connect() as d:
+    def _run_schema(d):
         d.executescript("""CREATE TABLE IF NOT EXISTS leads(batch TEXT,handle TEXT,name TEXT DEFAULT '',phone TEXT DEFAULT '',area TEXT DEFAULT '',followers TEXT DEFAULT '',status TEXT DEFAULT 'queued',error TEXT DEFAULT '',site_path TEXT DEFAULT '',notes TEXT DEFAULT '',stage TEXT DEFAULT 'new',follow_up TEXT DEFAULT '',price TEXT DEFAULT '',qa TEXT DEFAULT '',created_at TEXT DEFAULT CURRENT_TIMESTAMP,updated_at TEXT DEFAULT CURRENT_TIMESTAMP,locked_by TEXT DEFAULT '',locked_at TEXT DEFAULT '',PRIMARY KEY(batch,handle));
         CREATE TABLE IF NOT EXISTS revisions(id INTEGER PRIMARY KEY AUTOINCREMENT,batch TEXT,handle TEXT,request TEXT,status TEXT DEFAULT 'pending',created_at TEXT DEFAULT CURRENT_TIMESTAMP,applied_at TEXT,backup_path TEXT DEFAULT '');
         CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT);
@@ -81,8 +104,18 @@ def init_db():
         except Exception:pass
         for k,v in DEFAULTS.items(): d.execute("INSERT OR IGNORE INTO settings VALUES(?,?)",(k,json.dumps(v)))
 
-@app.on_event("startup")
-def startup(): init_db()
+    try:
+        with connect() as d:
+            _run_schema(d)
+    except Exception as exc:
+        if is_d1_configured():
+            import logging
+            logging.getLogger("uvicorn.error").warning("Cloudflare D1 unreachable at startup (%s); falling back to local SQLite.", exc)
+            set_d1_offline(True)
+            with connect() as d:
+                _run_schema(d)
+        else:
+            raise
 
 def resolve_credentials_path(path_str: str | None = None) -> Path:
     env_creds = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
@@ -102,14 +135,19 @@ def resolve_credentials_path(path_str: str | None = None) -> Path:
 def resolve_websites_root(root_str: str | None = None) -> Path:
     env_root = os.environ.get("WEBSITES_ROOT")
     if env_root:
-        return Path(env_root).expanduser().resolve()
-    if root_str:
+        p = Path(env_root).expanduser().resolve()
+    elif root_str:
         p = Path(root_str).expanduser()
         if not p.is_absolute():
             p = (Path.home() / p).resolve()
-        if p.is_dir():
-            return p.resolve()
-    return (Path.home() / "websites").resolve()
+        elif p.is_dir():
+            p = p.resolve()
+    else:
+        p = (Path.home() / "websites").resolve()
+    if not p.exists():
+        import logging
+        logging.getLogger("uvicorn.error").warning("Configured websites root directory does not exist: %s", p)
+    return p
 
 def settings():
     try:
@@ -145,10 +183,14 @@ def emit(handle,status,line="",batch=None):
         for q in tuple(subscribers):
             try:q.put_nowait(item)
             except queue.Full:pass
-    with connect() as d:
-        d.execute("INSERT INTO logs(batch,handle,status,line) VALUES(?,?,?,?)",(item["batch"],handle,status,line))
-        if handle and status in {"queued","scraping","building","scraped","done","failed"}:
-            d.execute("UPDATE leads SET status=?,error=?,stage=CASE WHEN ?='done' AND stage='new' THEN 'built' ELSE stage END,updated_at=CURRENT_TIMESTAMP WHERE batch=? AND handle=?",(status,line if status=="failed" else "",status,item["batch"],handle))
+    try:
+        with connect() as d:
+            if status != "log":
+                d.execute("INSERT INTO logs(batch,handle,status,line) VALUES(?,?,?,?)",(item["batch"],handle,status,line))
+            if handle and status in {"queued","scraping","building","scraped","done","failed"}:
+                d.execute("UPDATE leads SET status=?,error=?,stage=CASE WHEN ?='done' AND stage='new' THEN 'built' ELSE stage END,updated_at=CURRENT_TIMESTAMP WHERE batch=? AND handle=?",(status,line if status=="failed" else "",status,item["batch"],handle))
+    except Exception:
+        pass
 
 class Accounts(BaseModel): text:str; batch:str|None=None
 class Run(BaseModel): handles:list[str]=Field(default_factory=list); force:bool=False; rescrape:bool=False; scrape_only:bool=False
@@ -190,10 +232,13 @@ def state(batch:str|None=None):
     # on selection and seed lead rows without modifying any site files.
     if root.is_dir():
         with connect() as d:
+            existing_handles = {r["handle"] for r in d.execute("SELECT handle FROM leads WHERE batch=?", (batch,)).fetchall()}
             for account in root.iterdir():
                 try:
                     handle=clean_handle(account.name)
                 except HTTPException:
+                    continue
+                if handle in existing_handles:
                     continue
                 site=account/"site"/"index.html"
                 if not account.is_dir() or not site.is_file():continue
@@ -207,6 +252,7 @@ def state(batch:str|None=None):
                     record=json.loads(summary_path.read_text(encoding="utf-8"))[0];name=record.get("name") or name;phone=record.get("phone","");area=record.get("area","")
                 except Exception:pass
                 d.execute("INSERT OR IGNORE INTO leads(batch,handle,name,phone,area,followers,status,site_path,qa) VALUES(?,?,?,?,? ,?,'done',?,'available')",(batch,handle,name,phone,area,followers,str(site)))
+                existing_handles.add(handle)
     with connect() as d:
         leads=[dict(r) for r in d.execute("SELECT * FROM leads WHERE batch=? ORDER BY updated_at DESC,handle",(batch,))]
     for l in leads:
@@ -224,7 +270,7 @@ def state(batch:str|None=None):
                         pass
         l["has_recording"] = 1 if has_rec else 0
     a=REPO/"config/accounts.txt"; auth=REPO/"config/auth.json"
-    return {"batch":batch,"batches":batches,"settings":conf,"leads":leads,"accounts":a.read_text(encoding="utf-8") if a.exists() else "","auth_exists":auth.exists(),"auth_mtime":dt.datetime.fromtimestamp(auth.stat().st_mtime).isoformat(timespec="minutes") if auth.exists() else ""}
+    return {"batch":batch,"batches":batches,"settings":conf,"leads":leads,"accounts":a.read_text(encoding="utf-8") if a.exists() else "","auth_exists":auth.exists(),"auth_mtime":dt.datetime.fromtimestamp(auth.stat().st_mtime).isoformat(timespec="minutes") if auth.exists() else "","d1_offline":is_d1_offline()}
 
 @app.post("/api/accounts")
 def save_accounts(b:Accounts):
@@ -294,26 +340,17 @@ def run_worker(handles,batch,force,rescrape,scrape_only,jid):
         with job_lock:active_job=None
         return
     def build_one(current):
-        user=get_current_user()
-        with connect() as d:
-            row=d.execute("SELECT locked_by,locked_at FROM leads WHERE batch=? AND handle=?",(batch,current)).fetchone()
-            if row and row.get("locked_by") and row.get("locked_by")!=user:
-                locked_at=row.get("locked_at") or ""
-                is_stale=False
-                if locked_at:
-                    try:
-                        dt_lock=dt.datetime.fromisoformat(locked_at.replace(" ","T")).replace(tzinfo=dt.timezone.utc)
-                        now_utc=dt.datetime.now(dt.timezone.utc)
-                        if (now_utc - dt_lock).total_seconds() > 15 * 60:
-                            is_stale=True
-                    except Exception:pass
-                if not is_stale:
-                    emit(current,"failed",f"Account currently locked by {row['locked_by']}",batch)
-                    return "failed"
-            d.execute("INSERT OR IGNORE INTO leads(batch,handle) VALUES(?,?)",(batch,current))
-            d.execute("UPDATE leads SET locked_by=?,locked_at=CURRENT_TIMESTAMP WHERE batch=? AND handle=?",(user,batch,current))
-        emit(current,"queued","In queue",batch)
         try:
+            user=get_current_user()
+            with connect() as d:
+                d.execute("INSERT OR IGNORE INTO leads(batch,handle) VALUES(?,?)",(batch,current))
+                cur=d.execute("UPDATE leads SET locked_by=?,locked_at=CURRENT_TIMESTAMP WHERE batch=? AND handle=? AND (locked_by='' OR locked_by IS NULL OR locked_by=? OR locked_at < datetime('now','-15 minutes'))",(user,batch,current,user))
+                if cur.rowcount == 0:
+                    r=d.execute("SELECT locked_by FROM leads WHERE batch=? AND handle=?",(batch,current)).fetchone()
+                    locked_by=dict(r).get("locked_by","another user") if r else "another user"
+                    emit(current,"failed",f"Account currently locked by {locked_by}",batch)
+                    return "failed"
+            emit(current,"queued","In queue",batch)
             class Log:
                 def log(self,level,msg):emit(current,"log",f"{level}: {msg}",batch)
             py=os.environ.get("PIPELINE_PYTHON") or get_venv_python(REPO)
@@ -328,7 +365,7 @@ def run_worker(handles,batch,force,rescrape,scrape_only,jid):
             name=area=phone=followers=""
             try:
                 p=json.loads(prof.read_text(encoding="utf-8"));followers=p.get("followers","");name=p.get("name","")
-                r=json.loads(summ.read_text(encoding="utf-8"))[0];name=r.get("name") or name;area=r.get("area","");phone=r.get("phone","")
+                rec=json.loads(summ.read_text(encoding="utf-8"))[0];name=rec.get("name") or name;area=rec.get("area","");phone=rec.get("phone","")
             except Exception:pass
             site_index=root/current/"site"/"index.html"
             is_valid_local=site_index.is_file() and not validate_site(site_index.parent)
@@ -339,20 +376,29 @@ def run_worker(handles,batch,force,rescrape,scrape_only,jid):
             with connect() as d:d.execute("UPDATE leads SET name=CASE WHEN name='' THEN ? ELSE name END,phone=CASE WHEN phone='' THEN ? ELSE phone END,area=CASE WHEN area='' THEN ? ELSE area END,followers=?,site_path=?,qa=?,locked_by='',locked_at='',updated_at=CURRENT_TIMESTAMP WHERE batch=? AND handle=?",(name,phone,area,followers,site_path,qa,batch,current))
             return "scraped" if rc==0 and scrape_only else "skipped" if rc==2 else "built" if rc==0 else "failed"
         except Exception as e:
-            with connect() as d:d.execute("UPDATE leads SET locked_by='',locked_at='' WHERE batch=? AND handle=?",(batch,current))
+            try:
+                with connect() as d:d.execute("UPDATE leads SET locked_by='',locked_at='' WHERE batch=? AND handle=?",(batch,current))
+            except Exception:pass
             emit(current,"failed",str(e),batch);return "failed"
-    workers=1
-    with ThreadPoolExecutor(max_workers=workers) as pool:
-        futures=[pool.submit(build_one,h) for h in handles]
-        for future in as_completed(futures):
-            key=future.result();counts[key]+=1
-    emit("","summary",json.dumps(counts),batch)
-    with job_lock:active_job=None
+    workers=max(1,int(conf.get("parallelism",1)))
+    try:
+        with ThreadPoolExecutor(max_workers=workers) as pool:
+            futures=[pool.submit(build_one,h) for h in handles]
+            for future in as_completed(futures):
+                try:
+                    key=future.result();counts[key]+=1
+                except Exception:
+                    counts["failed"]+=1
+    finally:
+        emit("","summary",json.dumps(counts),batch)
+        with job_lock:active_job=None
 
 @app.post("/api/run")
 def run(b:Run,batch:str|None=None):
     batch=clean_batch(batch or selected_batch)
-    p=REPO/"config/accounts.txt";handles=b.handles or parse_accounts(p.read_text(encoding="utf-8") if p.exists() else "")
+    p=REPO/"config/accounts.txt"
+    raw_handles=b.handles or parse_accounts(p.read_text(encoding="utf-8") if p.exists() else "")
+    handles=[clean_handle(h) for h in raw_handles]
     return queue_run(handles,batch,b.force,b.rescrape,b.scrape_only)
 
 @app.post("/api/cancel")
@@ -368,9 +414,11 @@ def job():
 
 @app.get("/api/events")
 def stream(request:Request):
-    def gen():
+    with event_lock:
+        if len(subscribers) >= 50:
+            raise HTTPException(503, "Too many active subscribers")
         q=queue.Queue(maxsize=200)
-        with event_lock:subscribers.add(q);history=events[-80:]
+        subscribers.add(q);history=events[-80:]
         try:
             for x in history:yield "data: "+json.dumps(x)+"\n\n"
             while True:
@@ -469,7 +517,8 @@ async def save_recording(handle:str,request:Request,batch:str|None=None,screen:s
     if not has_site:
         with connect() as d:
             row=d.execute("SELECT site_path, status FROM leads WHERE batch=? AND handle=?",(batch,handle)).fetchone()
-            if row and (row.get("site_path") or row.get("status") in {"done","built"}):
+            row_dict=dict(row) if row else {}
+            if row_dict and (row_dict.get("site_path") or row_dict.get("status") in {"done","built"}):
                 has_site=True
         if not has_site and is_r2_configured():
             has_site=has_r2_site(batch,handle)
@@ -499,19 +548,19 @@ def get_recording(handle:str,screen:str,batch:str|None=None,download:bool=False)
         if f.is_file():
             local_file=f; filename=f.name; break
     if is_r2_configured():
-        if not filename:
-            for rec in list_recordings(batch,handle):
-                if rec.startswith(f"{handle}-{screen}."):
-                    filename=rec; break
-        if filename:
-            presigned_url=get_presigned_recording_url(batch,handle,filename,download=download)
+        r2_filename=None
+        for rec in list_recordings(batch,handle):
+            if rec.startswith(f"{handle}-{screen}."):
+                r2_filename=rec; break
+        if r2_filename:
+            presigned_url=get_presigned_recording_url(batch,handle,r2_filename,download=download)
             if presigned_url:
                 from fastapi.responses import RedirectResponse
                 return RedirectResponse(presigned_url,status_code=302)
             elif download and not local_file:
-                temp_file=Path(gettempdir())/f"rec_{handle}_{screen}_{filename}"
-                if download_recording(batch,handle,filename,temp_file):
-                    return FileResponse(temp_file,filename=filename,media_type="video/webm" if filename.endswith(".webm") else "video/mp4")
+                temp_file=Path(gettempdir())/f"rec_{handle}_{screen}_{r2_filename}"
+                if download_recording(batch,handle,r2_filename,temp_file):
+                    return FileResponse(temp_file,filename=r2_filename,media_type="video/webm" if r2_filename.endswith(".webm") else "video/mp4")
     if local_file and local_file.is_file():
         headers={"Content-Disposition":f'attachment; filename="{filename}"'} if download else {}
         return FileResponse(local_file,headers=headers,media_type="video/webm" if filename.endswith(".webm") else "video/mp4")
@@ -670,17 +719,23 @@ def delete_leads(b:BulkInput,batch:str|None=None):
 def export_leads(batch:str|None=None):
     batch=clean_batch(batch or selected_batch)
     with connect() as d:rows=d.execute("SELECT * FROM leads WHERE batch=? ORDER BY handle",(batch,)).fetchall()
-    output=io.StringIO();writer=csv.writer(output);writer.writerow(rows[0].keys() if rows else ["handle","name","phone","area","status","stage","notes"])
-    for row in rows:writer.writerow(tuple(row))
-    from fastapi.responses import Response
+    output=io.StringIO();writer=csv.writer(output)
+    keys=list(rows[0].keys()) if rows else ["handle","name","phone","area","status","stage","notes"]
+    writer.writerow(keys)
+    for row in rows:
+        vals=[]
+        for k in keys:
+            v=row[k]
+            if isinstance(v,str) and v.startswith(("=","+","-","@")):
+                v="'"+v
+            vals.append(v)
+        writer.writerow(vals)
     return Response(output.getvalue(),media_type="text/csv",headers={"Content-Disposition":f'attachment; filename="leads-{batch}.csv"'})
 
 @app.put("/api/lead/{handle}")
 def edit_lead(handle:str,b:LeadEdit,batch:str|None=None):
     handle=clean_handle(handle);batch=clean_batch(batch or selected_batch);data=root_for(batch)/handle/f"{handle}_data"/"business_data.json"
     with connect() as d:d.execute("UPDATE leads SET name=?,phone=?,area=?,followers=?,notes=?,stage=?,follow_up=?,price=?,updated_at=CURRENT_TIMESTAMP WHERE batch=? AND handle=?",(b.name,b.phone,b.area,b.followers,b.notes,b.stage,b.follow_up,b.price,batch,handle))
-    if b.stage in {"lost","not_interested","dropped"}:
-        delete_lead_assets(batch,handle)
     data.parent.mkdir(parents=True,exist_ok=True)
     try:records=json.loads(data.read_text(encoding="utf-8"))
     except Exception:
@@ -691,6 +746,14 @@ def edit_lead(handle:str,b:LeadEdit,batch:str|None=None):
     if is_r2_configured():
         upload_file(data,f"{batch}/{handle}/media/business_data.json","application/json")
     return {"saved":True}
+
+@app.post("/api/lead/{handle}/archive")
+def archive_lead(handle:str,batch:str|None=None):
+    handle=clean_handle(handle);batch=clean_batch(batch or selected_batch)
+    deleted=delete_lead_assets(batch,handle)
+    with connect() as d:
+        d.execute("UPDATE leads SET stage='lost',updated_at=CURRENT_TIMESTAMP WHERE batch=? AND handle=?",(batch,handle))
+    return {"archived":True,"deleted_assets":deleted}
 
 @app.post("/api/revision/{handle}")
 def add_revision(handle:str,b:Revision,batch:str|None=None):
@@ -755,7 +818,33 @@ def undo_revision(handle:str,rid:int,batch:str|None=None):
     if not r or not r["backup_path"]:raise HTTPException(404,"No backup")
     base=root_for(batch)/handle;backup=Path(r["backup_path"]).resolve();site=base/"site"
     if not backup.is_relative_to((base/"backups").resolve()) or not backup.is_dir():raise HTTPException(400,"Invalid backup")
-    shutil.rmtree(site,ignore_errors=True);shutil.copytree(backup,site);emit(handle,"done","Revision undone",batch);return {"undone":True}
+    shutil.rmtree(site,ignore_errors=True);shutil.copytree(backup,site)
+    now=time.time()
+    for item in site.rglob("*"):
+        if item.is_file():
+            os.utime(item,(now,now))
+    if is_r2_configured():
+        try:
+            s3=get_s3_client()
+            bucket=os.environ["R2_BUCKET_NAME"].strip()
+            prefix=f"{batch}/{handle}/site/"
+            paginator=s3.get_paginator("list_objects_v2")
+            pages=paginator.paginate(Bucket=bucket,Prefix=prefix)
+            to_delete=[]
+            for page in pages:
+                for obj in page.get("Contents",[]):
+                    rel=obj["Key"][len(prefix):]
+                    if rel and not (site/rel).is_file():
+                        to_delete.append({"Key":obj["Key"]})
+            if to_delete:
+                s3.delete_objects(Bucket=bucket,Delete={"Objects":to_delete})
+        except Exception:pass
+        upload_site(site,batch,handle)
+        touch_time=time.time()+2
+        for item in site.rglob("*"):
+            if item.is_file():
+                os.utime(item,(touch_time,touch_time))
+    emit(handle,"done","Revision undone",batch);return {"undone":True}
 
 @app.get("/api/lead/{handle}/zip")
 def zip_site(handle:str,batch:str|None=None,mode:str="site"):
@@ -763,32 +852,35 @@ def zip_site(handle:str,batch:str|None=None,mode:str="site"):
     if mode not in {"site","full"}:raise HTTPException(400,"mode must be 'site' or 'full'")
     account=root_for(batch)/handle
     target_name=f"{handle}-site" if mode=="site" else f"{handle}-full"
-    archive_base=str(Path(gettempdir())/f"studio_{handle}_{mode}")
+    archive_base=str(Path(gettempdir())/f"studio_{handle}_{mode}_{uuid.uuid4().hex}")
+    cleanup_dir=None
+    target=None
     if mode=="site":
         site=account/"site"
         if site.is_dir() and (site/"index.html").is_file():
             target=shutil.make_archive(archive_base,"zip",site)
-            return FileResponse(target,filename=f"{target_name}.zip")
-        if is_r2_configured():
-            temp_site=Path(gettempdir())/f"r2_site_{batch}_{handle}"
+        elif is_r2_configured():
+            temp_site=Path(gettempdir())/f"r2_site_{batch}_{handle}_{uuid.uuid4().hex}"
             temp_site.mkdir(parents=True,exist_ok=True)
             if download_site(batch,handle,temp_site):
                 target=shutil.make_archive(archive_base,"zip",temp_site)
-                shutil.rmtree(temp_site,ignore_errors=True)
-                return FileResponse(target,filename=f"{target_name}.zip")
-        raise HTTPException(404,"Website files not found")
+            shutil.rmtree(temp_site,ignore_errors=True)
+        if not target:raise HTTPException(404,"Website files not found")
     else:
         if account.is_dir():
             target=shutil.make_archive(archive_base,"zip",account)
-            return FileResponse(target,filename=f"{target_name}.zip")
-        if is_r2_configured():
-            temp_lead=Path(gettempdir())/f"r2_lead_{batch}_{handle}"
+        elif is_r2_configured():
+            temp_lead=Path(gettempdir())/f"r2_lead_{batch}_{handle}_{uuid.uuid4().hex}"
             temp_lead.mkdir(parents=True,exist_ok=True)
             if download_lead_folder(batch,handle,temp_lead):
                 target=shutil.make_archive(archive_base,"zip",temp_lead)
-                shutil.rmtree(temp_lead,ignore_errors=True)
-                return FileResponse(target,filename=f"{target_name}.zip")
-        raise HTTPException(404,"Account files not found")
+            shutil.rmtree(temp_lead,ignore_errors=True)
+        if not target:raise HTTPException(404,"Account files not found")
+
+    def _cleanup():
+        Path(target).unlink(missing_ok=True)
+
+    return FileResponse(target,filename=f"{target_name}.zip",media_type="application/zip",background=BackgroundTask(_cleanup))
 
 @app.get("/api/open/{handle}")
 def open_profile(handle:str):
@@ -811,6 +903,25 @@ def login():
             except Exception as e:emit("","failed",str(e))
             browser.close()
     threading.Thread(target=work,daemon=True).start();return {"started":True}
+
+SCROLL_SHIM = """<script>
+window.addEventListener('message', function(e) {
+  if (e.data && e.data.action === 'autoScroll') {
+    var max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+    if (!max) { window.parent.postMessage({ action: 'scrollDone' }, '*'); return; }
+    var dur = Math.min(60000, Math.max(6000, max / 0.11));
+    var t0 = performance.now() + 1200;
+    var ease = function(t) { return t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2; };
+    function step(now) {
+      var k = Math.min(1, Math.max(0, (now - t0) / dur));
+      window.scrollTo(0, max * ease(k));
+      if (k < 1) requestAnimationFrame(step);
+      else setTimeout(function() { window.parent.postMessage({ action: 'scrollDone' }, '*'); }, 1500);
+    }
+    requestAnimationFrame(step);
+  }
+});
+</script>"""
 
 @app.get("/preview/{batch}/{handle}/{path:path}")
 def preview(batch:str,handle:str,path:str="index.html"):
@@ -836,9 +947,27 @@ def preview(batch:str,handle:str,path:str="index.html"):
                         target.write_bytes(body)
                         os.utime(target, (r2_mtime, r2_mtime))
                     except Exception:pass
+                    if clean_path.endswith(".html"):
+                        html_text = body.decode("utf-8", errors="replace")
+                        if "</body>" in html_text:
+                            html_text = html_text.replace("</body>", SCROLL_SHIM + "</body>")
+                            return Response(content=html_text, media_type=ct, headers=headers)
+                        elif "</html>" in html_text:
+                            html_text = html_text.replace("</html>", SCROLL_SHIM + "</html>")
+                            return Response(content=html_text, media_type=ct, headers=headers)
                     return Response(content=body,media_type=ct,headers=headers)
 
     if local_exists:
+        if clean_path.endswith(".html"):
+            try:
+                html_text = target.read_text(encoding="utf-8", errors="replace")
+                if "</body>" in html_text:
+                    html_text = html_text.replace("</body>", SCROLL_SHIM + "</body>")
+                    return Response(content=html_text, media_type="text/html; charset=utf-8", headers=headers)
+                elif "</html>" in html_text:
+                    html_text = html_text.replace("</html>", SCROLL_SHIM + "</html>")
+                    return Response(content=html_text, media_type="text/html; charset=utf-8", headers=headers)
+            except Exception:pass
         return FileResponse(target,headers=headers)
     raise HTTPException(404,"Not found")
 
@@ -861,4 +990,5 @@ def media(batch:str,handle:str,path:str):
 
 if __name__=="__main__":
     import uvicorn
-    uvicorn.run("src.app:app",host="127.0.0.1",port=int(os.environ.get("PORT",8765)),reload=True)
+    reload_opt = os.environ.get("STUDIO_RELOAD", "").strip().lower() in {"1", "true", "yes"}
+    uvicorn.run("src.app:app",host="127.0.0.1",port=int(os.environ.get("PORT",8765)),reload=reload_opt)

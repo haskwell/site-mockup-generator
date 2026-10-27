@@ -21,9 +21,17 @@ class TestR2PrivateAccess(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
         self.db_path = Path(self.temp_dir) / "test_dashboard.sqlite3"
-        self.client = TestClient(app)
+        self.env_patcher = patch.dict(os.environ, {
+            "R2_BUCKET_NAME": "test-mockups-bucket",
+            "CLOUDFLARE_ACCOUNT_ID": "test-account",
+            "R2_ACCESS_KEY_ID": "test-access",
+            "R2_SECRET_ACCESS_KEY": "test-secret",
+        })
+        self.env_patcher.start()
+        self.client = TestClient(app, headers={"Host": "127.0.0.1", "X-Studio": "1", "Content-Type": "application/json"})
 
     def tearDown(self):
+        self.env_patcher.stop()
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_database_migration_http_to_preview(self):

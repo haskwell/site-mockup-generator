@@ -12,7 +12,7 @@ Priority order when instructions conflict: the accuracy rules below, then `DESIG
 
 - `DESIGN.md` is the fixed design direction for this site (see Design direction).
 - `<username>_data/profile_data.json` is the only source of facts.
-- Images are in `site/assets/` as `post_<n>.webp` (maybe `pfp.jpg`); don't move or convert them. `posts[].width/height` give pixel sizes. Look at a few first.
+- Images: use only files that exist in `site/assets/` as `post_<n>.webp` (maybe `pfp.jpg`); never reference an asset file that is not present in `site/assets/`. Don't move or convert them. `posts[].width/height` give pixel sizes. Look at a few first.
 - Static HTML/CSS, no frameworks. Google Fonts via `<link>` is fine. Modern CSS and inline SVG are welcome.
 
 ## Design direction

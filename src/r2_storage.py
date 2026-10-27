@@ -51,17 +51,26 @@ def is_r2_configured() -> bool:
     return bool(account_id and access_key and secret_key and bucket)
 
 
+_cached_s3_client = None
+_cached_s3_creds = None
+
+
 def get_s3_client():
-    """Create and return a boto3 S3 client configured for Cloudflare R2."""
+    """Create and return a boto3 S3 client configured for Cloudflare R2, cached for reuse."""
+    global _cached_s3_client, _cached_s3_creds
     import boto3
     from botocore.config import Config
 
     account_id = os.environ["CLOUDFLARE_ACCOUNT_ID"].strip()
     access_key = os.environ["R2_ACCESS_KEY_ID"].strip()
     secret_key = os.environ["R2_SECRET_ACCESS_KEY"].strip()
-    endpoint = f"https://{account_id}.r2.cloudflarestorage.com"
+    creds_tuple = (account_id, access_key, secret_key)
 
-    return boto3.client(
+    if _cached_s3_client is not None and _cached_s3_creds == creds_tuple:
+        return _cached_s3_client
+
+    endpoint = f"https://{account_id}.r2.cloudflarestorage.com"
+    client = boto3.client(
         "s3",
         endpoint_url=endpoint,
         aws_access_key_id=access_key,
@@ -69,6 +78,9 @@ def get_s3_client():
         region_name="auto",
         config=Config(signature_version="s3v4", retries={"max_attempts": 3, "mode": "standard"}),
     )
+    _cached_s3_client = client
+    _cached_s3_creds = creds_tuple
+    return client
 
 
 def has_r2_site(batch: str, handle: str) -> bool:

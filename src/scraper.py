@@ -273,6 +273,8 @@ def fetch_post_meta(
         page.goto(post_url, timeout=30000)
     except Exception as e:
         logger.warning("%sNavigation warning for %s: %s", label, shortcode, e)
+        if shortcode not in (page.url or ""):
+            return None
     dismiss_instagram_modals(page)
     if is_login_wall(page):
         logger.warning("%sRedirected to login wall: %s", label, page.url)

@@ -72,6 +72,15 @@ def update_sheet(record: dict[str, Any], credentials: Path, sheet_name: str = "w
         worksheet.update(range_name=f"B{matching_row}:F{matching_row}", values=[values], value_input_option="RAW")
         return "updated", matching_row
 
+    # Guard serial-number race: re-read column A right before appending to avoid duplicate serials
+    try:
+        col_a = worksheet.col_values(1)
+        latest_serials = [int(v.strip()) for v in col_a[1:] if str(v).strip().isdigit()]
+        if latest_serials:
+            highest_serial = max(highest_serial, max(latest_serials))
+    except Exception:
+        pass
+
     serial = highest_serial + 1
     worksheet.append_row([serial, *values], value_input_option="RAW")
     return "added", serial

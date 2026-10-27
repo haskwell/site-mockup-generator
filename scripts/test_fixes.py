@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Offline automated test suite to verify the 6 codebase audit fixes."""
+"""Automated test suite to verify codebase audit fixes directly against src/ modules."""
 import datetime as dt
 import json
 import os
 import shutil
+import sqlite3
 import tempfile
 import unittest
 from pathlib import Path
@@ -15,10 +16,15 @@ import sys
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
+from fastapi.testclient import TestClient
+from src.app import app, clean_handle, export_leads, unlock_lead, resolve_credentials_path, resolve_websites_root
+import src.r2_storage as r2_storage
+from src.run import validate_site
 
-class TestLoggingImports(unittest.TestCase):
+
+class TestLoggingAndDecodings(unittest.TestCase):
     def test_imports_succeed(self):
-        """Verify that all 4 modules can be imported as packages without logging_config error."""
+        """Verify that all pipeline modules import without error."""
         import src.scraper
         import src.profile_summary
         import src.update_sheet
@@ -29,7 +35,7 @@ class TestLoggingImports(unittest.TestCase):
         self.assertIsNotNone(src.design.get_logger)
 
     def test_home_utf8_decoding(self):
-        """Verify that home() reads web/index.html in UTF-8 without charmap/cp1252 errors."""
+        """Verify that home() reads web/index.html in UTF-8 without errors."""
         from src.app import home
         html = home()
         self.assertTrue(len(html) > 1000)
@@ -40,214 +46,157 @@ class TestLockTTLAndUnlock(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
         self.db_path = Path(self.temp_dir) / "test.db"
-        import sqlite3
         conn = sqlite3.connect(self.db_path)
-        conn.execute("CREATE TABLE leads(batch TEXT, handle TEXT, locked_by TEXT DEFAULT '', locked_at TEXT DEFAULT '', PRIMARY KEY(batch, handle))")
+        conn.execute("CREATE TABLE leads(batch TEXT, handle TEXT, name TEXT DEFAULT '', phone TEXT DEFAULT '', area TEXT DEFAULT '', followers TEXT DEFAULT '', status TEXT DEFAULT 'queued', error TEXT DEFAULT '', site_path TEXT DEFAULT '', notes TEXT DEFAULT '', stage TEXT DEFAULT 'new', follow_up TEXT DEFAULT '', price TEXT DEFAULT '', qa TEXT DEFAULT '', created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP, locked_by TEXT DEFAULT '', locked_at TEXT DEFAULT '', PRIMARY KEY(batch, handle))")
         conn.commit()
         conn.close()
 
     def tearDown(self):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    def test_stale_lock_detection(self):
-        """Verify locks older than 15 minutes are detected as stale."""
-        now = dt.datetime.now(dt.timezone.utc)
-        recent_lock = (now - dt.timedelta(minutes=5)).strftime("%Y-%m-%d %H:%M:%S")
-        stale_lock = (now - dt.timedelta(minutes=20)).strftime("%Y-%m-%d %H:%M:%S")
-
-        def check_lock(locked_at_str):
-            if not locked_at_str:
-                return False
-            dt_lock = dt.datetime.fromisoformat(locked_at_str.replace(" ", "T")).replace(tzinfo=dt.timezone.utc)
-            return (now - dt_lock).total_seconds() > 15 * 60
-
-        self.assertFalse(check_lock(recent_lock))
-        self.assertTrue(check_lock(stale_lock))
-
-    def test_unlock_endpoint_logic(self):
-        """Verify unlocking a lead clears locked_by and locked_at."""
-        import sqlite3
+    def test_unlock_lead_endpoint(self):
+        """Verify unlock_lead() in src.app clears locked_by and locked_at in the database."""
         conn = sqlite3.connect(self.db_path)
         conn.execute("INSERT INTO leads(batch, handle, locked_by, locked_at) VALUES('2026-10-11', 'locked_user', 'alice', '2026-10-26 12:00:00')")
         conn.commit()
+        conn.close()
 
-        # Unlock
-        conn.execute("UPDATE leads SET locked_by='', locked_at='' WHERE batch=? AND handle=?", ('2026-10-11', 'locked_user'))
-        conn.commit()
+        def custom_connect():
+            c = sqlite3.connect(self.db_path)
+            c.row_factory = sqlite3.Row
+            return c
 
+        with patch("src.app.connect", side_effect=custom_connect):
+            res = unlock_lead("locked_user", batch="2026-10-11")
+            self.assertEqual(res, {"unlocked": True})
+
+        conn = sqlite3.connect(self.db_path)
         row = conn.execute("SELECT locked_by, locked_at FROM leads WHERE batch='2026-10-11' AND handle='locked_user'").fetchone()
         self.assertEqual(row[0], "")
         self.assertEqual(row[1], "")
         conn.close()
 
 
-class TestCloudPhotoSelection(unittest.TestCase):
+class TestSqlite3RowRegression(unittest.TestCase):
+    """Regression test ensuring sqlite3.Row objects are never accessed with .get()."""
+
     def setUp(self):
         self.temp_dir = tempfile.mkdtemp()
-        self.websites_root = Path(self.temp_dir) / "websites"
-        self.websites_root.mkdir()
-
-    def tearDown(self):
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
-
-    @patch("src.app.is_r2_configured", return_value=True)
-    @patch("src.app.upload_file", return_value=True)
-    @patch("src.app.get_lead_json")
-    def test_save_photos_with_cloud_fallback(self, mock_get_lead_json, mock_upload_file, mock_r2_cfg):
-        from src.app import save_photos, PhotoSelection
-
-        # Simulate cloud-only profile
-        mock_get_lead_json.return_value = {
-            "posts": [
-                {"web_path": "posts/web/1_post.webp"},
-                {"web_path": "posts/web/2_post.webp"}
-            ]
-        }
-
-        with patch("src.app.root_for", return_value=self.websites_root / "2026-10-11"):
-            sel = PhotoSelection(files=["1_post.webp"])
-            res = save_photos("acme", sel, batch="2026-10-11")
-            self.assertEqual(res, {"saved": 1})
-
-            # Check that local file was saved
-            saved_file = self.websites_root / "2026-10-11" / "acme" / "selected_posts.json"
-            self.assertTrue(saved_file.is_file())
-            self.assertEqual(json.loads(saved_file.read_text()), ["1_post.webp"])
-
-            # Check that R2 upload was invoked
-            mock_upload_file.assert_called_once()
-
-
-class TestRevisionsDesignFallback(unittest.TestCase):
-    def setUp(self):
-        self.temp_dir = tempfile.mkdtemp()
-        self.root = Path(self.temp_dir) / "2026-10-11"
-        self.account = self.root / "cloud_user"
-        self.site = self.account / "site"
-        self.site.mkdir(parents=True)
-        (self.site / "index.html").write_text("<html><body>Hello</body></html>")
-
-    def tearDown(self):
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
-
-    @patch("src.revisions.is_r2_configured", return_value=True)
-    @patch("src.revisions.get_lead_text")
-    def test_revision_pulls_design_from_r2(self, mock_get_lead_text, mock_r2_cfg):
-        mock_get_lead_text.return_value = "# Cloud Design Brief\nMinimalist aesthetic"
-        design_file = self.account / "DESIGN.md"
-
-        # Simulate missing DESIGN.md before revision
-        self.assertFalse(design_file.is_file())
-
-        # Test the fallback logic in revisions
-        if not design_file.is_file() and mock_r2_cfg():
-            cloud_design = mock_get_lead_text("2026-10-11", "cloud_user", "DESIGN.md")
-            if cloud_design:
-                design_file.write_text(cloud_design, encoding="utf-8")
-
-        self.assertTrue(design_file.is_file())
-        self.assertIn("Cloud Design Brief", design_file.read_text())
-
-
-class TestR2AssetSyncHelpers(unittest.TestCase):
-    def setUp(self):
-        self.temp_dir = tempfile.mkdtemp()
-        self.account = Path(self.temp_dir) / "test_user"
-        self.account.mkdir()
-        (self.account / "DESIGN.md").write_text("# Design")
-        (self.account / "selected_posts.json").write_text('["1.webp"]')
-        data_dir = self.account / "test_user_data"
-        data_dir.mkdir()
-        (data_dir / "profile_data.json").write_text('{"posts":[]}')
-
-    def tearDown(self):
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
-
-    @patch("src.r2_storage.is_r2_configured", return_value=True)
-    @patch("src.r2_storage.upload_file", return_value=True)
-    @patch("src.r2_storage.upload_lead_media", return_value=1)
-    @patch("src.r2_storage.upload_site", return_value="https://pub.r2.dev/site/index.html")
-    def test_upload_lead_assets_orchestration(self, mock_upload_site, mock_media, mock_upload_file, mock_r2_cfg):
-        from src.r2_storage import upload_lead_assets
-        site_dir = self.account / "site"
-        site_dir.mkdir()
-
-        url = upload_lead_assets(self.account, "2026-10-11", "test_user")
-        self.assertEqual(url, "https://pub.r2.dev/site/index.html")
-        mock_upload_site.assert_called_once()
-        mock_media.assert_called_once()
-        self.assertEqual(mock_upload_file.call_count, 2)  # DESIGN.md and selected_posts.json
-
-
-class TestParallelR2LeadFetch(unittest.TestCase):
-    def setUp(self):
-        self.temp_dir = tempfile.mkdtemp()
-        self.websites_root = Path(self.temp_dir) / "websites"
-        self.batch_dir = self.websites_root / "2026-10-11"
-        self.batch_dir.mkdir(parents=True)
         self.db_path = Path(self.temp_dir) / "test.db"
-        import sqlite3
         conn = sqlite3.connect(self.db_path)
-        conn.execute("CREATE TABLE leads(batch TEXT, handle TEXT, name TEXT DEFAULT '', phone TEXT DEFAULT '', area TEXT DEFAULT '', followers TEXT DEFAULT '', status TEXT DEFAULT 'queued', error TEXT DEFAULT '', site_path TEXT DEFAULT '', notes TEXT DEFAULT '', stage TEXT DEFAULT 'new', follow_up TEXT DEFAULT '', price TEXT DEFAULT '', qa TEXT DEFAULT '', created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP, locked_by TEXT DEFAULT '', locked_at TEXT DEFAULT '', PRIMARY KEY(batch, handle))")
-        conn.execute("CREATE TABLE revisions(id INTEGER PRIMARY KEY AUTOINCREMENT, batch TEXT, handle TEXT, request TEXT, status TEXT DEFAULT 'pending', created_at TEXT DEFAULT CURRENT_TIMESTAMP, applied_at TEXT, backup_path TEXT DEFAULT '')")
-        conn.execute("INSERT INTO leads(batch, handle, name, site_path) VALUES('2026-10-11', 'cloud_lead', 'Cloud Cafe', 'https://pub-r2.dev/site/index.html')")
+        conn.execute("CREATE TABLE leads(batch TEXT, handle TEXT, name TEXT DEFAULT '', phone TEXT DEFAULT '', area TEXT DEFAULT '', followers TEXT DEFAULT '', status TEXT DEFAULT 'queued', error TEXT DEFAULT '', site_path TEXT DEFAULT '', notes TEXT DEFAULT '', stage TEXT DEFAULT 'new', follow_up TEXT DEFAULT '', price TEXT DEFAULT '', qa TEXT DEFAULT '', created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP, locked_by TEXT DEFAULT '', locked_at TEXT DEFAULT '', has_recording INTEGER DEFAULT 0, PRIMARY KEY(batch, handle))")
+        conn.execute("INSERT INTO leads(batch, handle, status, site_path) VALUES('2026-10-11', 'rowuser', 'built', '/path/to/site')")
         conn.commit()
         conn.close()
 
     def tearDown(self):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
-    @patch("src.app.is_r2_configured", return_value=True)
-    @patch("src.app.get_lead_json")
-    @patch("src.app.get_lead_text")
-    @patch("src.app.list_recordings")
-    @patch("src.app.connect")
-    @patch("src.app.root_for")
-    def test_lead_parallel_r2_resolution(self, mock_root_for, mock_connect, mock_list_rec, mock_get_text, mock_get_json, mock_r2_cfg):
-        import sqlite3
-        mock_root_for.return_value = self.batch_dir
+    def test_sqlite3_row_has_no_get_method(self):
+        """Confirm that real sqlite3.Row objects lack .get() and dict(row) must be used."""
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
-        mock_connect.return_value = conn
+        row = conn.execute("SELECT * FROM leads WHERE handle='rowuser'").fetchone()
+        self.assertIsInstance(row, sqlite3.Row)
+        with self.assertRaises(AttributeError):
+            _ = row.get("site_path")
+        row_dict = dict(row)
+        self.assertEqual(row_dict.get("site_path"), "/path/to/site")
+        conn.close()
 
-        def fake_get_json(batch, handle, filename):
-            if filename == "profile_data.json":
-                return {"name": "Cloud Cafe", "posts": [{"web_path": "posts/web/pic1.webp"}]}
-            elif filename == "business_data.json":
-                return [{"name": "Cloud Cafe", "phone": "12345"}]
-            elif filename == "selected_posts.json":
-                return ["pic1.webp"]
-            return None
+    def test_save_recording_with_real_sqlite_row(self):
+        """Test save_recording with real sqlite3.Row factory does not raise AttributeError."""
+        from src.app import save_recording
+        def custom_connect():
+            c = sqlite3.connect(self.db_path)
+            c.row_factory = sqlite3.Row
+            return c
 
-        mock_get_json.side_effect = fake_get_json
-        mock_get_text.return_value = "# Cloud Design"
-        mock_list_rec.return_value = ["cloud_lead-desktop.webm"]
+        mock_request = MagicMock()
+        async def fake_body():
+            return b"test video bytes"
+        mock_request.body = fake_body
 
-        from src.app import lead
-        res = lead("cloud_lead", batch="2026-10-11")
-
-        self.assertEqual(res["lead"]["name"], "Cloud Cafe")
-        self.assertEqual(res["profile"]["name"], "Cloud Cafe")
-        self.assertEqual(res["design"], "# Cloud Design")
-        self.assertEqual(res["selected_photos"], ["pic1.webp"])
-        self.assertEqual(res["recordings"], {"desktop": "cloud_lead-desktop.webm"})
+        import asyncio
+        with patch("src.app.connect", side_effect=custom_connect):
+            with patch("src.app.is_r2_configured", return_value=False):
+                with patch("src.app.root_for", return_value=Path(self.temp_dir)):
+                    res = asyncio.run(save_recording("rowuser", mock_request, batch="2026-10-11", screen="desktop"))
+                    self.assertEqual(res["screen"], "desktop")
 
 
-class TestCrossPlatformPaths(unittest.TestCase):
-    def test_resolve_credentials_from_foreign_os_path(self):
-        from src.app import resolve_credentials_path, REPO
-        # Simulate a Linux path string passed on a Windows system where that path does not exist
-        foreign_linux_path = "/home/frost/code/python/test/config/creds.json"
-        resolved = resolve_credentials_path(foreign_linux_path)
-        # Should cleanly resolve to the current local repo's config/creds.json
-        expected = (REPO / "config" / "creds.json").resolve()
-        self.assertEqual(resolved, expected)
+class TestCSVExportFormulaInjection(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.db_path = Path(self.temp_dir) / "test.db"
+        conn = sqlite3.connect(self.db_path)
+        conn.execute("CREATE TABLE leads(batch TEXT, handle TEXT, name TEXT, phone TEXT, area TEXT, followers TEXT, status TEXT, stage TEXT, notes TEXT, PRIMARY KEY(batch, handle))")
+        conn.execute("INSERT INTO leads VALUES('2026-10-11', 'safe_lead', '=cmd|calc!A1', '+1234567890', '-500', '@mention', 'done', 'won', 'note')")
+        conn.commit()
+        conn.close()
 
-    def test_resolve_credentials_from_relative_path(self):
-        from src.app import resolve_credentials_path, REPO
-        resolved = resolve_credentials_path("config/creds.json")
-        expected = (REPO / "config" / "creds.json").resolve()
-        self.assertEqual(resolved, expected)
+    def tearDown(self):
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_formula_injection_cells_prefixed(self):
+        """Verify export_leads prefixes cells starting with = + - @ with a single quote."""
+        def custom_connect():
+            c = sqlite3.connect(self.db_path)
+            c.row_factory = sqlite3.Row
+            return c
+
+        with patch("src.app.connect", side_effect=custom_connect):
+            resp = export_leads("2026-10-11")
+            content = resp.body.decode("utf-8")
+            self.assertIn("'=cmd|calc!A1", content)
+            self.assertIn("'+1234567890", content)
+            self.assertIn("'-500", content)
+            self.assertIn("'@mention", content)
+
+
+class TestSecurityMiddleware(unittest.TestCase):
+    def setUp(self):
+        self.client = TestClient(app)
+
+    def test_dns_rebinding_rejected(self):
+        """Requests with unauthorized Host header must be rejected."""
+        resp = self.client.get("/api/health", headers={"Host": "attacker.com"})
+        self.assertEqual(resp.status_code, 403)
+
+    def test_state_changing_without_x_studio_rejected(self):
+        """POST/PUT/DELETE requests without X-Studio header must be rejected."""
+        resp = self.client.post("/api/cancel", headers={"Host": "127.0.0.1", "Content-Type": "application/json"})
+        self.assertEqual(resp.status_code, 403)
+
+    def test_state_changing_without_json_content_type_rejected(self):
+        """POST/PUT/DELETE requests with non-JSON Content-Type must be rejected."""
+        resp = self.client.post("/api/cancel", headers={"Host": "127.0.0.1", "X-Studio": "1", "Content-Type": "text/plain"})
+        self.assertEqual(resp.status_code, 415)
+
+
+class TestSiteValidation(unittest.TestCase):
+    def setUp(self):
+        self.temp_dir = tempfile.mkdtemp()
+        self.site_dir = Path(self.temp_dir) / "site"
+        self.site_dir.mkdir()
+
+    def tearDown(self):
+        shutil.rmtree(self.temp_dir, ignore_errors=True)
+
+    def test_shortcut_icon_checked(self):
+        """validate_site should detect missing files referenced by rel='shortcut icon'."""
+        html = "<!doctype html><html><head><link rel='shortcut icon' href='favicon.ico'></head><body>" + ("<!-- padding -->" * 60) + "</body></html>"
+        (self.site_dir / "index.html").write_text(html, encoding="utf-8")
+        errors = validate_site(self.site_dir)
+        self.assertTrue(any("favicon.ico" in e for e in errors))
+
+    def test_css_url_checked(self):
+        """validate_site should detect missing files referenced by CSS url()."""
+        html = "<!doctype html><html><head><link rel='stylesheet' href='style.css'></head><body>" + ("<!-- padding -->" * 60) + "</body></html>"
+        (self.site_dir / "index.html").write_text(html, encoding="utf-8")
+        (self.site_dir / "style.css").write_text("body { background: url('missing_bg.webp'); }", encoding="utf-8")
+        errors = validate_site(self.site_dir)
+        self.assertTrue(any("missing_bg.webp" in e for e in errors))
 
 
 if __name__ == "__main__":

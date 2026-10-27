@@ -54,8 +54,10 @@ def validate_site(site: Path) -> list[str]:
                 self.refs.extend(candidate.strip().split()[0] for candidate in attrs["srcset"].split(",") if candidate.strip())
             if tag == "video" and attrs.get("poster"):
                 self.refs.append(attrs["poster"])
-            if tag == "link" and attrs.get("href") and attrs.get("rel") in {"stylesheet", "icon"}:
-                self.refs.append(attrs["href"])
+            if tag == "link" and attrs.get("href"):
+                rel_parts = set((attrs.get("rel") or "").lower().split())
+                if rel_parts & {"stylesheet", "icon"}:
+                    self.refs.append(attrs["href"])
         def error(self, message):
             self.errors.append(message)
     checker = Checker()
@@ -75,6 +77,18 @@ def validate_site(site: Path) -> list[str]:
         target = (site / ref.split("?", 1)[0].split("#", 1)[0]).resolve()
         if not target.is_relative_to(site.resolve()) or not target.is_file():
             errors.append(f"missing or unsafe referenced file: {ref}")
+    import re
+    for css_file in site.rglob("*.css"):
+        try:
+            css_text = css_file.read_text(encoding="utf-8")
+            for url_ref in re.findall(r'url\s*\(\s*[\'"]?([^\'")]+)[\'"]?\s*\)', css_text):
+                url_ref = url_ref.strip()
+                if not url_ref.startswith(("https://", "http://", "data:", "#")):
+                    target = (css_file.parent / url_ref.split("?", 1)[0].split("#", 1)[0]).resolve()
+                    if not target.is_relative_to(site.resolve()) or not target.is_file():
+                        errors.append(f"missing or unsafe referenced file in CSS: {url_ref}")
+        except Exception:
+            pass
     return errors
 
 
@@ -224,12 +238,14 @@ def process_account(user: str, root: Path, python: str, force: bool, logger: Log
     model = options.get("model", MODEL)
     logger.log("INFO", f"{user}: building site with agy ({model})...")
     status("building", "Building site with agy")
+    timeout_sec = int(options.get("timeout", TIMEOUT_SECONDS))
+    # NOTE: --dangerously-skip-permissions is used for automated builds; scraped bios and profile text are untrusted user input.
     rc, timed_out = run_streaming(
         [agy_bin, "-p", "Read GEMINI.md, DESIGN.md and SKILL.md, then build the site. DESIGN.md is binding.",
          "--model", model, "--dangerously-skip-permissions"],
-        account, logger, agy_log, int(options.get("timeout", TIMEOUT_SECONDS)), cancel_event=cancel_event)
+        account, logger, agy_log, timeout_sec, cancel_event=cancel_event)
     if timed_out:
-        logger.log("ERROR", f"{user}: agy timed out after 900s; build failed (see {agy_log})")
+        logger.log("ERROR", f"{user}: agy timed out after {timeout_sec}s; build failed (see {agy_log})")
         restore_backup(site, backup)
         return 1
     if rc:
@@ -269,7 +285,8 @@ def main() -> int:
     session_log = log_dir / f"{dt.datetime.now():%Y-%m-%d_%H-%M-%S}_run_{os.getpid()}.log"
     logger = Logger(session_log)
     try:
-        root = Path(os.environ.get("WEBSITES_ROOT", str(Path.home() / "websites" / f"{dt.date.today():%Y-%m-%d}")))
+        base_root = Path(os.environ.get("WEBSITES_ROOT", Path.home() / "websites")).expanduser().resolve()
+        root = base_root / f"{dt.date.today():%Y-%m-%d}"
         accounts = Path(sys.argv[1]) if len(sys.argv) > 1 else REPO / "config/accounts.txt"
         if not accounts.is_file():
             logger.log("ERROR", f"Accounts file not found: {accounts}")

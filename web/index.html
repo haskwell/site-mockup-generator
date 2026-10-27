@@ -1704,6 +1704,9 @@
             ><span class="dot" style="background:var(--accent)"></span><span id="synctext">Uploading…</span></span
           >
         </header>
+        <div id="offlinebanner" hidden style="background:#dc2626;color:#fff;padding:8px 16px;margin:8px 24px 0 24px;border-radius:var(--r);font-size:12px;font-weight:600;display:flex;align-items:center;gap:8px;">
+          <span>⚠️</span> <span>Cloudflare D1 is unreachable. Operating in offline fallback mode using local SQLite.</span>
+        </div>
 
         <section class="view" id="view-pipeline">
           <div class="due" id="due" hidden></div>
@@ -2313,9 +2316,14 @@
 
       /* ---------- utils ---------- */
       const api = async (url, opt = {}) => {
+        const headers = {
+          "Content-Type": "application/json",
+          "X-Studio": "1",
+          ...(opt.headers || {}),
+        };
         const r = await fetch(url, {
-          headers: { "Content-Type": "application/json" },
           ...opt,
+          headers,
         });
         const j = await r.json().catch(() => ({}));
         if (!r.ok) throw Error(j.detail || r.statusText);
@@ -2361,8 +2369,10 @@
         ((l.name || l.handle || "?").trim()[0] || "?").toUpperCase();
       const avatarHtml = (l, style = "") => `<div class="avatar" style="${style || `background:hsl(${hue(l.handle)} 45% 40%)`}">${esc(initial(l))}<img src="/media/${enc(S.st.batch)}/${enc(l.handle)}/pfp.jpg" alt="" onerror="this.remove()" /></div>`;
       const stageOf = (l) => (STAGES.includes(l.stage) ? l.stage : "new");
+      let dlgRes = null;
       function dlg(title, body, buttons) {
         return new Promise((res) => {
+          dlgRes = res;
           $("#dlgtitle").textContent = title;
           $("#dlgbody").textContent = body;
           const a = $("#dlgactions");
@@ -2373,6 +2383,7 @@
             if (b.cls) el.className = b.cls;
             el.onclick = () => {
               $("#dlgov").hidden = true;
+              dlgRes = null;
               res(b.value);
             };
             a.append(el);
@@ -2394,12 +2405,21 @@
       async function refresh(reload) {
         S.st = await api("/api/state" + bq());
         $("#batch").value = S.st.batch;
+        if ($("#offlinebanner")) $("#offlinebanner").hidden = !S.st.d1_offline;
         if (document.activeElement !== $("#accounts"))
           $("#accounts").value = S.st.accounts || "";
         const s = S.st.settings || {};
         if (S.view !== "settings" || !$("#sroot").dataset.filled) {
           fillSettings();
         }
+        $("#authstate").textContent = S.st.auth_exists
+          ? "Session saved · " + S.st.auth_mtime
+          : "No session";
+        render();
+        if (reload && S.sel && !$("#studio").hidden)
+          await loadLead(S.sel, false);
+        await jobStatus();
+      }
         $("#authstate").textContent = S.st.auth_exists
           ? "Session saved · " + S.st.auth_mtime
           : "No session";
@@ -2502,7 +2522,8 @@
       }
       function renderPipeline() {
         const rows = filtered();
-        const today = new Date().toISOString().slice(0, 10);
+        const _now = new Date();
+        const today = `${_now.getFullYear()}-${String(_now.getMonth() + 1).padStart(2, "0")}-${String(_now.getDate()).padStart(2, "0")}`;
         const due = (S.st.leads || []).filter(
           (l) =>
             l.follow_up &&
@@ -2691,6 +2712,7 @@
                   $("#loadersub").textContent = "";
                 }
               }
+              const purl = previewUrl(h);
               f.onload = () => {
                 if (h === S.sel) {
                   if (ldr) {
@@ -2706,10 +2728,27 @@
               f.onerror = () => {
                 if (h === S.sel) {
                   if (ldr) ldr.hidden = true;
-                  f.hidden = false;
+                  f.hidden = true;
+                  $("#previewempty").hidden = false;
                 }
               };
-              f.src = previewUrl(h);
+              fetch(purl, { method: "HEAD" })
+                .then((res) => {
+                  if (h !== S.sel) return;
+                  if (!res.ok) {
+                    if (ldr) ldr.hidden = true;
+                    f.hidden = true;
+                    $("#previewempty").hidden = false;
+                    return;
+                  }
+                  f.src = purl;
+                })
+                .catch(() => {
+                  if (h !== S.sel) return;
+                  if (ldr) ldr.hidden = true;
+                  f.hidden = true;
+                  $("#previewempty").hidden = false;
+                });
             } else {
               if (ldr) ldr.hidden = true;
               f.hidden = false;
@@ -2900,28 +2939,51 @@
         if (extra.stage) $("#f-stage").value = extra.stage;
         flashSaved();
       }
-      const autosave = debounce(async () => {
-        try {
-          await putLead();
-          const l = leadOf(S.sel);
-          Object.assign(l, {
-            name: $("#f-name").value,
-            phone: $("#f-phone").value,
-            stage: $("#f-stage").value,
-          });
-          $("#ssub").textContent =
-            `@${S.sel}${$("#f-area").value ? " · " + $("#f-area").value : ""}`;
-          if (S.ld) {
-            S.ld.lead.stage = $("#f-stage").value;
-            drawStrip();
-            drawNext();
-            updateContactMenu();
+      let autosaveTimer = null;
+      function autosave() {
+        const targetHandle = S.sel;
+        if (!targetHandle) return;
+        const body = {
+          name: $("#f-name").value,
+          phone: $("#f-phone").value,
+          area: $("#f-area").value,
+          followers: $("#f-followers").value,
+          notes: $("#f-notes").value,
+          stage: $("#f-stage").value,
+          follow_up: $("#f-follow_up").value,
+          price: $("#f-price").value,
+        };
+        clearTimeout(autosaveTimer);
+        autosaveTimer = setTimeout(async () => {
+          try {
+            await api(`${leadUrl(targetHandle)}${bq()}`, {
+              method: "PUT",
+              body: JSON.stringify(body),
+            });
+            flashSaved();
+            const l = leadOf(targetHandle);
+            if (l) {
+              Object.assign(l, {
+                name: body.name,
+                phone: body.phone,
+                stage: body.stage,
+              });
+            }
+            if (S.sel === targetHandle) {
+              $("#ssub").textContent = `@${targetHandle}${body.area ? " · " + body.area : ""}`;
+              if (S.ld) {
+                S.ld.lead.stage = body.stage;
+                drawStrip();
+                drawNext();
+                updateContactMenu();
+              }
+            }
+            render();
+          } catch (e) {
+            toast(e.message);
           }
-          render();
-        } catch (e) {
-          toast(e.message);
-        }
-      }, 600);
+        }, 600);
+      }
       async function setStage(st) {
         try {
           await putLead({ stage: st });
@@ -3077,8 +3139,10 @@
         $("#present").hidden = false;
         $("#pframe").src = previewUrl(S.sel);
         pdevice(P.device);
-        if (autoRecord)
+        if (autoRecord) {
           toast("Pick this tab in the share dialog, then recording starts");
+          toggleRecord();
+        }
       }
       function pdevice(d) {
         P.device = d;
@@ -3212,39 +3276,18 @@
       }
       function autoScroll(frame) {
         try {
-          const doc = frame.contentDocument,
-            win = frame.contentWindow;
-          const max = Math.max(
-            0,
-            doc.documentElement.scrollHeight - frame.clientHeight,
-          );
-          if (!max) {
-            setTimeout(
-              () => P.rec && P.rec.state === "recording" && stopRecord(),
-              4000,
-            );
-            return;
+          if (frame && frame.contentWindow) {
+            frame.contentWindow.postMessage({ action: "autoScroll" }, "*");
           }
-          const dur = Math.min(60000, Math.max(6000, max / 0.11));
-          const t0 = performance.now() + 1200;
-          const ease = (t) =>
-            t < 0.5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
-          const step = (now) => {
-            if (!P.rec || P.rec.state !== "recording") return;
-            const k = Math.min(1, Math.max(0, (now - t0) / dur));
-            win.scrollTo(0, max * ease(k));
-            if (k < 1) P.raf = requestAnimationFrame(step);
-            else
-              setTimeout(
-                () => P.rec && P.rec.state === "recording" && stopRecord(),
-                1500,
-              );
-          };
-          P.raf = requestAnimationFrame(step);
         } catch {
           toast("Auto-scroll unavailable for this page; scroll manually");
         }
       }
+      window.addEventListener("message", (e) => {
+        if (e.data && e.data.action === "scrollDone") {
+          if (P.rec && P.rec.state === "recording") stopRecord();
+        }
+      });
       function stopRecord() {
         if (P.rec && P.rec.state === "recording") P.rec.stop();
       }
@@ -3664,10 +3707,6 @@
               .writeText(S.ld.lead.site_path)
               .then(() => toast("Path copied"));
         },
-        zip: () => {
-          $("#smenu").hidden = true;
-          actions.zipSite();
-        },
         zipSite: () => {
           $("#smenu").hidden = true;
           if (!S.sel) return;
@@ -3693,11 +3732,17 @@
         downloadRec: () => {
           $("#smenu").hidden = true;
           if (!S.sel) return;
-          const dev = S.device || P.device || "desktop";
+          const recs = S.ld?.recordings || {};
+          const availableScreens = Object.keys(recs);
+          let dev = S.device || P.device || "desktop";
+          if (!availableScreens.includes(dev) && availableScreens.length > 0) {
+            dev = availableScreens[0];
+          }
           setSyncIndicator(`Downloading demo recording for @${S.sel}…`);
           toast(`Downloading ${dev} demo recording…`);
           const a = document.createElement("a");
           a.href = `${leadUrl(S.sel)}/recording/${dev}?download=true&${bq().slice(1)}`;
+          a.download = `${S.sel}-${dev}.webm`;
           a.click();
           setTimeout(() => setSyncIndicator(null), 2500);
         },
@@ -3961,7 +4006,7 @@
         if (li) runPal(+li.dataset.n);
         if (e.target === $("#paletteov")) $("#paletteov").hidden = true;
       });
-      document.addEventListener("keydown", (e) => {
+      document.addEventListener("keydown", async (e) => {
         const typing = /INPUT|TEXTAREA|SELECT/.test(e.target.tagName);
         if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
           e.preventDefault();
@@ -3986,7 +4031,14 @@
           return;
         }
         if (!$("#dlgov").hidden) {
-          if (e.key === "Escape") $("#dlgov").hidden = true;
+          if (e.key === "Escape") {
+            $("#dlgov").hidden = true;
+            if (dlgRes) {
+              const r = dlgRes;
+              dlgRes = null;
+              r(false);
+            }
+          }
           return;
         }
         if (!$("#videomodal").hidden) {
@@ -4057,7 +4109,11 @@
         }
         if (!$("#studio").hidden) {
           const k = e.key.toLowerCase();
-          if (k === "r") runBuild([S.sel], true);
+          if (k === "r") {
+            if (e.shiftKey || (await confirmDlg("Rebuild Site", `Rebuild website mockup for @${S.sel}?`, "Rebuild"))) {
+              runBuild([S.sel], true);
+            }
+          }
           if (k === "p") openPresent();
           if (k === "j" || k === "k") {
             const list = filtered();
@@ -4147,15 +4203,23 @@
         el.innerHTML = `<span class="muted">${esc((x.time || "").split("T")[1] || "")}</span> <b>${esc(x.handle || "batch")}</b> <span class="muted">${esc(x.status)}</span> ${esc(x.line)}`;
         const box = $("#logs");
         box.append(el);
+        while (box.children.length > 500) {
+          box.firstElementChild.remove();
+        }
         box.scrollTop = box.scrollHeight;
         if (x.handle === S.sel && !$("#studio").hidden) {
           const revbox = $("#revisionlogs");
           const revisionLine = el.cloneNode(true);
           revbox.append(revisionLine);
+          while (revbox.children.length > 500) {
+            revbox.firstElementChild.remove();
+          }
           revbox.scrollTop = revbox.scrollHeight;
         }
         if (x.batch === S.st.batch) {
-          jobStatus();
+          if (x.status !== "log") {
+            jobStatus();
+          }
           if (x.handle && x.status !== "log") {
             refreshSoon();
             if (

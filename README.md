@@ -1,78 +1,138 @@
 # Instagram Site Mockup Generator
 
-Scrapes Instagram profile data, creates a business summary, and uses `agy` to
-build a static site under `WEBSITES_ROOT`.
+Scrapes Instagram profile data, extracts business information, and uses `agy` to build bespoke, responsive static websites under `WEBSITES_ROOT`.
 
 ## Setup
 
+1. **Environment and dependencies**:
+   ```bash
+   python3 -m venv .venv
+   source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+   python -m pip install -r requirements.txt
+   playwright install chromium
+   ```
+
+2. **Configuration (`.env`)**:
+   Copy `.env.example` to `.env`:
+   ```bash
+   cp .env.example .env
+   ```
+
+3. **`agy` CLI**:
+   Install and authenticate `agy` separately. It must be accessible on your system `PATH` or at `~/.local/bin/agy`. The generator invokes `agy` to design and revise site mockups.
+
+4. **Accounts and Credentials**:
+   - Accounts: Put Instagram handles or profile URLs (one per line) in [config/accounts.txt](file:///home/frost/code/python/test/config/accounts.txt).
+   - Saved Instagram session (optional): [config/auth.json](file:///home/frost/code/python/test/config/auth.json) (can be generated directly from the dashboard login tool).
+   - Google Sheets credentials (optional): Service account JSON at [config/creds.json](file:///home/frost/code/python/test/config/creds.json).
+
+## Storage Modes: Local vs. Cloud
+
+- **Local mode (default)**: When Cloudflare variables in `.env` are left blank, Studio runs fully local and offline. Lead data and revisions are saved to [dashboard.sqlite3](file:///home/frost/code/python/test/dashboard.sqlite3), and website mockups are stored under `WEBSITES_ROOT`.
+- **Cloud mode (Cloudflare D1 + R2)**: For multi-user teams, specify Cloudflare D1 and R2 variables in `.env`:
+  - `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN`, `D1_DATABASE_ID`
+  - `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_BUCKET_NAME`
+  - `TEAM_MEMBER_NAME` (optional; defaults to OS user)
+  If Cloudflare D1 is unreachable at startup, the dashboard automatically falls back to local SQLite and presents an offline status banner.
+
+## Dashboard Features
+
+Start the dashboard with `python app.py` and open `http://127.0.0.1:8765`.
+
+- **Pipeline & Stages**: Track leads across sales outreach stages: `new`, `built`, `recorded`, `sent`, `replied`, `won`, and `lost`.
+- **Photo Selection**: Filter and select which scraped Instagram post photos should be incorporated into the website mockup before building.
+- **Revisions & Undo**: Queue prompt revisions against any mockup. Each revision creates a timestamped site backup under `<handle>/backups/`. Revisions can be undone with one click, restoring the previous snapshot and syncing to R2.
+- **Walkthrough Recordings**: Record animated site walkthroughs across desktop, tablet, and mobile viewport frames using region capture. Videos can be replayed in the built-in cinema player or downloaded directly.
+- **ZIP & CSV Export**: Export individual site mockups or full lead asset folders as ZIP archives. Export lead tables to CSV with built-in protection against spreadsheet formula injection.
+- **Team Concurrency & Atomic Locking**: Leads are locked conditionally upon queueing so multiple teammates do not overwrite each other's active work. Stale locks (>15 minutes) expire automatically.
+
+## Launchers & Setup
+
+- **Desktop Launcher**: Run `python launch.py` for a dedicated desktop window launcher with system tray integration.
+- **Windows Shortcuts**: Run `launch-setup.bat` (or [launch-setup.ps1](file:///home/frost/code/python/test/launch-setup.ps1)) to generate desktop launch shortcuts pointing to your project directory.
+- **Batch Command**: On Windows, double-click `launch.bat` to launch the dashboard server.
+
+## Migration Scripts
+
+- **Migrate to Cloudflare D1**:
+  ```bash
+  python scripts/migrate_to_d1.py [path/to/dashboard.sqlite3]
+  ```
+  Exports local SQLite lead records, revisions, logs, and settings into Cloudflare D1.
+
+- **Migrate to Cloudflare R2**:
+  ```bash
+  python scripts/migrate_to_r2.py [websites_root] --update-db
+  ```
+  Uploads local site mockups and media assets to Cloudflare R2 and updates database records with private preview links.
+
+## Running Tests
+
+Execute the automated test suite with Python's built-in `unittest`:
 ```bash
-python3 -m venv .venv
-source .venv/bin/activate
-python -m pip install -r requirements.txt
-playwright install chromium
+python -m unittest discover -s scripts
+```
+Or run individual test modules:
+```bash
+python scripts/test_fixes.py
+python scripts/test_r2_private_access.py
 ```
 
-Install and authenticate `agy` separately. It must be available on `PATH` or
-installed at `~/.local/bin/agy`; the dashboard checks both locations. Put
-account handles or Instagram profile URLs, one per line, in
-`config/accounts.txt`. Optional saved browser state belongs in
-`config/auth.json`; Google Sheets credentials belong in `config/creds.json`.
-Both are ignored by git.
+## CLI Usage
 
-## Build
-
+### Build Batch
 ```bash
 python run.py [path/to/accounts.txt]
 ```
+Outputs sites to `<WEBSITES_ROOT>/YYYY-MM-DD/<handle>/site/index.html`. Set `WEBSITES_ROOT` in `.env` or settings (default: `~/websites`). Set `FORCE=1` to force rebuilds of previously built leads.
 
-The default account list is `config/accounts.txt`. By default output goes to
-`~/websites/YYYY-MM-DD/<handle>/site/`. Set `WEBSITES_ROOT` to choose another
-root. `FORCE=1 python run.py` rebuilds existing sites and removes stale files
-from the deployed site directory. A copy of the previous site is kept under
-`<handle>/backups/` before a build or revision. Google Sheets updates happen
-after a successful build and are non-fatal.
-
-Run output, including scraper and summary messages, is written to a timestamped
-session log in `logs/`; full `agy` output is also stored per account.
-
-## Local dashboard
-
-Start the local-only dashboard with `python app.py` and open
-`http://127.0.0.1:8765`. It stores leads, outreach fields, live logs, and
-revision history in `dashboard.sqlite3`. Select a batch date, paste or import
-account handles, then run builds and review sites in the embedded preview. The
-Batch screen's **Scrape only** option scrapes the accounts, extracts their
-business details, and adds or updates them in Google Sheets without building
-websites. This mode requires the configured Google Sheets credentials and
-spreadsheet. For regular builds, Google Sheets sync is optional and runs after
-a successful build. The dashboard does not bind to the network; keep the URL
-local because it can launch a Playwright login window and run local build tools.
-
-## Revise existing sites
-
-`config/REVISIONS.md` uses one section per handle:
-
+### Revise Sites via CLI
+Add revision instructions under handle headers in [config/REVISIONS.md](file:///home/frost/code/python/test/config/REVISIONS.md):
 ```markdown
 # example_handle
-
-Make the contact button more prominent.
+Make the contact button larger and fix hero text alignment.
+```
+Then run:
+```bash
+python revisions.py
 ```
 
-Run `python revisions.py`, enter the output date (`YYYY-MM-DD`), and only
-non-empty sections for configured accounts are applied. Successfully applied
-sections are cleared; failed requests remain in the file. Existing notes are
-preserved when `run.py` refreshes the list of account headings.
+## Important Notes & Security
 
-## Project layout
+- **Pakistan-Tuned Extraction**: Contact extraction in [src/profile_summary.py](file:///home/frost/code/python/test/src/profile_summary.py) includes specialized pattern recognition for Pakistani phone formats (`03xx`, `+923xx`, `00923xx`) and major Pakistani cities (Lahore, Karachi, Islamabad, Rawalpindi, Faisalabad, etc.).
+- **Local-Only Warning**: The dashboard server has **no authentication** and runs build tools with broad local permissions. **Do not bind the dashboard to `0.0.0.0` or expose it over the public internet.** It is strictly designed for local loopback use (`127.0.0.1` / `localhost`). Incoming requests with non-loopback Host headers are rejected to protect against DNS rebinding, and state-changing endpoints require custom anti-CSRF headers.
+- **Untrusted Input**: Instagram biographies, scraped profile text, and client revision instructions are untrusted inputs. Automated builds run with `--dangerously-skip-permissions` inside the local repository workspace.
+
+## Project Layout
 
 ```text
-config/                 Account list, revision requests, local credentials
-prompts/GEMINI.md       Generation instructions
-prompts/SKILL.md        Design guidance
-src/                    Dashboard, build and revision workflows, plus pipeline modules
-run.py                  Build command entrypoint
-app.py                  Dashboard command entrypoint
-revisions.py            Revision command entrypoint
-launch.py               Desktop dashboard launcher
-requirements.txt        Python dependencies
+├── assets/                     Icons and branding graphics
+├── config/                     Account lists, revision requests, local credentials
+├── logs/                       Timestamped CLI and session build logs
+├── prompts/
+│   ├── GEMINI.md               Generation instructions for agy
+│   └── SKILL.md                Craft and design guidance rules
+├── scripts/
+│   ├── migrate_to_d1.py        SQLite -> Cloudflare D1 migration script
+│   ├── migrate_to_r2.py        Local websites -> Cloudflare R2 migration script
+│   ├── test_fixes.py           Audit fixes test suite
+│   └── test_r2_private_access.py R2 private access test suite
+├── src/
+│   ├── app.py                  FastAPI local dashboard server and API endpoints
+│   ├── d1_client.py            Cloudflare D1 HTTP client with SQLite fallback
+│   ├── design.py               Visual theme and palette generation
+│   ├── logging_config.py       Structured logging configuration
+│   ├── pipeline_common.py      Shared constants, CLI helpers, process runners
+│   ├── profile_summary.py      Business bio, phone, and city extraction
+│   ├── r2_storage.py           Cloudflare R2 storage client and asset sync
+│   ├── revisions.py            Revision processing workflow
+│   ├── run.py                  Main CLI pipeline and site HTML/CSS validation
+│   └── update_sheet.py         Google Sheets sync with serial race guard
+├── web/
+│   └── index.html              Single-page studio dashboard interface
+├── app.py                      Dashboard compatibility entrypoint
+├── launch.py                   Desktop dashboard launcher
+├── launch-setup.ps1            PowerShell desktop shortcut generator
+├── requirements.txt            Python dependencies
+└── run.py                      CLI build command entrypoint
 ```

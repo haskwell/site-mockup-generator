@@ -188,6 +188,7 @@ def main() -> int:
                                 "UPDATE leads SET site_path=?, updated_at=CURRENT_TIMESTAMP WHERE batch=? AND handle=?",
                                 (preview_url, batch_name, handle),
                             )
+                            db.commit()
                         except Exception as exc:
                             print(f"    (DB update skipped for @{handle}: {exc})")
             else:

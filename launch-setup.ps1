@@ -1,4 +1,4 @@
-$ProjectDir = "$HOME\Desktop\projects\site-mockup-generator"
+$ProjectDir = $PSScriptRoot
 $Desktop = [Environment]::GetFolderPath("Desktop")
 $ws = New-Object -ComObject WScript.Shell
 $s = $ws.CreateShortcut("$Desktop\Launch Site Mockup.lnk")
