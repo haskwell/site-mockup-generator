@@ -1057,6 +1057,28 @@
         gap: 3px;
         vertical-align: middle;
       }
+      .demo-badge {
+        font-size: 10px;
+        font-weight: 700;
+        padding: 2px 7px;
+        border-radius: 8px;
+        background: rgba(239, 68, 68, 0.12);
+        color: #f87171;
+        border: 1px solid rgba(239, 68, 68, 0.28);
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        cursor: pointer;
+        line-height: 1.3;
+        vertical-align: middle;
+        transition: all 0.15s ease;
+      }
+      .demo-badge:hover {
+        background: rgba(239, 68, 68, 0.24);
+        border-color: rgba(239, 68, 68, 0.5);
+        color: #fca5a5;
+        transform: translateY(-1px);
+      }
       .noside .side {
         display: none;
       }
@@ -1403,6 +1425,182 @@
         animation: fade 0.2s;
       }
 
+      /* cinema video player modal */
+      .video-modal {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.85);
+        backdrop-filter: blur(8px);
+        -webkit-backdrop-filter: blur(8px);
+        z-index: 100;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        animation: vFadeIn 0.2s ease;
+      }
+      @keyframes vFadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      .video-backdrop {
+        position: absolute;
+        inset: 0;
+        cursor: pointer;
+      }
+      .video-dialog {
+        position: relative;
+        background: var(--bg2, #141720);
+        border: 1px solid var(--line2, rgba(255, 255, 255, 0.14));
+        border-radius: 16px;
+        box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7);
+        width: min(960px, 94vw);
+        max-height: 92vh;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        z-index: 1;
+        animation: vScaleIn 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+      }
+      @keyframes vScaleIn {
+        from { transform: scale(0.96); opacity: 0; }
+        to { transform: scale(1); opacity: 1; }
+      }
+      .video-header {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 18px;
+        border-bottom: 1px solid var(--line, rgba(255, 255, 255, 0.1));
+        background: var(--panel, #181b26);
+        flex-shrink: 0;
+      }
+      .video-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 650;
+        font-size: 15px;
+      }
+      .video-pill {
+        font-size: 10px;
+        font-weight: 800;
+        letter-spacing: 0.5px;
+        padding: 2px 6px;
+        border-radius: 4px;
+        background: #ef4444;
+        color: #fff;
+        text-transform: uppercase;
+      }
+      .video-tabs {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-left: 12px;
+      }
+      .video-tab {
+        font-size: 12px;
+        font-weight: 600;
+        padding: 4px 10px;
+        border-radius: 6px;
+        background: var(--chip, rgba(255, 255, 255, 0.06));
+        color: var(--muted, #94a3b8);
+        border: 1px solid var(--line, rgba(255, 255, 255, 0.08));
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        transition: all 0.15s ease;
+      }
+      .video-tab:hover {
+        background: var(--line2, rgba(255, 255, 255, 0.12));
+        color: var(--text, #f8fafc);
+      }
+      .video-tab.active {
+        background: var(--accent, #6366f1);
+        color: #fff;
+        border-color: transparent;
+        box-shadow: 0 2px 8px rgba(99, 102, 241, 0.35);
+      }
+      .video-viewport {
+        background: #000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        position: relative;
+        min-height: 280px;
+        max-height: calc(85vh - 120px);
+        overflow: hidden;
+      }
+      #v-player {
+        width: 100%;
+        height: auto;
+        max-height: calc(85vh - 120px);
+        display: block;
+        background: #000;
+        outline: none;
+        object-fit: contain;
+      }
+      .video-footer {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 18px;
+        border-top: 1px solid var(--line, rgba(255, 255, 255, 0.1));
+        background: var(--panel, #181b26);
+        flex-shrink: 0;
+        font-size: 12px;
+      }
+      .del-confirm-wrap {
+        display: inline-flex;
+        align-items: center;
+        position: relative;
+      }
+      .del-confirm-box {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        background: rgba(239, 68, 68, 0.14);
+        border: 1px solid rgba(239, 68, 68, 0.38);
+        border-radius: 8px;
+        padding: 2px 4px 2px 8px;
+        animation: delSlide 0.16s ease-out;
+      }
+      @keyframes delSlide {
+        from { opacity: 0; transform: scale(0.92); }
+        to { opacity: 1; transform: scale(1); }
+      }
+      .del-confirm-msg {
+        font-size: 11px;
+        font-weight: 600;
+        color: #fca5a5;
+        white-space: nowrap;
+      }
+      .del-confirm-box button.solid {
+        background: #ef4444;
+        color: #fff;
+        font-size: 11px;
+        font-weight: 700;
+        padding: 3px 8px;
+        border-radius: 6px;
+        border: none;
+        cursor: pointer;
+        transition: background 0.15s ease;
+      }
+      .del-confirm-box button.solid:hover {
+        background: #dc2626;
+      }
+      .del-confirm-box button.ghost {
+        padding: 3px 6px;
+        font-size: 11px;
+        border: none;
+        cursor: pointer;
+        color: var(--muted);
+      }
+      .del-confirm-box button.ghost:hover {
+        color: var(--text);
+      }
+
       @media (max-width: 900px) {
         .app {
           grid-template-columns: 1fr;
@@ -1742,6 +1940,7 @@
         <span class="saved" id="saved">Saved</span>
         <button class="primary" id="nextbtn" data-act="next"></button>
         <button data-act="present" id="presentbtn"></button>
+        <button data-act="playRecording" id="playrecbtn" class="sm ghost" hidden></button>
         <div class="menu">
           <button
             class="iconbtn"
@@ -1759,6 +1958,7 @@
             <button data-act="zipSite" id="m-zip"></button>
             <button data-act="zipFull" id="m-zip-full"></button>
             <button data-act="downloadRec" id="m-rec-dl" hidden></button>
+            <button class="danger" data-act="deleteRec" id="m-rec-del" hidden></button>
             <button class="danger" data-act="deleteOne" id="m-del"></button>
           </div>
         </div>
@@ -1806,6 +2006,7 @@
               <iframe
                 id="preview"
                 title="Generated site preview"
+                sandbox="allow-scripts allow-forms"
                 hidden
               ></iframe>
               <div class="device-loader" id="deviceloader" hidden>
@@ -1954,6 +2155,36 @@
           <div class="muted" id="dlgbody"></div>
         </div>
         <div class="actions" id="dlgactions"></div>
+      </div>
+    </div>
+    <div class="video-modal" id="videomodal" hidden>
+      <div class="video-backdrop" data-act="closeVideo"></div>
+      <div class="video-dialog">
+        <div class="video-header">
+          <div class="video-title">
+            <span class="video-pill">REC</span>
+            <span id="v-title">@handle</span>
+          </div>
+          <div class="video-tabs" id="v-tabs"></div>
+          <div class="spacer"></div>
+          <button class="iconbtn sm ghost" data-act="closeVideo" aria-label="Close">✕</button>
+        </div>
+        <div class="video-viewport">
+          <video id="v-player" controls playsinline preload="metadata"></video>
+        </div>
+        <div class="video-footer">
+          <span class="muted" id="v-meta">Recorded video demo</span>
+          <span class="muted" style="margin-left: auto; font-size: 11px; opacity: 0.75">Space: Play/Pause · ←/→: 5s · F: Fullscreen · Esc: Close</span>
+          <div class="del-confirm-wrap" id="v-del-wrap">
+            <button class="sm ghost danger" data-act="delAsk" id="v-del-btn">🗑️ Delete</button>
+            <div class="del-confirm-box" id="v-del-confirm" hidden>
+              <span class="del-confirm-msg">Delete <b id="v-del-target"></b>?</span>
+              <button class="solid" data-act="delConfirm" id="v-del-yes">Confirm</button>
+              <button class="ghost" data-act="delCancel" id="v-del-no">✕</button>
+            </div>
+          </div>
+          <button class="sm ghost" data-act="downloadVideo" id="v-dl-btn">📥 Download</button>
+        </div>
       </div>
     </div>
     <div class="toasts" id="toasts" aria-live="polite"></div>
@@ -2259,13 +2490,15 @@
           l.status === "failed"
             ? `<div class="cardfail">${ic("x", 14)}<span>Build failed</span><button class="sm" data-act="retry" data-h="${h}">Retry</button></div>`
             : "";
-        const isCloud = l.site_path && l.site_path.startsWith("http");
+        const isCloud = l.site_path && (l.site_path.startsWith("http") || l.site_path.startsWith("/preview/"));
         const cloudBadge = isCloud ? `<span class="cloud-badge" title="Hosted in Cloudflare R2">☁️ R2</span>` : "";
+        const hasRec = !!(l.has_recording || l.stage === "recorded" || (l.recordings && Object.keys(l.recordings).length));
+        const recBadge = hasRec ? `<button class="demo-badge sm" data-act="playCardRec" data-h="${h}" title="Watch video demo">▶ Demo</button>` : "";
         return `<div class="card ${picked ? "picked" : ""}" draggable="true" data-act="open" data-h="${h}" tabindex="0">
     <div class="row">${S.selmode ? `<input type="checkbox" ${picked ? "checked" : ""} data-act="check" data-h="${h}" aria-label="Select ${h}" />` : ""}
     ${avatarHtml(l)}
     <div style="min-width:0"><div class="nm">${esc(l.name || "@" + l.handle)}</div><div class="meta">@${h}${l.area ? " · " + esc(l.area) : ""}</div></div></div>
-    <div class="foot"><span class="status ${esc(l.status)}">${esc(l.status || "queued")}</span>${cloudBadge}<span class="spacer"></span>${l.phone ? esc(l.phone) : ""}</div>${fail}</div>`;
+    <div class="foot"><span class="status ${esc(l.status)}">${esc(l.status || "queued")}</span>${cloudBadge}${recBadge}<span class="spacer"></span>${l.phone ? esc(l.phone) : ""}</div>${fail}</div>`;
       }
       function renderPipeline() {
         const rows = filtered();
@@ -2306,7 +2539,7 @@
               rows
                 .map(
                   (l) =>
-                    `<tr data-act="open" data-h="${esc(l.handle)}">${S.selmode ? `<td><input type="checkbox" ${S.checked.has(l.handle) ? "checked" : ""} data-act="check" data-h="${esc(l.handle)}"></td>` : ""}<td><div style="display:flex;gap:10px;align-items:center">${avatarHtml(l,"width:32px;height:32px;font-size:13px;background:hsl("+hue(l.handle)+" 45% 40%)")}<div><div style="font-weight:650">${esc(l.name || "@" + l.handle)}</div><div class="muted" style="font-size:12px">@${esc(l.handle)}</div></div></div></td><td><span class="status ${esc(l.status)}">${esc(l.status || "queued")}</span> ${l.site_path && l.site_path.startsWith("http") ? '<span class="cloud-badge">☁️ R2</span>' : ''}</td><td>${esc(stageOf(l))}</td><td>${esc(l.area || "—")}</td><td>${esc(l.phone || "—")}</td></tr>`,
+                    `<tr data-act="open" data-h="${esc(l.handle)}">${S.selmode ? `<td><input type="checkbox" ${S.checked.has(l.handle) ? "checked" : ""} data-act="check" data-h="${esc(l.handle)}"></td>` : ""}<td><div style="display:flex;gap:10px;align-items:center">${avatarHtml(l,"width:32px;height:32px;font-size:13px;background:hsl("+hue(l.handle)+" 45% 40%)")}<div><div style="font-weight:650">${esc(l.name || "@" + l.handle)}</div><div class="muted" style="font-size:12px">@${esc(l.handle)}</div></div></div></td><td><span class="status ${esc(l.status)}">${esc(l.status || "queued")}</span> ${l.site_path && (l.site_path.startsWith("http") || l.site_path.startsWith("/preview/")) ? '<span class="cloud-badge">☁️ R2</span>' : ''} ${l.has_recording || l.stage === 'recorded' ? `<button class="demo-badge sm" data-act="playCardRec" data-h="${esc(l.handle)}" title="Watch video demo">▶ Demo</button>` : ''}</td><td>${esc(stageOf(l))}</td><td>${esc(l.area || "—")}</td><td>${esc(l.phone || "—")}</td></tr>`,
                 )
                 .join("") +
               `</tbody></table>`
@@ -2394,6 +2627,7 @@
         const ldr = $("#deviceloader");
         if (ldr) ldr.hidden = true;
         $("#smenu").hidden = true;
+        if ($("#playrecbtn")) $("#playrecbtn").hidden = true;
         setSyncIndicator(null);
         refresh(false);
       }
@@ -2401,6 +2635,7 @@
         $("#ic-back").innerHTML = ic("back");
         $("#ic-more").innerHTML = ic("more");
         $("#presentbtn").innerHTML = lab("expand", "Present");
+        $("#playrecbtn").innerHTML = lab("play", "Watch Demo");
         $("#d-phone").innerHTML = ic("phone");
         $("#d-tablet").innerHTML = ic("tablet");
         $("#d-desktop").innerHTML = ic("monitor");
@@ -2417,6 +2652,7 @@
         $("#m-zip").innerHTML = lab("download", "Download Site ZIP");
         $("#m-zip-full").innerHTML = lab("download", "Download Full Folder ZIP");
         $("#m-rec-dl").innerHTML = lab("play", "Download Recording");
+        $("#m-rec-del").innerHTML = lab("trash", "Delete Recording…");
         $("#m-del").innerHTML = lab("trash", "Delete lead…");
         $("#p-exit").innerHTML = lab("back", "Exit");
         $("#p-full").innerHTML = lab("expand", "Fullscreen");
@@ -2447,7 +2683,13 @@
               if (ldr) {
                 ldr.classList.remove("fade-out");
                 ldr.hidden = false;
-                $("#loaderstatus").textContent = "Rendering website preview…";
+                if (d.cloud_newer) {
+                  $("#loaderstatus").textContent = "☁️ Pulling latest revision from R2…";
+                  $("#loadersub").textContent = "Syncing updated site files to local disk";
+                } else {
+                  $("#loaderstatus").textContent = "Rendering website preview…";
+                  $("#loadersub").textContent = "";
+                }
               }
               f.onload = () => {
                 if (h === S.sel) {
@@ -2456,6 +2698,9 @@
                     setTimeout(() => { if (h === S.sel) ldr.hidden = true; }, 250);
                   }
                   f.hidden = false;
+                  if (d.cloud_newer) {
+                    toast("☁️ Synced latest revision from Cloudflare R2!");
+                  }
                 }
               };
               f.onerror = () => {
@@ -2488,13 +2733,21 @@
           }
           updateContactMenu();
           const recBtn = $("#m-rec-dl");
+          const delRecBtn = $("#m-rec-del");
+          const playRecBtn = $("#playrecbtn");
+          const hasRec = d.recordings && Object.keys(d.recordings).length > 0;
           if (recBtn) {
-            const hasRec = d.recordings && Object.keys(d.recordings).length > 0;
             recBtn.hidden = !hasRec;
             if (hasRec) {
               const recDevs = Object.keys(d.recordings).join("/");
               recBtn.innerHTML = lab("play", `Download Recording (${recDevs})`);
             }
+          }
+          if (delRecBtn) {
+            delRecBtn.hidden = !hasRec;
+          }
+          if (playRecBtn) {
+            playRecBtn.hidden = !hasRec;
           }
           $("#f-qa").value = l.qa || "";
           $("#biotext").textContent =
@@ -2996,6 +3249,152 @@
         if (P.rec && P.rec.state === "recording") P.rec.stop();
       }
 
+      /* ---------- cinema video player ---------- */
+      const V = {
+        handle: null,
+        screen: "desktop",
+        recordings: {},
+      };
+      async function openVideoPlayer(handle, preferredDevice) {
+        if (!handle) return;
+        V.handle = handle;
+        $("#v-title").textContent = `@${handle}`;
+        $("#videomodal").hidden = false;
+        document.body.style.overflow = "hidden";
+
+        try {
+          if (S.ld && S.ld.lead && S.ld.lead.handle === handle && S.ld.recordings) {
+            V.recordings = S.ld.recordings;
+          } else {
+            const data = await api(leadUrl(handle) + bq());
+            V.recordings = data.recordings || {};
+          }
+        } catch {
+          V.recordings = {};
+        }
+
+        const screens = ["desktop", "tablet", "phone"].filter(
+          (s) => V.recordings[s],
+        );
+        const availableScreens = screens.length ? screens : ["desktop"];
+        if (preferredDevice && availableScreens.includes(preferredDevice)) {
+          V.screen = preferredDevice;
+        } else if (availableScreens.includes("desktop")) {
+          V.screen = "desktop";
+        } else {
+          V.screen = availableScreens[0];
+        }
+
+        const tabs = $("#v-tabs");
+        tabs.innerHTML =
+          availableScreens.length > 1
+            ? availableScreens
+                .map(
+                  (s) =>
+                    `<button class="video-tab ${s === V.screen ? "active" : ""}" data-act="switchVideoScreen" data-s="${s}">${ic(s === "desktop" ? "monitor" : s, 13)} <span>${s.charAt(0).toUpperCase() + s.slice(1)}</span></button>`,
+                )
+                .join("")
+            : "";
+
+        loadVideoScreen(V.screen);
+      }
+      function resetDelConfirm() {
+        const btn = $("#v-del-btn");
+        const box = $("#v-del-confirm");
+        if (btn) btn.hidden = false;
+        if (box) box.hidden = true;
+      }
+      function askDelConfirm() {
+        const btn = $("#v-del-btn");
+        const box = $("#v-del-confirm");
+        const targetEl = $("#v-del-target");
+        if (!btn || !box) return;
+        const devName = V.screen.charAt(0).toUpperCase() + V.screen.slice(1);
+        if (targetEl) targetEl.textContent = devName;
+        btn.hidden = true;
+        box.hidden = false;
+      }
+      function loadVideoScreen(screen) {
+        V.screen = screen;
+        resetDelConfirm();
+        $$("#v-tabs .video-tab").forEach((b) =>
+          b.classList.toggle("active", b.dataset.s === screen),
+        );
+        const name = screen.charAt(0).toUpperCase() + screen.slice(1);
+        $("#v-meta").textContent = `${name} demo recording`;
+        const player = $("#v-player");
+        player.src = `${leadUrl(V.handle)}/recording/${screen}?${bq().slice(1)}`;
+        player.play().catch(() => {});
+      }
+      function switchVideoScreen(screen) {
+        if (V.screen === screen) return;
+        loadVideoScreen(screen);
+      }
+      function closeVideoPlayer() {
+        resetDelConfirm();
+        const player = $("#v-player");
+        player.pause();
+        player.removeAttribute("src");
+        player.load();
+        $("#videomodal").hidden = true;
+        if ($("#studio").hidden && $("#present").hidden) {
+          document.body.style.overflow = "";
+        }
+      }
+      function downloadCurrentVideo() {
+        if (!V.handle) return;
+        const a = document.createElement("a");
+        a.href = `${leadUrl(V.handle)}/recording/${V.screen}?download=true&${bq().slice(1)}`;
+        a.click();
+      }
+      async function executeDeleteCurrentVideo() {
+        if (!V.handle || !V.screen) return;
+        const screenToDelete = V.screen;
+        const devName = screenToDelete.charAt(0).toUpperCase() + screenToDelete.slice(1);
+        resetDelConfirm();
+        setSyncIndicator(`Deleting ${devName} recording…`);
+        try {
+          const res = await api(
+            `${leadUrl(V.handle)}/recording/${screenToDelete}?${bq().slice(1)}`,
+            { method: "DELETE" },
+          );
+          toast(`${devName} recording deleted`);
+
+          V.recordings = res.remaining || {};
+          const remainingScreens = ["desktop", "tablet", "phone"].filter(
+            (s) => V.recordings[s],
+          );
+
+          if (remainingScreens.length > 0) {
+            const nextScreen = remainingScreens.includes("desktop")
+              ? "desktop"
+              : remainingScreens[0];
+            const tabs = $("#v-tabs");
+            tabs.innerHTML =
+              remainingScreens.length > 1
+                ? remainingScreens
+                    .map(
+                      (s) =>
+                        `<button class="video-tab ${s === nextScreen ? "active" : ""}" data-act="switchVideoScreen" data-s="${s}">${ic(s === "desktop" ? "monitor" : s, 13)} <span>${s.charAt(0).toUpperCase() + s.slice(1)}</span></button>`,
+                    )
+                    .join("")
+                : "";
+            loadVideoScreen(nextScreen);
+          } else {
+            closeVideoPlayer();
+          }
+
+          if (S.sel === V.handle) {
+            await loadLead(V.handle, true);
+          }
+          await refresh(false);
+        } catch (e) {
+          toast(`Failed to delete recording: ${e.message}`);
+        } finally {
+          setSyncIndicator(null);
+        }
+      }
+
       /* ---------- command palette ---------- */
       let palItems = [],
         palIdx = 0;
@@ -3302,6 +3701,58 @@
           a.click();
           setTimeout(() => setSyncIndicator(null), 2500);
         },
+        deleteRec: async () => {
+          $("#smenu").hidden = true;
+          if (!S.sel || !S.ld) return;
+          const recs = S.ld.recordings || {};
+          const devKeys = Object.keys(recs);
+          if (!devKeys.length) return;
+
+          let targetScreen = "all";
+          if (devKeys.length === 1) {
+            const s = devKeys[0];
+            const name = s.charAt(0).toUpperCase() + s.slice(1);
+            const ok = await confirmDlg(
+              "Delete Recording",
+              `Are you sure you want to delete the ${name} recording for @${S.sel}?`,
+              "Delete",
+            );
+            if (!ok) return;
+            targetScreen = s;
+          } else {
+            const options = [
+              { label: "Cancel", value: null },
+              ...devKeys.map((k) => ({
+                label: `${k.charAt(0).toUpperCase() + k.slice(1)} only`,
+                value: k,
+                cls: "danger",
+              })),
+              { label: "All recordings", value: "all", cls: "danger" },
+            ];
+            const choice = await dlg(
+              "Delete Recording",
+              `Choose which recording to delete for @${S.sel}:`,
+              options,
+            );
+            if (!choice) return;
+            targetScreen = choice;
+          }
+
+          setSyncIndicator(`Deleting recording for @${S.sel}…`);
+          try {
+            await api(
+              `${leadUrl(S.sel)}/recording/${targetScreen}?${bq().slice(1)}`,
+              { method: "DELETE" },
+            );
+            toast("Recording deleted");
+            await loadLead(S.sel, true);
+            await refresh(false);
+          } catch (e) {
+            toast(`Failed to delete recording: ${e.message}`);
+          } finally {
+            setSyncIndicator(null);
+          }
+        },
         device: (el) => {
           const d = el.dataset.d;
           S.device = d;
@@ -3318,13 +3769,16 @@
             if (ldr) {
               ldr.classList.remove("fade-out");
               ldr.hidden = false;
-              $("#loaderstatus").textContent = "Reloading mockup…";
+              $("#loaderstatus").textContent = "☁️ Checking R2 for revisions…";
+              $("#loadersub").textContent = "Syncing latest website files";
               f.onload = () => {
                 ldr.classList.add("fade-out");
-                setTimeout(() => { ldr.hidden = true; }, 250);
+                setTimeout(() => { if (S.sel) ldr.hidden = true; }, 250);
               };
             }
+            setSyncIndicator(`Checking @${S.sel} on R2…`);
             f.src = previewUrl(S.sel);
+            setTimeout(() => setSyncIndicator(null), 1800);
           }
         },
         toggleSide: () => {
@@ -3420,6 +3874,37 @@
             toast(e.message);
           }
         },
+        playRecording: () => {
+          if (S.sel) openVideoPlayer(S.sel, S.device);
+        },
+        playCardRec: (el, e) => {
+          if (e) {
+            e.stopPropagation();
+            e.preventDefault();
+          }
+          openVideoPlayer(el.dataset.h);
+        },
+        switchVideoScreen: (el) => {
+          switchVideoScreen(el.dataset.s);
+        },
+        closeVideo: () => {
+          closeVideoPlayer();
+        },
+        delAsk: (el, e) => {
+          if (e) e.stopPropagation();
+          askDelConfirm();
+        },
+        delConfirm: (el, e) => {
+          if (e) e.stopPropagation();
+          executeDeleteCurrentVideo();
+        },
+        delCancel: (el, e) => {
+          if (e) e.stopPropagation();
+          resetDelConfirm();
+        },
+        downloadVideo: () => {
+          downloadCurrentVideo();
+        },
       };
       function closeStudioIfOpen() {
         if (!$("#studio").hidden) closeStudio();
@@ -3463,6 +3948,7 @@
       /* ---------- events ---------- */
       document.addEventListener("click", (e) => {
         if (!e.target.closest(".menu")) $("#smenu").hidden = true;
+        if (!e.target.closest("#v-del-wrap")) resetDelConfirm();
         const el = e.target.closest("[data-act]");
         if (el && A[el.dataset.act]) {
           if (el.type === "checkbox") {
@@ -3501,6 +3987,51 @@
         }
         if (!$("#dlgov").hidden) {
           if (e.key === "Escape") $("#dlgov").hidden = true;
+          return;
+        }
+        if (!$("#videomodal").hidden) {
+          if (e.key === "Escape") {
+            e.preventDefault();
+            closeVideoPlayer();
+            return;
+          }
+          if (e.key === " " || e.code === "Space") {
+            if (!typing) {
+              e.preventDefault();
+              const vp = $("#v-player");
+              if (vp.paused) vp.play();
+              else vp.pause();
+              return;
+            }
+          }
+          if (e.key === "ArrowLeft") {
+            e.preventDefault();
+            const vp = $("#v-player");
+            vp.currentTime = Math.max(0, vp.currentTime - 5);
+            return;
+          }
+          if (e.key === "ArrowRight") {
+            e.preventDefault();
+            const vp = $("#v-player");
+            vp.currentTime = Math.min(vp.duration || 0, vp.currentTime + 5);
+            return;
+          }
+          if (e.key.toLowerCase() === "f" && !typing) {
+            e.preventDefault();
+            const vp = $("#v-player");
+            if (document.fullscreenElement) {
+              document.exitFullscreen().catch(() => {});
+            } else if (vp.requestFullscreen) {
+              vp.requestFullscreen().catch(() => {});
+            }
+            return;
+          }
+          if (e.key.toLowerCase() === "m" && !typing) {
+            e.preventDefault();
+            const vp = $("#v-player");
+            vp.muted = !vp.muted;
+            return;
+          }
           return;
         }
         if (e.key === "Escape") {
@@ -3544,10 +4075,26 @@
         drawPalette();
       });
       $("#q").addEventListener("input", render);
-      $("#batch").addEventListener("change", () => {
+      $("#batch").addEventListener("change", async () => {
+        const b = $("#batch").value;
         S.sel = "";
         S.checked.clear();
-        refresh(false);
+        setSyncIndicator(`☁️ Loading batch ${b} from R2…`);
+        const root = $("#pipeline");
+        if (root && S.view === "pipeline") {
+          root.innerHTML = `<div class="empty" style="padding: 70px 16px;">
+            <div class="loader-spinner" style="margin: 0 auto 16px;"></div>
+            <h3 style="font-size: 16px; margin-bottom: 6px; color: var(--text);">☁️ Connecting to Cloudflare R2…</h3>
+            <div class="muted" style="font-size: 13px;">Pulling leads and mockups for ${esc(b)}</div>
+          </div>`;
+        }
+        $("#batch").disabled = true;
+        try {
+          await refresh(false);
+        } finally {
+          $("#batch").disabled = false;
+          setSyncIndicator(null);
+        }
       });
       $("#importfile").addEventListener("change", async (e) => {
         const f = e.target.files[0];

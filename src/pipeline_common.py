@@ -47,17 +47,31 @@ def kill_process_tree(proc: subprocess.Popen) -> None:
             except Exception:
                 pass
     else:
+        killed_group = False
         try:
-            os.killpg(proc.pid, signal.SIGTERM)
+            pgid = os.getpgid(proc.pid)
+            if pgid == proc.pid:
+                os.killpg(pgid, signal.SIGTERM)
+                killed_group = True
+            else:
+                proc.terminate()
             proc.wait(timeout=5)
-        except (subprocess.TimeoutExpired, ProcessLookupError):
+        except (subprocess.TimeoutExpired, ProcessLookupError, PermissionError):
             try:
-                os.killpg(proc.pid, signal.SIGKILL)
-            except ProcessLookupError:
+                if killed_group:
+                    os.killpg(proc.pid, signal.SIGKILL)
+                else:
+                    proc.kill()
+            except Exception:
                 pass
         except Exception:
             try:
-                os.killpg(proc.pid, signal.SIGKILL)
+                proc.kill()
+            except Exception:
+                pass
+        if proc.poll() is None:
+            try:
+                proc.kill()
             except Exception:
                 pass
 

@@ -90,6 +90,8 @@ def main() -> int:
         server_kwargs["creationflags"] = (
             subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
         )
+    else:
+        server_kwargs["start_new_session"] = True
     server = subprocess.Popen([python, str(REPO / "app.py")], **server_kwargs)
 
     try:

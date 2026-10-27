@@ -10,7 +10,7 @@ import shutil
 import sys
 from pathlib import Path
 from src.pipeline_common import Logger, MODEL, MIN_SIZE, TIMEOUT_SECONDS, account_handle, find_agy, run_streaming
-from src.r2_storage import download_site, get_lead_text, is_r2_configured, upload_file, upload_site
+from src.r2_storage import download_site, get_lead_text, get_r2_mtime, is_r2_configured, upload_file, upload_site
 
 REPO = Path(__file__).resolve().parents[1]
 
@@ -73,19 +73,35 @@ def revise(user: str, revision: str, root: Path, accounts: set[str], logger: Log
         return 1
     account = root / user
     site_index = account / "site/index.html"
-    if not site_index.is_file() and is_r2_configured():
-        logger.log("INFO", f"{user}: pulling site files from Cloudflare R2 for revision...")
-        download_site(root.name, user, account / "site")
+    if is_r2_configured():
+        r2_mtime = get_r2_mtime(f"{root.name}/{user}/site/index.html")
+        if not site_index.is_file() or (r2_mtime is not None and r2_mtime > site_index.stat().st_mtime):
+            logger.log("INFO", f"{user}: pulling latest site files from Cloudflare R2 for revision...")
+            download_site(root.name, user, account / "site")
+            if r2_mtime is not None and site_index.is_file():
+                try:
+                    os.utime(site_index, (r2_mtime, r2_mtime))
+                except Exception:
+                    pass
     if not site_index.is_file():
         logger.log("ERROR", f"{user}: existing site not found at {site_index}")
         return 1
     design_file = account / "DESIGN.md"
-    if not design_file.is_file() and is_r2_configured():
-        cloud_design = get_lead_text(root.name, user, "DESIGN.md")
-        if cloud_design:
-            account.mkdir(parents=True, exist_ok=True)
-            design_file.write_text(cloud_design, encoding="utf-8")
-            logger.log("INFO", f"{user}: fetched DESIGN.md from Cloudflare R2")
+    if not design_file.is_file() and (account / "site/DESIGN.md").is_file():
+        design_file = account / "site/DESIGN.md"
+    if is_r2_configured():
+        r2_design_mtime = get_r2_mtime(f"{root.name}/{user}/site/DESIGN.md") or get_r2_mtime(f"{root.name}/{user}/DESIGN.md")
+        if not design_file.is_file() or (r2_design_mtime is not None and r2_design_mtime > design_file.stat().st_mtime):
+            cloud_design = get_lead_text(root.name, user, "DESIGN.md")
+            if cloud_design:
+                account.mkdir(parents=True, exist_ok=True)
+                design_file.write_text(cloud_design, encoding="utf-8")
+                if r2_design_mtime is not None:
+                    try:
+                        os.utime(design_file, (r2_design_mtime, r2_design_mtime))
+                    except Exception:
+                        pass
+                logger.log("INFO", f"{user}: fetched latest DESIGN.md from Cloudflare R2")
     if not design_file.is_file():
         try:
             design_file.write_text(f"# Design Direction for {user}\nClean, modern, responsive website.\n", encoding="utf-8")

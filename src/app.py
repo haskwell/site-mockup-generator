@@ -7,20 +7,25 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 from fastapi import FastAPI, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
+from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
 from pydantic import BaseModel, Field
 from src.pipeline_common import MODEL, TIMEOUT_SECONDS, account_handle, find_agy, get_venv_python, run_streaming
 from src.run import process_account, validate_site
 from src.d1_client import get_current_user, get_db_connection, is_d1_configured
 from src.r2_storage import (
     delete_lead_assets,
+    delete_recording,
     download_lead_folder,
     download_recording,
     download_site,
     get_lead_json,
     get_lead_text,
+    get_presigned_recording_url,
     get_preview_url,
+    get_r2_mtime,
+    get_r2_object,
     get_recording_url,
+    has_r2_site,
     is_r2_configured,
     list_recordings,
     upload_file,
@@ -69,6 +74,10 @@ def init_db():
         try:d.execute("ALTER TABLE leads ADD COLUMN locked_by TEXT DEFAULT ''")
         except Exception:pass
         try:d.execute("ALTER TABLE leads ADD COLUMN locked_at TEXT DEFAULT ''")
+        except Exception:pass
+        try:d.execute("ALTER TABLE leads ADD COLUMN has_recording INTEGER DEFAULT 0")
+        except Exception:pass
+        try:d.execute("UPDATE leads SET site_path = '/preview/' || batch || '/' || handle || '/index.html' WHERE site_path LIKE 'http%'")
         except Exception:pass
         for k,v in DEFAULTS.items(): d.execute("INSERT OR IGNORE INTO settings VALUES(?,?)",(k,json.dumps(v)))
 
@@ -200,6 +209,20 @@ def state(batch:str|None=None):
                 d.execute("INSERT OR IGNORE INTO leads(batch,handle,name,phone,area,followers,status,site_path,qa) VALUES(?,?,?,?,? ,?,'done',?,'available')",(batch,handle,name,phone,area,followers,str(site)))
     with connect() as d:
         leads=[dict(r) for r in d.execute("SELECT * FROM leads WHERE batch=? ORDER BY updated_at DESC,handle",(batch,))]
+    for l in leads:
+        has_rec = bool(l.get("has_recording"))
+        if not has_rec:
+            if l.get("stage") == "recorded":
+                has_rec = True
+            else:
+                h = l.get("handle") or ""
+                rec_dir = root / h / "recordings"
+                if rec_dir.is_dir():
+                    try:
+                        has_rec = any(f.suffix.lower() in {".webm", ".mp4"} for f in rec_dir.iterdir() if f.is_file())
+                    except OSError:
+                        pass
+        l["has_recording"] = 1 if has_rec else 0
     a=REPO/"config/accounts.txt"; auth=REPO/"config/auth.json"
     return {"batch":batch,"batches":batches,"settings":conf,"leads":leads,"accounts":a.read_text(encoding="utf-8") if a.exists() else "","auth_exists":auth.exists(),"auth_mtime":dt.datetime.fromtimestamp(auth.stat().st_mtime).isoformat(timespec="minutes") if auth.exists() else ""}
 
@@ -308,9 +331,11 @@ def run_worker(handles,batch,force,rescrape,scrape_only,jid):
                 r=json.loads(summ.read_text(encoding="utf-8"))[0];name=r.get("name") or name;area=r.get("area","");phone=r.get("phone","")
             except Exception:pass
             site_index=root/current/"site"/"index.html"
-            preview_url=get_preview_url(batch,current,"index.html")
+            is_valid_local=site_index.is_file() and not validate_site(site_index.parent)
+            has_remote=has_r2_site(batch,current) if is_r2_configured() else False
+            preview_url=get_preview_url(batch,current,"index.html") if (is_valid_local and is_r2_configured()) or has_remote else None
             site_path=preview_url or (str(site_index) if site_index.is_file() else "")
-            qa="passed" if (site_index.is_file() and not validate_site(site_index.parent)) or preview_url else "pending"
+            qa="passed" if (is_valid_local or has_remote) else "pending"
             with connect() as d:d.execute("UPDATE leads SET name=CASE WHEN name='' THEN ? ELSE name END,phone=CASE WHEN phone='' THEN ? ELSE phone END,area=CASE WHEN area='' THEN ? ELSE area END,followers=?,site_path=?,qa=?,locked_by='',locked_at='',updated_at=CURRENT_TIMESTAMP WHERE batch=? AND handle=?",(name,phone,area,followers,site_path,qa,batch,current))
             return "scraped" if rc==0 and scrape_only else "skipped" if rc==2 else "built" if rc==0 else "failed"
         except Exception as e:
@@ -367,8 +392,19 @@ def lead(handle:str,batch:str|None=None):
     except Exception:pass
     try:summary=json.loads((data/"business_data.json").read_text(encoding="utf-8"))
     except Exception:pass
-    design=account/"DESIGN.md"
-    design_content=design.read_text(encoding="utf-8") if design.exists() else None
+    design_candidates=[account/"site"/"DESIGN.md",account/"DESIGN.md",account/"site"/"design.md",account/"design.md"]
+    design_content=None
+    for cand in design_candidates:
+        if cand.is_file():
+            try:
+                design_content=cand.read_text(encoding="utf-8")
+                break
+            except Exception:pass
+    if is_r2_configured():
+        r2_dmtime = get_r2_mtime(f"{batch}/{handle}/site/DESIGN.md") or get_r2_mtime(f"{batch}/{handle}/DESIGN.md")
+        local_cand = next((c for c in design_candidates if c.is_file()), None)
+        if local_cand and r2_dmtime and r2_dmtime > local_cand.stat().st_mtime:
+            design_content = None
     selected_file=root_for(batch)/handle/"selected_posts.json"
     selected=None
     try:selected=json.loads(selected_file.read_text(encoding="utf-8"))
@@ -410,12 +446,17 @@ def lead(handle:str,batch:str|None=None):
     for post in profile.get("posts",[]):post["preview"]=f"/media/{batch}/{handle}/{post.get('web_path','')}"
     if selected is None:selected=[Path(p.get("web_path","")).name for p in profile.get("posts",[])]
     lead_dict=dict(r)
+    cloud_newer=False
     if is_r2_configured():
         sp=lead_dict.get("site_path") or ""
         if not sp or (sp.startswith("/") and not Path(sp).exists()):
-            r2_url=get_preview_url(batch,handle,"index.html")
+            r2_url=get_preview_url(batch,handle,"index.html",verify_exists=True)
             if r2_url:lead_dict["site_path"]=r2_url
-    return {"lead":lead_dict,"profile":profile,"summary":summary,"revisions":rev,"design":design_content,"selected_photos":selected,"recordings":recordings}
+        r2_mtime=get_r2_mtime(f"{batch}/{handle}/site/index.html")
+        site_index=root_for(batch)/handle/"site"/"index.html"
+        if r2_mtime and site_index.is_file() and r2_mtime > site_index.stat().st_mtime:
+            cloud_newer=True
+    return {"lead":lead_dict,"profile":profile,"summary":summary,"revisions":rev,"design":design_content,"selected_photos":selected,"recordings":recordings,"cloud_newer":cloud_newer}
 
 @app.post("/api/lead/{handle}/recording")
 async def save_recording(handle:str,request:Request,batch:str|None=None,screen:str="desktop",extension:str="webm"):
@@ -431,7 +472,7 @@ async def save_recording(handle:str,request:Request,batch:str|None=None,screen:s
             if row and (row.get("site_path") or row.get("status") in {"done","built"}):
                 has_site=True
         if not has_site and is_r2_configured():
-            has_site=bool(get_preview_url(batch,handle,"index.html"))
+            has_site=has_r2_site(batch,handle)
     if not has_site:raise HTTPException(404,"Site not found")
     data=await request.body()
     if not data:raise HTTPException(400,"Recording is empty")
@@ -439,6 +480,8 @@ async def save_recording(handle:str,request:Request,batch:str|None=None,screen:s
     filename=f"{handle}-{screen}.{extension}"
     path=recordings/filename
     path.write_bytes(data)
+    with connect() as d:
+        d.execute("UPDATE leads SET has_recording=1, updated_at=CURRENT_TIMESTAMP WHERE batch=? AND handle=?",(batch,handle))
     r2_url=None
     if is_r2_configured():
         r2_url=upload_recording(path,batch,handle,filename)
@@ -461,11 +504,11 @@ def get_recording(handle:str,screen:str,batch:str|None=None,download:bool=False)
                 if rec.startswith(f"{handle}-{screen}."):
                     filename=rec; break
         if filename:
-            r2_url=get_recording_url(batch,handle,filename)
-            if r2_url and not download:
+            presigned_url=get_presigned_recording_url(batch,handle,filename,download=download)
+            if presigned_url:
                 from fastapi.responses import RedirectResponse
-                return RedirectResponse(r2_url,status_code=302)
-            elif r2_url and download and not local_file:
+                return RedirectResponse(presigned_url,status_code=302)
+            elif download and not local_file:
                 temp_file=Path(gettempdir())/f"rec_{handle}_{screen}_{filename}"
                 if download_recording(batch,handle,filename,temp_file):
                     return FileResponse(temp_file,filename=filename,media_type="video/webm" if filename.endswith(".webm") else "video/mp4")
@@ -473,6 +516,106 @@ def get_recording(handle:str,screen:str,batch:str|None=None,download:bool=False)
         headers={"Content-Disposition":f'attachment; filename="{filename}"'} if download else {}
         return FileResponse(local_file,headers=headers,media_type="video/webm" if filename.endswith(".webm") else "video/mp4")
     raise HTTPException(404,"Recording not found")
+
+@app.delete("/api/lead/{handle}/recording/{screen}")
+def delete_lead_recording_screen(handle:str,screen:str,batch:str|None=None):
+    handle=clean_handle(handle);batch=clean_batch(batch or selected_batch)
+    if screen not in {"phone","tablet","desktop"}:raise HTTPException(400,"Invalid screen size")
+    account=root_for(batch)/handle
+    recordings_dir=account/"recordings"
+    deleted_local=0
+    if recordings_dir.is_dir():
+        for f in list(recordings_dir.iterdir()):
+            if f.is_file() and f.suffix.lower() in {".webm",".mp4"}:
+                if f"-{screen}." in f.name or f.name.startswith(f"{handle}-{screen}.") or f.name.startswith(f"{screen}."):
+                    try:
+                        f.unlink()
+                        deleted_local+=1
+                    except OSError:pass
+        try:
+            if not any(recordings_dir.iterdir()):
+                recordings_dir.rmdir()
+        except OSError:pass
+
+    deleted_r2=0
+    if is_r2_configured():
+        deleted_r2=delete_recording(batch,handle,screen=screen)
+
+    remaining={}
+    if recordings_dir.is_dir():
+        for f in recordings_dir.iterdir():
+            if f.is_file() and f.suffix.lower() in {".webm",".mp4"}:
+                for s in ["desktop","tablet","phone"]:
+                    if f"-{s}." in f.name:remaining[s]=f.name
+    if is_r2_configured():
+        for r2_rec in list_recordings(batch,handle):
+            for s in ["desktop","tablet","phone"]:
+                if f"-{s}." in r2_rec:remaining[s]=r2_rec
+
+    has_rec = 1 if len(remaining) > 0 else 0
+    new_stage = None
+    with connect() as d:
+        row = d.execute("SELECT stage, site_path FROM leads WHERE batch=? AND handle=?",(batch,handle)).fetchone()
+        row_dict = dict(row) if row else {}
+        current_stage = row_dict.get("stage")
+        new_stage = current_stage
+        if not has_rec and current_stage == "recorded":
+            has_site = (account/"site"/"index.html").is_file() or bool(row_dict.get("site_path"))
+            new_stage = "built" if has_site else "new"
+        d.execute("UPDATE leads SET has_recording=?, stage=?, updated_at=CURRENT_TIMESTAMP WHERE batch=? AND handle=?",(has_rec,new_stage,batch,handle))
+
+    return {
+        "deleted": True,
+        "deleted_local": deleted_local,
+        "deleted_r2": deleted_r2,
+        "screen": screen,
+        "has_recording": has_rec,
+        "remaining": remaining,
+        "stage": new_stage
+    }
+
+@app.delete("/api/lead/{handle}/recording")
+def delete_lead_recording_all(handle:str,batch:str|None=None):
+    handle=clean_handle(handle);batch=clean_batch(batch or selected_batch)
+    account=root_for(batch)/handle
+    recordings_dir=account/"recordings"
+    deleted_local=0
+    if recordings_dir.is_dir():
+        for f in list(recordings_dir.iterdir()):
+            if f.is_file() and f.suffix.lower() in {".webm",".mp4"}:
+                try:
+                    f.unlink()
+                    deleted_local+=1
+                except OSError:pass
+        try:
+            if not any(recordings_dir.iterdir()):
+                recordings_dir.rmdir()
+        except OSError:pass
+
+    deleted_r2=0
+    if is_r2_configured():
+        deleted_r2=delete_recording(batch,handle,screen=None)
+
+    new_stage = None
+    with connect() as d:
+        row = d.execute("SELECT stage, site_path FROM leads WHERE batch=? AND handle=?",(batch,handle)).fetchone()
+        row_dict = dict(row) if row else {}
+        current_stage = row_dict.get("stage")
+        new_stage = current_stage
+        if current_stage == "recorded":
+            has_site = (account/"site"/"index.html").is_file() or bool(row_dict.get("site_path"))
+            new_stage = "built" if has_site else "new"
+        d.execute("UPDATE leads SET has_recording=0, stage=?, updated_at=CURRENT_TIMESTAMP WHERE batch=? AND handle=?",(new_stage,batch,handle))
+
+    return {
+        "deleted": True,
+        "deleted_local": deleted_local,
+        "deleted_r2": deleted_r2,
+        "screen": "all",
+        "has_recording": 0,
+        "remaining": {},
+        "stage": new_stage
+    }
 
 @app.put("/api/lead/{handle}/photos")
 def save_photos(handle:str,b:PhotoSelection,batch:str|None=None):
@@ -672,27 +815,50 @@ def login():
 @app.get("/preview/{batch}/{handle}/{path:path}")
 def preview(batch:str,handle:str,path:str="index.html"):
     handle=clean_handle(handle);batch=clean_batch(batch)
-    r2_url=get_preview_url(batch,handle,path)
-    if r2_url:
-        from fastapi.responses import RedirectResponse
-        return RedirectResponse(r2_url,status_code=302)
-    base=(root_for(batch)/handle/"site").resolve();target=(base/path).resolve()
-    if not target.is_relative_to(base) or not target.is_file():raise HTTPException(404,"Not found")
-    return FileResponse(target)
+    clean_path=Path(path).as_posix().lstrip("/")
+    if ".." in Path(clean_path).parts or clean_path.startswith("/"):
+        raise HTTPException(400,"Invalid path")
+    base=(root_for(batch)/handle/"site").resolve()
+    target=(base/clean_path).resolve()
+    local_exists=target.is_file() and target.is_relative_to(base)
+    headers={"Content-Security-Policy":"sandbox allow-scripts allow-forms;","Cache-Control":"private, max-age=1800"}
+
+    if is_r2_configured():
+        r2_key=f"{batch}/{handle}/site/{clean_path}"
+        r2_mtime=get_r2_mtime(r2_key)
+        if r2_mtime is not None:
+            if not local_exists or r2_mtime > target.stat().st_mtime:
+                obj=get_r2_object(r2_key)
+                if obj:
+                    body,ct=obj
+                    try:
+                        target.parent.mkdir(parents=True, exist_ok=True)
+                        target.write_bytes(body)
+                        os.utime(target, (r2_mtime, r2_mtime))
+                    except Exception:pass
+                    return Response(content=body,media_type=ct,headers=headers)
+
+    if local_exists:
+        return FileResponse(target,headers=headers)
+    raise HTTPException(404,"Not found")
 
 @app.get("/media/{batch}/{handle}/{path:path}")
 def media(batch:str,handle:str,path:str):
     handle=clean_handle(handle);batch=clean_batch(batch)
-    base=(root_for(batch)/handle/f"{handle}_data").resolve();target=(base/path).resolve()
+    clean_path=Path(path).as_posix().lstrip("/")
+    if ".." in Path(clean_path).parts or clean_path.startswith("/"):
+        raise HTTPException(400,"Invalid path")
+    base=(root_for(batch)/handle/f"{handle}_data").resolve()
+    target=(base/clean_path).resolve()
     if target.is_file() and target.is_relative_to(base):
         return FileResponse(target)
     if is_r2_configured():
-        public_base=os.environ.get("R2_PUBLIC_URL","").strip().rstrip("/")
-        if public_base:
-            from fastapi.responses import RedirectResponse
-            return RedirectResponse(f"{public_base}/{batch}/{handle}/media/{path.lstrip('/')}",status_code=302)
+        obj=get_r2_object(f"{batch}/{handle}/media/{clean_path}")
+        if obj:
+            body,ct=obj
+            return Response(content=body,media_type=ct,headers={"Cache-Control":"private, max-age=86400"})
     raise HTTPException(404,"Not found")
 
 if __name__=="__main__":
     import uvicorn
-    uvicorn.run("src.app:app",host="127.0.0.1",port=int(os.environ.get("PORT",8765)))
+    uvicorn.run("src.app:app",host="127.0.0.1",port=int(os.environ.get("PORT",8765)),reload=True)

@@ -71,22 +71,84 @@ def get_s3_client():
     )
 
 
-def get_preview_url(batch: str, handle: str, path: str = "index.html") -> str | None:
-    """Return the public CDN preview URL for a given mockup, if configured."""
-    public_base = os.environ.get("R2_PUBLIC_URL", "").strip().rstrip("/")
-    if not public_base:
+def has_r2_site(batch: str, handle: str) -> bool:
+    """Return True if the site index.html exists in R2 for this lead."""
+    if not is_r2_configured():
+        return False
+    bucket = os.environ["R2_BUCKET_NAME"].strip()
+    s3 = get_s3_client()
+    key = f"{batch}/{handle}/site/index.html"
+    try:
+        s3.head_object(Bucket=bucket, Key=key)
+        return True
+    except Exception:
+        return False
+
+
+def get_r2_object(key: str) -> tuple[bytes, str] | None:
+    """Fetch raw object bytes and Content-Type from R2."""
+    if not is_r2_configured():
+        return None
+    bucket = os.environ["R2_BUCKET_NAME"].strip()
+    s3 = get_s3_client()
+    try:
+        resp = s3.get_object(Bucket=bucket, Key=key)
+        body = resp["Body"].read()
+        ct = resp.get("ContentType") or guess_content_type(Path(key))
+        return body, ct
+    except Exception:
+        return None
+
+
+def get_r2_mtime(key: str) -> float | None:
+    """Return the LastModified epoch timestamp of an object in R2."""
+    if not is_r2_configured():
+        return None
+    bucket = os.environ["R2_BUCKET_NAME"].strip()
+    s3 = get_s3_client()
+    try:
+        resp = s3.head_object(Bucket=bucket, Key=key)
+        dt_val = resp.get("LastModified")
+        return dt_val.timestamp() if dt_val else None
+    except Exception:
+        return None
+
+
+def get_preview_url(batch: str, handle: str, path: str = "index.html", verify_exists: bool = False) -> str | None:
+    """Return the private preview URL path (/preview/{batch}/{handle}/{clean_path})."""
+    if not is_r2_configured():
+        return None
+    if verify_exists and not has_r2_site(batch, handle):
         return None
     clean_path = path.lstrip("/")
-    return f"{public_base}/{batch}/{handle}/site/{clean_path}"
+    return f"/preview/{batch}/{handle}/{clean_path}"
+
+
+def get_presigned_recording_url(
+    batch: str, handle: str, filename: str, expires_in: int = 3600, download: bool = False
+) -> str | None:
+    """Generate a temporary signed URL for direct R2 streaming or download."""
+    if not is_r2_configured():
+        return None
+    bucket = os.environ["R2_BUCKET_NAME"].strip()
+    s3 = get_s3_client()
+    key = f"{batch}/{handle}/recordings/{filename}"
+    params: dict[str, Any] = {"Bucket": bucket, "Key": key}
+    if download:
+        params["ResponseContentDisposition"] = f'attachment; filename="{filename}"'
+    try:
+        return s3.generate_presigned_url(
+            "get_object",
+            Params=params,
+            ExpiresIn=expires_in,
+        )
+    except Exception:
+        return None
 
 
 def get_recording_url(batch: str, handle: str, filename: str) -> str | None:
-    """Return the public CDN URL for a given recording video, if configured."""
-    public_base = os.environ.get("R2_PUBLIC_URL", "").strip().rstrip("/")
-    if not public_base:
-        return None
-    clean_filename = filename.lstrip("/")
-    return f"{public_base}/{batch}/{handle}/recordings/{clean_filename}"
+    """Compatibility alias for generating presigned recording URL."""
+    return get_presigned_recording_url(batch, handle, filename)
 
 
 def upload_recording(local_path: Path, batch: str, handle: str, filename: str) -> str | None:
@@ -99,7 +161,9 @@ def upload_recording(local_path: Path, batch: str, handle: str, filename: str) -
     ct = guess_content_type(local_path)
     with local_path.open("rb") as f:
         s3.put_object(Bucket=bucket, Key=r2_key, Body=f, ContentType=ct)
-    return get_recording_url(batch, handle, filename)
+    name_parts = filename.rsplit(".", 1)[0].split("-")
+    screen = name_parts[-1] if len(name_parts) > 1 else "desktop"
+    return f"/api/lead/{handle}/recording/{screen}"
 
 
 def list_recordings(batch: str, handle: str) -> list[str]:
@@ -140,13 +204,45 @@ def download_recording(batch: str, handle: str, filename: str, dest_path: Path) 
         return False
 
 
+def delete_recording(batch: str, handle: str, screen: str | None = None) -> int:
+    """Delete recording(s) from R2 for a lead. If screen is provided, only deletes that screen's recording."""
+    if not is_r2_configured():
+        return 0
+    bucket = os.environ["R2_BUCKET_NAME"].strip()
+    s3 = get_s3_client()
+    prefix = f"{batch}/{handle}/recordings/"
+    paginator = s3.get_paginator("list_objects_v2")
+    deleted_count = 0
+    try:
+        for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
+            objects = []
+            for obj in page.get("Contents", []):
+                key = obj["Key"]
+                filename = key[len(prefix):]
+                if screen and screen != "all":
+                    if f"-{screen}." in filename or filename.startswith(f"{handle}-{screen}.") or filename.startswith(f"{screen}."):
+                        objects.append({"Key": key})
+                else:
+                    objects.append({"Key": key})
+            if objects:
+                s3.delete_objects(Bucket=bucket, Delete={"Objects": objects})
+                deleted_count += len(objects)
+    except Exception:
+        pass
+    return deleted_count
+
+
 def get_lead_json(batch: str, handle: str, filename: str) -> Any:
     """Fetch and parse a JSON file from R2 (e.g. profile_data.json or business_data.json)."""
     if not is_r2_configured():
         return None
     bucket = os.environ["R2_BUCKET_NAME"].strip()
     s3 = get_s3_client()
-    for key in [f"{batch}/{handle}/media/{filename}", f"{batch}/{handle}/{filename}"]:
+    for key in [
+        f"{batch}/{handle}/media/{filename}",
+        f"{batch}/{handle}/{filename}",
+        f"{batch}/{handle}/site/{filename}",
+    ]:
         try:
             resp = s3.get_object(Bucket=bucket, Key=key)
             return json.loads(resp["Body"].read().decode("utf-8"))
@@ -161,7 +257,15 @@ def get_lead_text(batch: str, handle: str, filename: str) -> str | None:
         return None
     bucket = os.environ["R2_BUCKET_NAME"].strip()
     s3 = get_s3_client()
-    for key in [f"{batch}/{handle}/media/{filename}", f"{batch}/{handle}/{filename}"]:
+    keys_to_try = [
+        f"{batch}/{handle}/site/{filename}",
+        f"{batch}/{handle}/{filename}",
+        f"{batch}/{handle}/media/{filename}",
+        f"{batch}/{handle}/site/{filename.lower()}",
+        f"{batch}/{handle}/{filename.lower()}",
+        f"{batch}/{handle}/media/{filename.lower()}",
+    ]
+    for key in keys_to_try:
         try:
             resp = s3.get_object(Bucket=bucket, Key=key)
             return resp["Body"].read().decode("utf-8")
