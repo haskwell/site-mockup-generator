@@ -62,26 +62,23 @@ a = Analysis(
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
-    excludes=['tkinter', 'unittest'],
+    excludes=['tkinter', 'unittest', 'test', 'distutils', 'pydoc'],
     noarchive=False,
 )
 
 pyz = PYZ(a.pure)
 
-# Single-file executable (Method 1: Uses system Edge/Chrome, keeping output compact)
+# Onedir distribution: extracts once at build time for instant (<2s) startup
 exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.datas,
     [],
+    exclude_binaries=True,
     name='Studio',
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
-    upx_exclude=[],
-    runtime_tmpdir=None,
+    upx=False,
     console=False,  # Set to True if you want a visible debug terminal
     disable_windowed_traceback=False,
     argv_emulation=False,
@@ -89,4 +86,15 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
     icon='assets/studio.ico' if Path('assets/studio.ico').is_file() else None,
+)
+
+coll = COLLECT(
+    exe,
+    a.binaries,
+    a.zipfiles,
+    a.datas,
+    strip=False,
+    upx=False,
+    upx_exclude=[],
+    name='Studio',
 )

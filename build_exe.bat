@@ -40,7 +40,7 @@ if exist "dist" rmdir /s /q "dist"
 
 REM 5. Run PyInstaller
 echo.
-echo [*] Compiling Studio.exe...
+echo [*] Compiling Studio (onedir build)...
 pyinstaller studio.spec --clean --noconfirm
 if %errorlevel% neq 0 (
     echo.
@@ -49,11 +49,16 @@ if %errorlevel% neq 0 (
     exit /b 1
 )
 
+REM Copy template config if available
+if exist ".env.example" (
+    copy /y ".env.example" "dist\Studio\.env.example" >nul 2>nul
+)
+
 echo.
 echo ========================================================
 echo [SUCCESS] Build complete!
-echo Your standalone executable is located at:
-echo    dist\Studio.exe
+echo Your standalone executable package is located at:
+echo    dist\Studio\Studio.exe
 echo ========================================================
 echo.
 pause

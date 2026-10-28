@@ -489,8 +489,11 @@ def save_settings(b:SettingsBody):
                 raise HTTPException(400, f"{k} must be at least 1")
             cleaned[k] = iv
         elif k == "local_mode":
+            was_local = is_local_mode()
             cleaned[k] = bool(v)
             set_local_mode(bool(v))
+            if bool(v) and not was_local:
+                init_db()
         else:
             cleaned[k] = v
     with connect() as d:

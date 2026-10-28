@@ -7,13 +7,14 @@ import os
 import shutil
 import subprocess
 import sys
+import threading
 import time
 import urllib.error
 import urllib.request
 import webbrowser
 from pathlib import Path
 
-from src.pipeline_common import REPO_ROOT, get_venv_python, kill_process_tree
+from src.pipeline_common import IS_FROZEN, REPO_ROOT, get_venv_python, kill_process_tree
 
 REPO = REPO_ROOT
 try:
@@ -107,52 +108,86 @@ def main() -> int:
     if server_is_running():
         return open_browser(profile, browser_bin)
 
-    python = get_venv_python(REPO)
-    log_dir = REPO / "logs"
-    log_dir.mkdir(exist_ok=True)
-    log_file = (log_dir / "server.log").open("a", encoding="utf-8")
-    server_kwargs: dict = {
-        "cwd": REPO,
-        "stdin": subprocess.DEVNULL,  # pythonw has no stdin to inherit
-        "stdout": log_file,
-        "stderr": subprocess.STDOUT,
-    }
-    if os.name == "nt":
-        # CREATE_NO_WINDOW stops the console from flashing up when
-        # launched via pythonw.exe
-        server_kwargs["creationflags"] = (
-            subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
-        )
+    server: subprocess.Popen | None = None
+    server_thread: threading.Thread | None = None
+    log_file = None
+
+    if IS_FROZEN:
+        # In frozen executable, run server directly in a daemon thread to avoid
+        # spawning a duplicate executable process and incurring duplicate startup latency.
+        import uvicorn
+        from src.app import app
+
+        def _run_server() -> None:
+            config = uvicorn.Config(
+                app,
+                host="127.0.0.1",
+                port=PORT,
+                log_level="info",
+                access_log=False,
+            )
+            srv = uvicorn.Server(config)
+            srv.run()
+
+        server_thread = threading.Thread(target=_run_server, daemon=True)
+        server_thread.start()
     else:
-        server_kwargs["start_new_session"] = True
-    server = subprocess.Popen([python, str(REPO / "app.py")], **server_kwargs)
+        python = get_venv_python(REPO)
+        log_dir = REPO / "logs"
+        log_dir.mkdir(exist_ok=True)
+        log_file = (log_dir / "server.log").open("a", encoding="utf-8")
+        server_kwargs: dict = {
+            "cwd": REPO,
+            "stdin": subprocess.DEVNULL,  # pythonw has no stdin to inherit
+            "stdout": log_file,
+            "stderr": subprocess.STDOUT,
+        }
+        if os.name == "nt":
+            # CREATE_NO_WINDOW stops the console from flashing up when
+            # launched via pythonw.exe
+            server_kwargs["creationflags"] = (
+                subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
+            )
+        else:
+            server_kwargs["start_new_session"] = True
+        server = subprocess.Popen([python, str(REPO / "app.py")], **server_kwargs)
 
     try:
         startup_deadline = time.monotonic() + 30.0
         while not server_is_running():
-            if server.poll() is not None:
+            if server is not None and server.poll() is not None:
+                return 1
+            if server_thread is not None and not server_thread.is_alive():
+                print("Error: Background server thread terminated unexpectedly.", file=sys.stderr)
                 return 1
             if time.monotonic() > startup_deadline:
                 print("Error: Server failed to start and respond to /api/ping within 30s.", file=sys.stderr)
                 return 1
-            time.sleep(0.3)
+            time.sleep(0.2)
         open_browser(profile, browser_bin)
         # On Windows Edge, open_browser may return immediately because Edge delegates
         # to its background process. Keep the launcher alive until the server shuts down.
-        if server.poll() is None:
+        if server is not None and server.poll() is None:
             try:
                 server.wait()
             except KeyboardInterrupt:
                 pass
+        elif server_thread is not None:
+            try:
+                while server_thread.is_alive():
+                    time.sleep(1)
+            except KeyboardInterrupt:
+                pass
         return 0
     finally:
-        if server.poll() is None:
+        if server is not None and server.poll() is None:
             kill_process_tree(server)
             try:
                 server.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 pass
-        log_file.close()
+        if log_file is not None:
+            log_file.close()
 
 
 if __name__ == "__main__":

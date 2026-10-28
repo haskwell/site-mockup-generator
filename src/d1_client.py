@@ -258,6 +258,8 @@ def set_local_mode(enabled: bool) -> None:
     """Manually persist local mode toggle in local SQLite settings."""
     try:
         db_file = Path(os.environ.get("DASHBOARD_DB", REPO / "dashboard.sqlite3"))
+        if not enabled and not db_file.is_file():
+            return
         db_file.parent.mkdir(parents=True, exist_ok=True)
         with sqlite3.connect(db_file, timeout=5) as conn:
             conn.execute("CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT)")
