@@ -128,8 +128,12 @@ def main() -> int:
     server = subprocess.Popen([python, str(REPO / "app.py")], **server_kwargs)
 
     try:
+        startup_deadline = time.monotonic() + 30.0
         while not server_is_running():
             if server.poll() is not None:
+                return 1
+            if time.monotonic() > startup_deadline:
+                print("Error: Server failed to start and respond to /api/ping within 30s.", file=sys.stderr)
                 return 1
             time.sleep(0.3)
         open_browser(profile, browser_bin)

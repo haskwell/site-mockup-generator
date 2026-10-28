@@ -9,11 +9,13 @@ import threading
 import time
 from typing import Any
 
-from dotenv import load_dotenv
 from src.pipeline_common import REPO_ROOT
 
-REPO = REPO_ROOT
-load_dotenv(REPO / ".env")
+try:
+    from dotenv import load_dotenv
+    load_dotenv(REPO_ROOT / ".env")
+except ImportError:
+    pass
 
 # Fallback MIME mappings to ensure reliable Content-Type across all platforms (Windows/Linux)
 MIME_OVERRIDES = {
@@ -247,7 +249,8 @@ def download_recording(batch: str, handle: str, filename: str, dest_path: Path) 
         resp = s3.get_object(Bucket=bucket, Key=key)
         dest_path.parent.mkdir(parents=True, exist_ok=True)
         with dest_path.open("wb") as f:
-            f.write(resp["Body"].read())
+            for chunk in resp["Body"].iter_chunks(chunk_size=65536):
+                f.write(chunk)
         return True
     except Exception:
         return False
@@ -345,11 +348,14 @@ def download_lead_folder(batch: str, handle: str, dest_dir: Path) -> bool:
                 rel_path = key[len(prefix):]
                 if not rel_path or rel_path.endswith("/"):
                     continue
-                target_path = dest_dir / rel_path
+                target_path = (dest_dir / rel_path).resolve()
+                if not target_path.is_relative_to(dest_dir.resolve()):
+                    continue
                 target_path.parent.mkdir(parents=True, exist_ok=True)
                 resp = s3.get_object(Bucket=bucket, Key=key)
                 with target_path.open("wb") as f:
-                    f.write(resp["Body"].read())
+                    for chunk in resp["Body"].iter_chunks(chunk_size=65536):
+                        f.write(chunk)
                 found_any = True
     except Exception:
         return False
@@ -377,14 +383,21 @@ def upload_site(local_site_dir: Path, batch: str, handle: str) -> str | None:
     bucket = os.environ["R2_BUCKET_NAME"].strip()
     s3 = get_s3_client()
 
-    for item in local_site_dir.rglob("*"):
-        if item.is_file():
-            # Use as_posix() to guarantee forward slashes on Windows
-            rel_path = item.relative_to(local_site_dir).as_posix()
-            r2_key = f"{batch}/{handle}/site/{rel_path}"
-            ct = guess_content_type(item)
-            with item.open("rb") as f:
-                s3.put_object(Bucket=bucket, Key=r2_key, Body=f, ContentType=ct)
+    files = [item for item in local_site_dir.rglob("*") if item.is_file()]
+    if not files:
+        return None
+
+    from concurrent.futures import ThreadPoolExecutor
+
+    def _upload_one(item: Path) -> None:
+        rel_path = item.relative_to(local_site_dir).as_posix()
+        r2_key = f"{batch}/{handle}/site/{rel_path}"
+        ct = guess_content_type(item)
+        with item.open("rb") as f:
+            s3.put_object(Bucket=bucket, Key=r2_key, Body=f, ContentType=ct)
+
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        list(pool.map(_upload_one, files))
 
     invalidate_r2_cache(f"{batch}/{handle}/site/")
     return get_preview_url(batch, handle, "index.html")
@@ -410,11 +423,14 @@ def download_site(batch: str, handle: str, dest_dir: Path) -> bool:
                 rel_path = key[len(prefix):]
                 if not rel_path or rel_path.endswith("/"):
                     continue
-                target_path = dest_dir / rel_path
+                target_path = (dest_dir / rel_path).resolve()
+                if not target_path.is_relative_to(dest_dir.resolve()):
+                    continue
                 target_path.parent.mkdir(parents=True, exist_ok=True)
                 resp = s3.get_object(Bucket=bucket, Key=key)
                 with target_path.open("wb") as f:
-                    f.write(resp["Body"].read())
+                    for chunk in resp["Body"].iter_chunks(chunk_size=65536):
+                        f.write(chunk)
                 found_any = True
     except Exception:
         return False

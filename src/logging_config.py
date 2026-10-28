@@ -3,6 +3,7 @@
 import logging
 import os
 import sys
+import threading
 
 _LOG_FORMAT = "%(asctime)s %(levelname)-8s %(name)s: %(message)s"
 _DATE_FORMAT = "%Y-%m-%d %H:%M:%S"
@@ -15,6 +16,7 @@ _LEVEL_COLORS = {
 }
 _RESET = "\033[0m"
 _CONFIGURED = False
+_CONFIG_LOCK = threading.Lock()
 
 
 class _ColorFormatter(logging.Formatter):
@@ -38,15 +40,17 @@ def get_logger(name: str) -> logging.Logger:
     global _CONFIGURED
     logger = logging.getLogger(f"profile_pipeline.{name}")
     if not _CONFIGURED:
-        console = logging.StreamHandler(sys.stdout)
-        console.setFormatter(
-            _ColorFormatter(_LOG_FORMAT, _DATE_FORMAT,
-                            use_color=sys.stdout.isatty() and not os.environ.get("NO_COLOR"))
-        )
-        root = logging.getLogger("profile_pipeline")
-        root.setLevel(logging.INFO)
-        root.addHandler(console)
-        _CONFIGURED = True
+        with _CONFIG_LOCK:
+            if not _CONFIGURED:
+                console = logging.StreamHandler(sys.stdout)
+                console.setFormatter(
+                    _ColorFormatter(_LOG_FORMAT, _DATE_FORMAT,
+                                    use_color=sys.stdout.isatty() and not os.environ.get("NO_COLOR"))
+                )
+                root = logging.getLogger("profile_pipeline")
+                root.setLevel(logging.INFO)
+                root.addHandler(console)
+                _CONFIGURED = True
     logger.setLevel(logging.INFO)
     logger.propagate = True
     return logger

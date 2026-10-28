@@ -63,7 +63,8 @@ def configured_accounts(path: Path) -> set[str]:
 
 
 def revise(user: str, revision: str, root: Path, accounts: set[str], logger: Logger,
-           *, emit=None, model: str = MODEL, timeout: int = TIMEOUT_SECONDS) -> int:
+           *, emit=None, model: str = MODEL, timeout: int = TIMEOUT_SECONDS,
+           cancel_event=None) -> int:
     def report(status: str, line: str = ""):
         if emit: emit(user, status, line)
     if not revision.strip():
@@ -123,8 +124,8 @@ def revise(user: str, revision: str, root: Path, accounts: set[str], logger: Log
         logger.log("ERROR", f"{user}: failed to copy generation instructions: {exc}")
         return 1
 
-    agy_log = account / "logs" / f"agy_revision_{dt.datetime.now():%Y-%m-%d_%H%M%S}.log"
-    backup = account / "backups" / f"site_before_revision_{dt.datetime.now():%Y%m%d_%H%M%S}"
+    agy_log = account / "logs" / f"agy_revision_{dt.datetime.now():%Y-%m-%d_%H%M%S}_{time.monotonic_ns() % 1000000}.log"
+    backup = account / "backups" / f"site_before_revision_{dt.datetime.now():%Y%m%d_%H%M%S}_{time.monotonic_ns() % 1000000}"
     backup.parent.mkdir(parents=True, exist_ok=True)
     shutil.copytree(account / "site", backup)
     prompt = ("Revise the existing website in site/ to address these requested changes. "
@@ -135,7 +136,8 @@ def revise(user: str, revision: str, root: Path, accounts: set[str], logger: Log
     # NOTE: --dangerously-skip-permissions is used for automated revisions; revision requests and scraped data are untrusted user input.
     code, timed_out = run_streaming([agy_bin, "-p", prompt, "--model", model,
                                      "--dangerously-skip-permissions"],
-                                    account, logger, agy_log, timeout, f"{user}: ")
+                                    account, logger, agy_log, timeout, f"{user}: ",
+                                    cancel_event=cancel_event)
     if timed_out:
         shutil.rmtree(account / "site", ignore_errors=True)
         shutil.copytree(backup, account / "site")

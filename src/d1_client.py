@@ -10,12 +10,11 @@ from pathlib import Path
 from typing import Any, Iterator, Sequence
 
 import requests
-from dotenv import load_dotenv
-from src.pipeline_common import REPO_ROOT
-
-# Automatically load .env if present
-REPO = REPO_ROOT
-load_dotenv(REPO / ".env")
+try:
+    from dotenv import load_dotenv
+    load_dotenv(REPO_ROOT / ".env")
+except ImportError:
+    pass
 
 
 def get_current_user() -> str:
@@ -169,8 +168,38 @@ class D1Connection:
             self._query(sql, params)
 
     def executescript(self, script: str) -> None:
-        # Split statements on semicolons outside of strings
-        statements = [s.strip() for s in script.split(";") if s.strip()]
+        # Split statements on semicolons outside of string literals and comments
+        statements = []
+        current = []
+        in_single = False
+        in_double = False
+        in_comment = False
+        for i, char in enumerate(script):
+            if in_comment:
+                current.append(char)
+                if char == "\n":
+                    in_comment = False
+                continue
+            if char == "-" and i + 1 < len(script) and script[i + 1] == "-" and not in_single and not in_double:
+                in_comment = True
+                current.append(char)
+                continue
+            if char == "'" and not in_double:
+                in_single = not in_single
+                current.append(char)
+            elif char == '"' and not in_single:
+                in_double = not in_double
+                current.append(char)
+            elif char == ";" and not in_single and not in_double:
+                stmt = "".join(current).strip()
+                if stmt:
+                    statements.append(stmt)
+                current = []
+            else:
+                current.append(char)
+        last = "".join(current).strip()
+        if last:
+            statements.append(last)
         for stmt in statements:
             self._query(stmt)
 
@@ -503,6 +532,11 @@ def get_db_connection(local_db_path: Path | None = None) -> D1Connection | Closi
         db_file.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(db_file, timeout=15, factory=ClosingLocalConnection)
         conn.row_factory = sqlite3.Row
+        try:
+            conn.execute("PRAGMA journal_mode=WAL;")
+            conn.execute("PRAGMA busy_timeout=5000;")
+        except Exception:
+            pass
         return conn
 
     if not is_d1_configured():

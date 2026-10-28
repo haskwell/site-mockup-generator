@@ -13,6 +13,7 @@ import sys
 import threading
 import time
 from pathlib import Path
+from typing import Any
 
 MODEL = "gemini-3.8-flash-medium"
 MIN_SIZE = 600
@@ -249,7 +250,8 @@ def run_streaming(
             try:
                 line = output_queue.get(timeout=poll_timeout)
             except queue.Empty:
-                if proc.poll() is not None:
+                if proc.poll() is not None and not reader_thread.is_alive():
+                    # Subprocess has terminated and reader thread has drained the pipe
                     break
                 continue
 

@@ -74,7 +74,10 @@ def validate_site(site: Path) -> list[str]:
     for ref in checker.refs:
         if ref.startswith(("https://", "http://", "data:", "#")):
             continue
-        target = (site / ref.split("?", 1)[0].split("#", 1)[0]).resolve()
+        clean_ref = ref.lstrip("/").split("?", 1)[0].split("#", 1)[0]
+        if not clean_ref:
+            continue
+        target = (site / clean_ref).resolve()
         if not target.is_relative_to(site.resolve()) or not target.is_file():
             errors.append(f"missing or unsafe referenced file: {ref}")
     import re
@@ -84,7 +87,11 @@ def validate_site(site: Path) -> list[str]:
             for url_ref in re.findall(r'url\s*\(\s*[\'"]?([^\'")]+)[\'"]?\s*\)', css_text):
                 url_ref = url_ref.strip()
                 if not url_ref.startswith(("https://", "http://", "data:", "#")):
-                    target = (css_file.parent / url_ref.split("?", 1)[0].split("#", 1)[0]).resolve()
+                    clean_url_ref = url_ref.lstrip("/").split("?", 1)[0].split("#", 1)[0]
+                    if not clean_url_ref:
+                        continue
+                    base_dir = site if url_ref.startswith("/") else css_file.parent
+                    target = (base_dir / clean_url_ref).resolve()
                     if not target.is_relative_to(site.resolve()) or not target.is_file():
                         errors.append(f"missing or unsafe referenced file in CSS: {url_ref}")
         except Exception:
@@ -289,6 +296,9 @@ def restore_backup(site: Path, backup: Path) -> None:
     if backup.exists():
         shutil.rmtree(site, ignore_errors=True)
         shutil.copytree(backup, site)
+    else:
+        # If no previous backup exists (first-time build failure), remove empty skeleton site
+        shutil.rmtree(site, ignore_errors=True)
 
 
 def main() -> int:

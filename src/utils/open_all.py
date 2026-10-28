@@ -11,8 +11,8 @@ from pathlib import Path
 
 def main() -> int:
     date = input("Enter date (YYYY-MM-DD): ").strip()
-    default_root = Path.home() / "websites" / date
-    search_dir = Path(os.environ.get("WEBSITES_ROOT", str(default_root))).expanduser()
+    base_root = Path(os.environ.get("WEBSITES_ROOT", Path.home() / "websites")).expanduser().resolve()
+    search_dir = base_root if base_root.name == date else base_root / date
 
     if not search_dir.is_dir():
         print(f"Error: Directory not found: {search_dir}")
@@ -46,7 +46,11 @@ def main() -> int:
 
     print(f"Opening {len(files)} site(s)")
     if browser:
-        subprocess.Popen([browser, *(str(path) for path in files)])
+        # Open in chunks of 20 to avoid OS command line length limits on Windows
+        chunk_size = 20
+        for i in range(0, len(files), chunk_size):
+            chunk = files[i:i + chunk_size]
+            subprocess.Popen([browser, *(str(path) for path in chunk)])
     else:
         for path in files:
             webbrowser.open(path.as_uri())

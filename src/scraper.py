@@ -118,7 +118,13 @@ def download_images_concurrently(
 def make_web_copy(src: str, dest: str) -> Tuple[int, int]:
     """Create a web-sized WebP copy. Returns (width, height) of the copy."""
     with Image.open(src) as im:
-        im = ImageOps.exif_transpose(im).convert("RGB")
+        im = ImageOps.exif_transpose(im)
+        if im.mode in ("RGBA", "LA") or (im.mode == "P" and "transparency" in getattr(im, "info", {})):
+            alpha = im.convert("RGBA")
+            bg = Image.new("RGBA", alpha.size, (255, 255, 255, 255))
+            im = Image.alpha_composite(bg, alpha).convert("RGB")
+        else:
+            im = im.convert("RGB")
         im.thumbnail((WEB_MAX_SIDE, WEB_MAX_SIDE))
         im.save(dest, "WEBP", quality=82)
         return im.size
@@ -503,10 +509,18 @@ def scrape_profile(
         ) as f:
             json.dump(profile_data, f, indent=4, ensure_ascii=False)
 
-        # Swap staging into place
-        if os.path.exists(output_dir):
-            shutil.rmtree(output_dir)
-        os.replace(staging, output_dir)
+        # Swap staging into place with retries for Windows file lock delays
+        max_attempts = 5
+        for attempt in range(max_attempts):
+            try:
+                if os.path.exists(output_dir):
+                    shutil.rmtree(output_dir)
+                os.replace(staging, output_dir)
+                break
+            except (PermissionError, OSError):
+                if attempt == max_attempts - 1:
+                    raise
+                time.sleep(0.4 * (attempt + 1))
         logger.info("Saved %d post(s) to %s", len(posts), json_final)
         return profile_data
 
