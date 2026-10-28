@@ -86,6 +86,9 @@ def open_browser(profile: Path, browser_bin: str | None) -> int:
             f"--app={target_url}",
             f"--user-data-dir={profile}",
             "--window-size=1500,800",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--disable-features=msEdgeStartupBoost",
         ]
         return subprocess.run(cmd, check=False).returncode
     webbrowser.open(target_url)
@@ -129,7 +132,15 @@ def main() -> int:
             if server.poll() is not None:
                 return 1
             time.sleep(0.3)
-        return open_browser(profile, browser_bin)
+        open_browser(profile, browser_bin)
+        # On Windows Edge, open_browser may return immediately because Edge delegates
+        # to its background process. Keep the launcher alive until the server shuts down.
+        if server.poll() is None:
+            try:
+                server.wait()
+            except KeyboardInterrupt:
+                pass
+        return 0
     finally:
         if server.poll() is None:
             kill_process_tree(server)

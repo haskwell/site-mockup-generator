@@ -63,6 +63,8 @@ async def security_middleware(request: Request, call_next):
     host = (request.headers.get("host") or "").split(":")[0].strip().lower()
     if host not in {"127.0.0.1", "localhost", "testserver", "::1"}:
         return Response("Invalid Host header", status_code=403)
+    if request.url.path in {"/api/shutdown", "/api/heartbeat"}:
+        return await call_next(request)
     if request.method in {"POST", "PUT", "DELETE", "PATCH"}:
         if request.headers.get("X-Studio") != "1":
             return Response("Missing or invalid X-Studio header", status_code=403)
@@ -70,6 +72,44 @@ async def security_middleware(request: Request, call_next):
         if not ct.startswith("application/json"):
             return Response("Content-Type must be application/json", status_code=415)
     return await call_next(request)
+
+_shutdown_timer = None
+_shutdown_lock = threading.Lock()
+_has_received_heartbeat = False
+_last_heartbeat = time.time()
+
+def _do_shutdown():
+    os._exit(0)
+
+def _watchdog():
+    global _last_heartbeat, _has_received_heartbeat
+    while True:
+        time.sleep(4)
+        if _has_received_heartbeat and (time.time() - _last_heartbeat > 15):
+            os._exit(0)
+
+threading.Thread(target=_watchdog, daemon=True).start()
+
+@app.post("/api/heartbeat")
+def heartbeat():
+    global _shutdown_timer, _has_received_heartbeat, _last_heartbeat
+    with _shutdown_lock:
+        _has_received_heartbeat = True
+        _last_heartbeat = time.time()
+        if _shutdown_timer is not None:
+            _shutdown_timer.cancel()
+            _shutdown_timer = None
+    return {"status": "alive"}
+
+@app.post("/api/shutdown")
+def trigger_shutdown():
+    global _shutdown_timer
+    with _shutdown_lock:
+        if _shutdown_timer is not None:
+            _shutdown_timer.cancel()
+        _shutdown_timer = threading.Timer(4.0, _do_shutdown)
+        _shutdown_timer.start()
+    return {"status": "shutting_down"}
 events=[]; subscribers=set(); event_lock=threading.Lock(); job_lock=threading.Lock(); active_job=None
 revision_queue=queue.Queue(); revision_active=False; revision_pending=0
 

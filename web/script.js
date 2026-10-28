@@ -3044,6 +3044,12 @@ function initApp() {
   setView("pipeline");
   $("#btn-submit-setup")?.addEventListener("click", submitSetup);
   $("#btn-switch-local")?.addEventListener("click", enableOfflineMode);
+  setInterval(() => {
+    fetch("/api/heartbeat", { method: "POST" }).catch(() => {});
+  }, 3000);
+  window.addEventListener("beforeunload", () => {
+    navigator.sendBeacon("/api/shutdown");
+  });
   if ("Notification" in window && Notification.permission === "default")
     Notification.requestPermission();
   refresh(false).catch((e) => toast(e.message));
