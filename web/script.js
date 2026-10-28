@@ -458,6 +458,11 @@ async function refresh(reload) {
     $("#batch").classList.remove("loading-date");
     $("#batch").title = `Batch date: ${S.st.batch}`;
     setSyncIndicator(null);
+    if (S.st.needs_setup) {
+      openSetupModal();
+    } else {
+      closeSetupModal();
+    }
     if ($("#offlinebanner"))
       $("#offlinebanner").hidden = !(S.st.local_mode || S.st.d1_offline);
     if (document.activeElement !== $("#accounts"))
@@ -1412,6 +1417,7 @@ function fillSettings() {
   $("#ssync").checked = !!s.sync_sheet;
   if ($("#slocalmode")) $("#slocalmode").checked = !!s.local_mode;
   drawSwatches();
+  loadCredentialsIntoSettings();
 }
 async function saveSettings() {
   const timeout = parseInt($("#stimeout").value, 10);
@@ -1458,6 +1464,146 @@ async function saveSettings() {
     await refresh(false);
   } catch (e) {
     toast(e.message);
+  }
+}
+
+async function loadCredentialsIntoSettings() {
+  try {
+    const c = await api("/api/credentials");
+    if ($("#cf-account-id")) $("#cf-account-id").value = c.account_id || "";
+    if ($("#cf-database-id")) $("#cf-database-id").value = c.database_id || "";
+    if ($("#cf-team-member")) $("#cf-team-member").value = c.team_member_name || "";
+    if ($("#cf-r2-bucket")) $("#cf-r2-bucket").value = c.r2_bucket_name || "";
+    if ($("#cf-r2-access")) $("#cf-r2-access").value = c.r2_access_key || "";
+    if ($("#cf-api-token") && c.has_api_token) $("#cf-api-token").placeholder = "•••••••• (Token saved)";
+    if ($("#cf-r2-secret") && c.has_r2_secret) $("#cf-r2-secret").placeholder = "•••••••• (Secret saved)";
+  } catch (e) {}
+}
+
+async function saveCredentials() {
+  const btn = $("#btn-save-credentials");
+  const origText = btn ? btn.textContent : "Test & Save";
+  const msgEl = $("#cf-status-msg");
+  if (msgEl) msgEl.hidden = true;
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Connecting to D1...";
+  }
+  try {
+    const payload = {
+      account_id: $("#cf-account-id").value.trim(),
+      database_id: $("#cf-database-id").value.trim(),
+      api_token: $("#cf-api-token").value.trim(),
+      team_member_name: $("#cf-team-member").value.trim(),
+      r2_bucket_name: $("#cf-r2-bucket").value.trim(),
+      r2_access_key: $("#cf-r2-access").value.trim(),
+      r2_secret_key: $("#cf-r2-secret").value.trim(),
+    };
+    if (!payload.account_id || !payload.database_id) {
+      throw new Error("Cloudflare Account ID and D1 Database ID are required.");
+    }
+    const res = await api("/api/credentials", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    toast(res.message || "Connected to Cloudflare D1 successfully!");
+    if (msgEl) {
+      msgEl.textContent = res.message;
+      msgEl.style.color = "var(--success)";
+      msgEl.hidden = false;
+    }
+    await refresh(true);
+  } catch (err) {
+    if (msgEl) {
+      msgEl.textContent = err.message || "Failed to connect to Cloudflare D1";
+      msgEl.style.color = "var(--danger)";
+      msgEl.hidden = false;
+    }
+    toast(err.message);
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = origText;
+    }
+  }
+}
+
+function openSetupModal() {
+  const ov = $("#setupov");
+  if (!ov) return;
+  ov.hidden = false;
+  api("/api/credentials")
+    .then((c) => {
+      if (c.account_id && $("#init-cf-account")) $("#init-cf-account").value = c.account_id;
+      if (c.database_id && $("#init-cf-database")) $("#init-cf-database").value = c.database_id;
+      if (c.team_member_name && $("#init-cf-name")) $("#init-cf-name").value = c.team_member_name;
+      if (c.r2_bucket_name && $("#init-r2-bucket")) $("#init-r2-bucket").value = c.r2_bucket_name;
+      if (c.r2_access_key && $("#init-r2-access")) $("#init-r2-access").value = c.r2_access_key;
+    })
+    .catch(() => {});
+}
+
+function closeSetupModal() {
+  const ov = $("#setupov");
+  if (ov) ov.hidden = true;
+}
+
+async function submitSetup() {
+  const btn = $("#btn-submit-setup");
+  const errEl = $("#setup-err-msg");
+  if (errEl) errEl.hidden = true;
+  const origText = btn ? btn.textContent : "Connect";
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = "Verifying D1...";
+  }
+  try {
+    const payload = {
+      account_id: $("#init-cf-account").value.trim(),
+      database_id: $("#init-cf-database").value.trim(),
+      api_token: $("#init-cf-token").value.trim(),
+      team_member_name: $("#init-cf-name").value.trim(),
+      r2_bucket_name: $("#init-r2-bucket").value.trim(),
+      r2_access_key: $("#init-r2-access").value.trim(),
+      r2_secret_key: $("#init-r2-secret").value.trim(),
+    };
+    if (!payload.account_id || !payload.database_id || !payload.api_token) {
+      throw new Error("Please enter your Cloudflare Account ID, Database ID, and API Token.");
+    }
+    const res = await api("/api/credentials", {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    toast(res.message || "Connected to Cloudflare D1 successfully!");
+    closeSetupModal();
+    await refresh(true);
+  } catch (err) {
+    if (errEl) {
+      errEl.textContent = err.message || "Connection failed. Please check your credentials.";
+      errEl.hidden = false;
+    }
+  } finally {
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = origText;
+    }
+  }
+}
+
+async function enableOfflineMode() {
+  const ok = await confirmDlg("Offline Mode", "Switch to offline mode? Lead data will be stored locally in SQLite.", "Use Offline Mode");
+  if (ok) {
+    try {
+      await api("/api/settings", {
+        method: "PUT",
+        body: JSON.stringify({ values: { local_mode: true } }),
+      });
+      closeSetupModal();
+      toast("Switched to offline local mode");
+      await refresh(true);
+    } catch (e) {
+      toast(e.message);
+    }
   }
 }
 
@@ -2119,6 +2265,7 @@ const A = {
     );
   },
   saveSettings,
+  saveCredentials,
   syncD1: async () => {
     try {
       toast("Syncing local changes to Cloudflare D1…");
@@ -2895,6 +3042,8 @@ function initApp() {
   $("#jobpill").classList.add("run");
   $("#jobtext").textContent = "Finding date…";
   setView("pipeline");
+  $("#btn-submit-setup")?.addEventListener("click", submitSetup);
+  $("#btn-switch-local")?.addEventListener("click", enableOfflineMode);
   if ("Notification" in window && Notification.permission === "default")
     Notification.requestPermission();
   refresh(false).catch((e) => toast(e.message));

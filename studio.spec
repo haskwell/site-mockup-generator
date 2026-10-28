@@ -29,6 +29,7 @@ hiddenimports = [
     'src.pipeline_common',
     'src.r2_storage',
     'src.d1_client',
+    'src.credentials_manager',
 ]
 
 # Collect dynamic dependencies

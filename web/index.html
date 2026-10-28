@@ -624,6 +624,26 @@
           </div>
 
           <div class="sec">
+            <h2>Cloudflare &amp; Cloud Storage</h2>
+            <div class="muted" style="font-size: 12px; margin-bottom: 12px">
+              Configure Cloudflare D1 database and R2 object storage credentials. These are saved to your local .env file.
+            </div>
+            <div class="sgrid">
+              <label class="field">Cloudflare Account ID*<input id="cf-account-id" placeholder="e.g. 7a8b9c..." autocomplete="off" /></label>
+              <label class="field">D1 Database ID*<input id="cf-database-id" placeholder="e.g. xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocomplete="off" /></label>
+              <label class="field">Cloudflare API Token*<input id="cf-api-token" type="password" placeholder="Leave blank to keep existing token" autocomplete="off" /></label>
+              <label class="field">Team Member Name<input id="cf-team-member" placeholder="Your name for lead locking" autocomplete="off" /></label>
+              <label class="field">R2 Bucket Name<input id="cf-r2-bucket" placeholder="e.g. websites" autocomplete="off" /></label>
+              <label class="field">R2 Access Key ID<input id="cf-r2-access" placeholder="R2 Access Key" autocomplete="off" /></label>
+              <label class="field">R2 Secret Access Key<input id="cf-r2-secret" type="password" placeholder="Leave blank to keep existing secret" autocomplete="off" /></label>
+            </div>
+            <div id="cf-status-msg" style="margin-top: 8px; font-size: 13px; font-weight: 500;" hidden></div>
+            <div style="display: flex; gap: 10px; margin-top: 12px">
+              <button class="primary" id="btn-save-credentials" data-act="saveCredentials">Test &amp; Save Credentials</button>
+            </div>
+          </div>
+
+          <div class="sec">
             <h2>Instagram session &amp; Health</h2>
             <div class="muted" style="margin-bottom: 8px">
               Session status:
@@ -1225,6 +1245,66 @@
           autocomplete="off"
         />
         <ul id="pallist"></ul>
+      </div>
+    </div>
+
+    <!-- First Launch / Cloud Setup Modal -->
+    <div class="overlay center" id="setupov" hidden>
+      <div class="dialog" style="max-width: 540px; width: 90vw;" role="dialog" aria-modal="true">
+        <div class="body">
+          <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 8px;">
+            <svg class="i" viewBox="0 0 24 24" style="width: 26px; height: 26px; stroke: var(--accent);"><path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9Z"/></svg>
+            <h2 style="margin: 0; font-size: 18px;">Connect Cloud Database</h2>
+          </div>
+          <div class="muted" style="margin-bottom: 16px; font-size: 13px; line-height: 1.5;">
+            Welcome to Studio! Please enter your Cloudflare D1 credentials to connect to your shared team database. These will be saved locally so you won't need to enter them again.
+          </div>
+          
+          <div style="display: flex; flex-direction: column; gap: 12px;">
+            <label class="field" style="display: flex; flex-direction: column; gap: 4px;">
+              <span>Cloudflare Account ID <span style="color: var(--danger)">*</span></span>
+              <input id="init-cf-account" placeholder="e.g. 7a8b9c..." autocomplete="off" />
+            </label>
+            <label class="field" style="display: flex; flex-direction: column; gap: 4px;">
+              <span>D1 Database ID <span style="color: var(--danger)">*</span></span>
+              <input id="init-cf-database" placeholder="e.g. xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx" autocomplete="off" />
+            </label>
+            <label class="field" style="display: flex; flex-direction: column; gap: 4px;">
+              <span>Cloudflare API Token <span style="color: var(--danger)">*</span></span>
+              <input id="init-cf-token" type="password" placeholder="D1 Read &amp; Write API Token" autocomplete="off" />
+            </label>
+            <label class="field" style="display: flex; flex-direction: column; gap: 4px;">
+              <span>Your Name (for concurrency locking)</span>
+              <input id="init-cf-name" placeholder="e.g. Alex" autocomplete="off" />
+            </label>
+            
+            <details style="margin-top: 4px; font-size: 13px;">
+              <summary style="cursor: pointer; color: var(--accent); font-weight: 500;">Optional: Cloudflare R2 Storage Keys</summary>
+              <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 10px; padding: 10px; background: var(--bg2); border-radius: 8px;">
+                <label class="field" style="display: flex; flex-direction: column; gap: 4px;">
+                  <span>R2 Bucket Name</span>
+                  <input id="init-r2-bucket" placeholder="e.g. websites" autocomplete="off" />
+                </label>
+                <label class="field" style="display: flex; flex-direction: column; gap: 4px;">
+                  <span>R2 Access Key ID</span>
+                  <input id="init-r2-access" placeholder="R2 Access Key ID" autocomplete="off" />
+                </label>
+                <label class="field" style="display: flex; flex-direction: column; gap: 4px;">
+                  <span>R2 Secret Access Key</span>
+                  <input id="init-r2-secret" type="password" placeholder="R2 Secret Access Key" autocomplete="off" />
+                </label>
+              </div>
+            </details>
+          </div>
+
+          <div id="setup-err-msg" style="margin-top: 14px; padding: 8px 12px; background: rgba(239, 68, 68, 0.15); border: 1px solid var(--danger); border-radius: 6px; color: var(--danger); font-size: 13px;" hidden></div>
+        </div>
+        <div class="actions" style="margin-top: 20px; display: flex; justify-content: space-between; align-items: center;">
+          <button id="btn-switch-local" type="button" class="sm ghost" style="color: var(--muted);" title="Run in offline mode using local SQLite">Use Offline Mode</button>
+          <div style="display: flex; gap: 10px;">
+            <button class="primary" id="btn-submit-setup">Connect &amp; Start</button>
+          </div>
+        </div>
       </div>
     </div>
 

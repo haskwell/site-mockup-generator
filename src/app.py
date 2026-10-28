@@ -238,6 +238,14 @@ def emit(handle,status,line="",batch=None):
 class Accounts(BaseModel): text:str; batch:str|None=None
 class Run(BaseModel): handles:list[str]=Field(default_factory=list); force:bool=False; rescrape:bool=False; scrape_only:bool=False
 class SettingsBody(BaseModel): values:dict[str,Any]
+class CredentialsReq(BaseModel):
+    account_id: str
+    database_id: str
+    api_token: str
+    r2_access_key: str = ""
+    r2_secret_key: str = ""
+    r2_bucket_name: str = ""
+    team_member_name: str = ""
 class LeadEdit(BaseModel): name:str=""; phone:str=""; area:str=""; followers:str=""; notes:str=""; stage:str="new"; follow_up:str=""; price:str=""
 class LeadStageUpdate(BaseModel): stage:str="new"
 class Revision(BaseModel): request:str
@@ -281,6 +289,21 @@ def sync_d1():
             pass
     return {"synced": synced}
 
+@app.get("/api/credentials")
+def get_credentials():
+    from src.credentials_manager import get_credentials_status
+    return get_credentials_status()
+
+@app.post("/api/credentials")
+def update_credentials(b: CredentialsReq):
+    from src.credentials_manager import save_credentials
+    try:
+        res = save_credentials(b.model_dump())
+        init_db()
+        return res
+    except Exception as exc:
+        raise HTTPException(400, str(exc))
+
 @app.get("/",response_class=HTMLResponse)
 def home(): return (WEB/"index.html").read_text(encoding="utf-8")
 
@@ -295,7 +318,21 @@ def studio_logo(): return FileResponse(get_asset_path("assets/studio.png"))
 
 @app.get("/api/state")
 def state(batch:str|None=None):
-    conf=settings(); base=Path(conf["websites_root"]).expanduser().resolve()
+    conf=settings()
+    if not is_d1_configured() and not is_local_mode():
+        return {
+            "batch": dt.date.today().isoformat(),
+            "batches": [dt.date.today().isoformat()],
+            "settings": conf,
+            "leads": [],
+            "accounts": "",
+            "auth_exists": False,
+            "auth_mtime": "",
+            "local_mode": False,
+            "d1_offline": False,
+            "needs_setup": True,
+        }
+    base=Path(conf["websites_root"]).expanduser().resolve()
     db_batches=set()
     try:
         with connect() as d:
@@ -320,33 +357,41 @@ def state(batch:str|None=None):
     # Existing CLI-built batches predate the dashboard database. Discover them
     # on selection and seed lead rows without modifying any site files.
     if root.is_dir():
+        try:
+            with connect() as d:
+                existing_handles = {r["handle"] for r in d.execute("SELECT handle FROM leads WHERE batch=?", (batch,)).fetchall()}
+                to_insert = []
+                for account in root.iterdir():
+                    try:
+                        handle=clean_handle(account.name)
+                    except HTTPException:
+                        continue
+                    if handle in existing_handles:
+                        continue
+                    site=account/"site"/"index.html"
+                    if not account.is_dir() or not site.is_file():continue
+                    profile_path=account/f"{handle}_data"/"profile_data.json"
+                    summary_path=account/f"{handle}_data"/"business_data.json"
+                    name=phone=area=followers=""
+                    try:
+                        profile=json.loads(profile_path.read_text(encoding="utf-8"));name=profile.get("name","");followers=profile.get("followers","")
+                    except Exception:pass
+                    try:
+                        record=json.loads(summary_path.read_text(encoding="utf-8"))[0];name=record.get("name") or name;phone=record.get("phone","");area=record.get("area","")
+                    except Exception:pass
+                    to_insert.append((batch,handle,name,phone,area,followers,'done',str(site),'available'))
+                    existing_handles.add(handle)
+                if to_insert:
+                    d.executemany("INSERT OR IGNORE INTO leads(batch,handle,name,phone,area,followers,status,site_path,qa) VALUES(?,?,?,?,?,?,?,?,?)", to_insert)
+        except Exception:
+            pass
+    leads = []
+    d1_err = False
+    try:
         with connect() as d:
-            existing_handles = {r["handle"] for r in d.execute("SELECT handle FROM leads WHERE batch=?", (batch,)).fetchall()}
-            to_insert = []
-            for account in root.iterdir():
-                try:
-                    handle=clean_handle(account.name)
-                except HTTPException:
-                    continue
-                if handle in existing_handles:
-                    continue
-                site=account/"site"/"index.html"
-                if not account.is_dir() or not site.is_file():continue
-                profile_path=account/f"{handle}_data"/"profile_data.json"
-                summary_path=account/f"{handle}_data"/"business_data.json"
-                name=phone=area=followers=""
-                try:
-                    profile=json.loads(profile_path.read_text(encoding="utf-8"));name=profile.get("name","");followers=profile.get("followers","")
-                except Exception:pass
-                try:
-                    record=json.loads(summary_path.read_text(encoding="utf-8"))[0];name=record.get("name") or name;phone=record.get("phone","");area=record.get("area","")
-                except Exception:pass
-                to_insert.append((batch,handle,name,phone,area,followers,'done',str(site),'available'))
-                existing_handles.add(handle)
-            if to_insert:
-                d.executemany("INSERT OR IGNORE INTO leads(batch,handle,name,phone,area,followers,status,site_path,qa) VALUES(?,?,?,?,?,?,?,?,?)", to_insert)
-    with connect() as d:
-        leads=[dict(r) for r in d.execute("SELECT * FROM leads WHERE batch=? ORDER BY updated_at DESC,handle",(batch,))]
+            leads=[dict(r) for r in d.execute("SELECT * FROM leads WHERE batch=? ORDER BY updated_at DESC,handle",(batch,))]
+    except Exception:
+        d1_err = True
     for l in leads:
         has_rec = bool(l.get("has_recording"))
         if not has_rec:
@@ -359,7 +404,7 @@ def state(batch:str|None=None):
                     pass
         l["has_recording"] = 1 if has_rec else 0
     a=REPO/"config/accounts.txt"; auth=REPO/"config/auth.json"
-    return {"batch":batch,"batches":batches,"settings":conf,"leads":leads,"accounts":a.read_text(encoding="utf-8") if a.exists() else "","auth_exists":auth.exists(),"auth_mtime":dt.datetime.fromtimestamp(auth.stat().st_mtime).isoformat(timespec="minutes") if auth.exists() else "","local_mode":is_local_mode(),"d1_offline":is_local_mode()}
+    return {"batch":batch,"batches":batches,"settings":conf,"leads":leads,"accounts":a.read_text(encoding="utf-8") if a.exists() else "","auth_exists":auth.exists(),"auth_mtime":dt.datetime.fromtimestamp(auth.stat().st_mtime).isoformat(timespec="minutes") if auth.exists() else "","local_mode":is_local_mode(),"d1_offline":is_local_mode() or d1_err,"needs_setup":False}
 
 @app.post("/api/accounts")
 def save_accounts(b:Accounts):
