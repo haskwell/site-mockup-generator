@@ -588,6 +588,79 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
             self.assertEqual(r_med.status_code, 200)
             self.assertIn("no-cache", r_med.headers.get("Cache-Control", ""))
 
+    def test_16_patch_lead_stage_endpoint(self):
+        """Verify PATCH /api/lead/{handle}/stage updates the stage without touching R2."""
+        conn = sqlite3.connect(self.db_path)
+        conn.execute("CREATE TABLE leads(batch TEXT, handle TEXT, stage TEXT DEFAULT 'new', updated_at TEXT, PRIMARY KEY(batch, handle))")
+        conn.execute("INSERT INTO leads(batch, handle, stage) VALUES('2026-10-28', 'patchuser', 'new')")
+        conn.commit()
+        conn.close()
+
+        def custom_connect():
+            c = sqlite3.connect(self.db_path)
+            c.row_factory = sqlite3.Row
+            return c
+
+        with patch("src.app.connect", side_effect=custom_connect), \
+             patch("src.app.is_r2_configured", return_value=True), \
+             patch("src.app.upload_file") as mock_upload:
+            resp = self.client.patch(
+                "/api/lead/patchuser/stage?batch=2026-10-28",
+                json={"stage": "recorded"},
+                headers={"X-Studio": "1"}
+            )
+            self.assertEqual(resp.status_code, 200)
+            self.assertEqual(resp.json(), {"saved": True, "handle": "patchuser", "stage": "recorded"})
+            # Verify R2 upload was NOT triggered
+            mock_upload.assert_not_called()
+
+            # Verify stage updated in DB
+            conn = sqlite3.connect(self.db_path)
+            row = conn.execute("SELECT stage FROM leads WHERE batch='2026-10-28' AND handle='patchuser'").fetchone()
+            self.assertEqual(row[0], "recorded")
+            conn.close()
+
+            # Test invalid stage
+            resp_inv = self.client.patch(
+                "/api/lead/patchuser/stage?batch=2026-10-28",
+                json={"stage": "invalid_stage"},
+                headers={"X-Studio": "1"}
+            )
+            self.assertEqual(resp_inv.status_code, 400)
+
+    def test_17_d1_connection_session_reuse(self):
+        """Verify D1Connection reuses a pooled requests.Session across queries."""
+        from src.d1_client import D1Connection
+        c1 = D1Connection("acct", "db", "token123")
+        c2 = D1Connection("acct", "db", "token123")
+        self.assertIs(c1.session, c2.session)
+        # Verify close() does not destroy the pooled session
+        c1.close()
+        self.assertFalse(c2.session.adapters.get("https://") is None)
+
+    def test_18_stage_recorded_without_recording_has_recording_zero(self):
+        """Verify moving a lead to 'recorded' stage without a recording does NOT flag has_recording=1."""
+        conn = sqlite3.connect(self.db_path)
+        conn.execute("CREATE TABLE IF NOT EXISTS leads(batch TEXT, handle TEXT, stage TEXT DEFAULT 'new', has_recording INTEGER DEFAULT 0, status TEXT DEFAULT 'queued', updated_at TEXT, PRIMARY KEY(batch, handle))")
+        conn.execute("INSERT OR REPLACE INTO leads(batch, handle, stage, has_recording) VALUES('2026-10-28', 'noreclead', 'recorded', 0)")
+        conn.commit()
+        conn.close()
+
+        def custom_connect():
+            c = sqlite3.connect(self.db_path)
+            c.row_factory = sqlite3.Row
+            return c
+
+        with patch("src.app.connect", side_effect=custom_connect), \
+             patch("src.app.is_r2_configured", return_value=False):
+            resp = self.client.get("/api/state?batch=2026-10-28")
+            self.assertEqual(resp.status_code, 200)
+            leads = resp.json().get("leads", [])
+            norec = next((l for l in leads if l["handle"] == "noreclead"), None)
+            self.assertIsNotNone(norec)
+            self.assertEqual(norec["stage"], "recorded")
+            self.assertEqual(norec["has_recording"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

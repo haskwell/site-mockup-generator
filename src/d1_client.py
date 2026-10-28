@@ -88,6 +88,33 @@ class D1Cursor:
         return iter(self._rows)
 
 
+_cached_d1_session: requests.Session | None = None
+_cached_d1_token: str | None = None
+
+
+def get_shared_d1_session(api_token: str) -> requests.Session:
+    """Return a shared requests.Session with connection pooling for Cloudflare D1."""
+    global _cached_d1_session, _cached_d1_token
+    if _cached_d1_session is not None and _cached_d1_token == api_token:
+        return _cached_d1_session
+
+    session = requests.Session()
+    adapter = requests.adapters.HTTPAdapter(
+        pool_connections=10,
+        pool_maxsize=20,
+        max_retries=2,
+    )
+    session.mount("https://", adapter)
+    session.mount("http://", adapter)
+    session.headers.update({
+        "Authorization": f"Bearer {api_token}",
+        "Content-Type": "application/json",
+    })
+    _cached_d1_session = session
+    _cached_d1_token = api_token
+    return session
+
+
 class D1Connection:
     """Connection to Cloudflare D1 over the HTTPS REST API."""
 
@@ -98,11 +125,7 @@ class D1Connection:
         self.endpoint = (
             f"https://api.cloudflare.com/client/v4/accounts/{account_id}/d1/database/{database_id}/query"
         )
-        self.session = requests.Session()
-        self.session.headers.update({
-            "Authorization": f"Bearer {api_token}",
-            "Content-Type": "application/json",
-        })
+        self.session = get_shared_d1_session(api_token)
 
     def _query(self, sql: str, params: Sequence[Any] | None = None) -> D1Cursor:
         # Convert any Path or custom objects to string
@@ -155,7 +178,8 @@ class D1Connection:
         pass
 
     def close(self) -> None:
-        self.session.close()
+        # Keep shared pooled session open so TCP/TLS connections persist
+        pass
 
     def __enter__(self) -> D1Connection:
         return self

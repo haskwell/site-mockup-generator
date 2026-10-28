@@ -65,9 +65,12 @@ function logout() {
     window._studioEventSource.close();
     window._studioEventSource = null;
   }
-  $("#studio").hidden = true;
-  $("#present").hidden = true;
-  $("#videodlg").hidden = true;
+  const studio = $("#studio");
+  if (studio) studio.hidden = true;
+  const present = $("#present");
+  if (present) present.hidden = true;
+  const videoModal = $("#videomodal");
+  if (videoModal) videoModal.hidden = true;
   showAuthOverlay();
   toast("Signed out");
 }
@@ -270,11 +273,24 @@ const ICONS = {
     '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"/>',
   chat: '<path d="M4 5h16v11H9l-5 4z"/>',
   play: '<path d="M6 3l14 9-14 9z"/>',
+  users:
+    '<path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/>',
+  calendar:
+    '<rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/>',
+  cloud:
+    '<path d="M18 10h-1.26A8 8 0 1 0 9 20h9a5 5 0 0 0 0-10z"/>',
+  external:
+    '<path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/>',
+  dollar:
+    '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
+  info:
+    '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>',
 };
 const ic = (n, s) =>
   `<svg class="i" viewBox="0 0 24 24"${s ? ` style="width:${s}px;height:${s}px"` : ""} aria-hidden="true">${ICONS[n] || ""}</svg>`;
 const lab = (n, t) => `${ic(n)}<span>${t}</span>`;
 const STAGES = ["new", "built", "recorded", "sent", "replied", "won", "lost"];
+const ACTIVE_STAGES = ["new", "built", "recorded", "sent", "replied"];
 const STATUSES = [
   "queued",
   "scraping",
@@ -399,7 +415,7 @@ function hue(s) {
 const initial = (l) =>
   ((l.name || l.handle || "?").trim()[0] || "?").toUpperCase();
 const avatarHtml = (l, style = "") =>
-  `<div class="avatar" style="${style || `background:hsl(${hue(l.handle)} 45% 40%)`}">${esc(initial(l))}<img src="/media/${enc(S.st.batch)}/${enc(l.handle)}/pfp.jpg" alt="" onerror="this.remove()" /></div>`;
+  `<div class="avatar" style="${style || `background:hsl(${hue(l.handle)} 45% 40%)`}">${esc(initial(l))}<img src="/media/${enc(S.st.batch)}/${enc(l.handle)}/pfp.jpg" alt="" onerror="this.remove()" draggable="false" /></div>`;
 const stageOf = (l) => (STAGES.includes(l.stage) ? l.stage : "new");
 let dlgRes = null;
 function dlg(title, body, buttons) {
@@ -489,13 +505,14 @@ const refreshSoon = debounce(() => refresh(false), 350);
 /* ---------- views ---------- */
 function setView(v) {
   S.view = v;
-  ["pipeline", "batch", "settings"].forEach((x) => {
+  ["pipeline", "clients", "batch", "settings"].forEach((x) => {
     const el = $("#view-" + x);
     if (el) el.hidden = x !== v;
     $("#nav-" + x)?.classList.toggle("active", x === v);
   });
   const meta = {
     pipeline: ["Pipeline", "Manage your website mockups"],
+    clients: ["Clients", "Won deals, revenue & client fulfillment"],
     batch: ["Batch Studio", "Prepare accounts and run mockup pipeline"],
     settings: ["Settings", "Configure workspace, models & storage"],
   }[v];
@@ -519,8 +536,13 @@ function filtered() {
   );
 }
 function render() {
-  const total = (S.st.leads || []).length;
-  if ($("#count-pipeline")) $("#count-pipeline").textContent = total;
+  const allLeads = S.st.leads || [];
+  const wonLeads = allLeads.filter((l) => stageOf(l) === "won");
+  const activeLeads = allLeads.filter(
+    (l) => !["won", "lost"].includes(stageOf(l)),
+  );
+  if ($("#count-pipeline")) $("#count-pipeline").textContent = activeLeads.length;
+  if ($("#count-clients")) $("#count-clients").textContent = wonLeads.length;
   if ($("#lay-board"))
     $("#lay-board").classList.toggle("on", S.layout === "board");
   if ($("#lay-list"))
@@ -528,13 +550,14 @@ function render() {
   if ($("#selbtn")) $("#selbtn").textContent = S.selmode ? "Done" : "Select";
   renderChips();
   if (S.view === "pipeline") renderPipeline();
+  if (S.view === "clients") renderClients();
   if (S.view === "batch") renderBatch();
   renderSelbar();
 }
 function renderChips() {
   if (S.loadingBatch) {
     $("#statuschips").innerHTML =
-      `<span class="chip on" style="opacity:0.75;cursor:wait"><span>📅 Finding latest date…</span></span>`;
+      `<span class="chip on" style="opacity:0.75;cursor:wait"><span>Finding latest date…</span></span>`;
     return;
   }
   const counts = {};
@@ -555,21 +578,20 @@ function cardHtml(l) {
     picked = S.checked.has(l.handle);
   const fail =
     l.status === "failed"
-      ? `<div class="cardfail">${ic("x", 14)}<span>Build failed</span><button class="sm" data-act="retry" data-h="${h}">Retry</button></div>`
+      ? `<div class="cardfail">${ic("x", 12)}<span>Build failed</span><button class="sm" data-act="retry" data-h="${h}">Retry</button></div>`
       : "";
   const isCloud =
     l.site_path &&
     (l.site_path.startsWith("http") || l.site_path.startsWith("/preview/"));
   const cloudBadge = isCloud
-    ? `<span class="cloud-badge" title="Hosted in Cloudflare R2">☁️ R2</span>`
+    ? `<span class="cloud-badge" title="Hosted in Cloudflare R2">${ic("cloud", 11)} R2</span>`
     : "";
   const hasRec = !!(
     l.has_recording ||
-    l.stage === "recorded" ||
     (l.recordings && Object.keys(l.recordings).length)
   );
   const recBadge = hasRec
-    ? `<button class="demo-badge sm" data-act="playCardRec" data-h="${h}" title="Watch video demo">▶ Demo</button>`
+    ? `<button class="demo-badge sm" data-act="playCardRec" data-h="${h}" title="Watch video demo">${ic("play", 10)} Demo</button>`
     : "";
 
   const _now = new Date();
@@ -579,54 +601,55 @@ function cardHtml(l) {
     l.follow_up <= today &&
     !["won", "lost"].includes(stageOf(l));
   const dueBadge = l.follow_up
-    ? `<span class="card-due ${isDueToday ? "due-today" : ""}" title="Follow-up due date">📅 ${esc(l.follow_up)}</span>`
+    ? `<span class="card-due ${isDueToday ? "due-today" : ""}" title="Follow-up due date">${ic("calendar", 11)} ${esc(l.follow_up)}</span>`
     : "";
 
-  // Website Mockup Thumbnail or Placeholder
-  let thumbHtml = "";
-  if (l.site_path) {
-    thumbHtml = `
-            <div class="card-thumb" data-act="open" data-h="${h}">
-              <div class="thumb-browser">
-                <div class="thumb-dots"><span></span><span></span><span></span></div>
-                <div class="thumb-url">${h}.studio</div>
-                <span class="thumb-badge">Built</span>
-              </div>
-              <div class="thumb-preview">
-                <iframe class="mini-frame" src="/preview/${enc(S.st.batch)}/${enc(l.handle)}/index.html" loading="lazy" tabindex="-1"></iframe>
-                <div class="thumb-overlay">
-                  <span class="thumb-open">Open Studio</span>
-                </div>
-              </div>
-            </div>`;
-  } else {
-    thumbHtml = `
-            <div class="card-no-site" data-act="open" data-h="${h}">
-              <span>No mockup yet</span>
-              <small>Website not built</small>
-            </div>`;
-  }
+  const priceBadge = l.price
+    ? `<span class="deal-badge" title="Quoted deal price">$${esc(String(l.price).replace(/^\$/, ""))}</span>`
+    : "";
+
+  const st = stageOf(l);
+  const isPitchStage = ["sent", "replied"].includes(st);
 
   return `<div class="card ${picked ? "picked" : ""}" draggable="true" data-act="open" data-h="${h}" tabindex="0">
-          <div class="card-row">
-            ${S.selmode ? `<input type="checkbox" ${picked ? "checked" : ""} data-act="check" data-h="${h}" aria-label="Select ${h}" />` : ""}
-            ${avatarHtml(l)}
-            <div class="card-info">
-              <div class="card-name">${esc(l.name || "@" + l.handle)}</div>
-              <div class="card-meta">@${h}${l.area ? " · " + esc(l.area) : ""}</div>
-            </div>
-          </div>
-          ${thumbHtml}
-          <div class="card-foot">
-            <span class="status ${esc(l.status || "queued")}">${esc(l.status || "queued")}</span>
-            ${cloudBadge}
-            ${recBadge}
-            ${dueBadge}
-            <span class="spacer"></span>
-            ${l.phone ? `<span style="font-size:10px;color:var(--text-dim)">📞 ${esc(l.phone)}</span>` : ""}
-          </div>
-          ${fail}
-        </div>`;
+    <div class="card-row">
+      ${S.selmode ? `<input type="checkbox" ${picked ? "checked" : ""} data-act="check" data-h="${h}" aria-label="Select ${h}" />` : ""}
+      ${avatarHtml(l)}
+      <div class="card-info">
+        <div class="card-name">${esc(l.name || "@" + l.handle)}</div>
+        <div class="card-meta">@${h}${l.area ? " · " + esc(l.area) : ""}</div>
+      </div>
+    </div>
+
+    <div class="card-badges">
+      <span class="status ${esc(l.status || "queued")}">${esc(l.status || "queued")}</span>
+      ${priceBadge}
+      ${cloudBadge}
+      ${recBadge}
+      ${dueBadge}
+    </div>
+
+    <div class="card-actions">
+      ${l.site_path ? `<button class="sm ghost card-btn" data-act="openPreviewTab" data-h="${h}" title="View website in new tab">${ic("external", 11)}<span>Site</span></button>` : ""}
+      ${l.phone ? `<button class="sm ghost card-btn" data-act="cardWa" data-h="${h}" title="Open WhatsApp chat">${ic("chat", 11)}<span>WhatsApp</span></button>` : ""}
+      ${isPitchStage ? `<button class="sm win-btn card-btn" data-act="cardMarkWon" data-h="${h}" title="Mark as Won (Closed Deal)">✓ Won</button>` : ""}
+      ${isPitchStage ? `<button class="sm loss-btn card-btn" data-act="cardMarkLost" data-h="${h}" title="Archive as Lost">✕ Pass</button>` : ""}
+      <div class="menu" style="margin-left:auto">
+        <button class="sm ghost card-btn" data-act="cardMenu" data-h="${h}" title="More lead actions" aria-label="More actions for ${h}">${ic("more", 11)}</button>
+        <div class="menulist card-menulist" id="cardmenu-${h}" hidden>
+          <button data-act="open" data-h="${h}">${ic("side", 12)}Open Studio</button>
+          ${l.site_path ? `<button data-act="openPreviewTab" data-h="${h}">${ic("external", 12)}View Site ↗</button>` : ""}
+          ${l.phone ? `<button data-act="cardWa" data-h="${h}">${ic("chat", 12)}WhatsApp Pitch</button>` : ""}
+          <button data-act="cardCopyPitch" data-h="${h}">${ic("copy", 12)}Copy Pitch Text</button>
+          <button data-act="cardRebuild" data-h="${h}">${ic("refresh", 12)}Rebuild Site</button>
+          ${l.site_path ? `<button data-act="cardZip" data-h="${h}">${ic("download", 12)}Download Site ZIP</button>` : ""}
+          <div class="menu-divider"></div>
+          <button class="danger" data-act="cardMarkLost" data-h="${h}">Archive Lead (Lost)</button>
+        </div>
+      </div>
+    </div>
+    ${fail}
+  </div>`;
 }
 function renderPipeline() {
   const rows = filtered();
@@ -653,7 +676,7 @@ function renderPipeline() {
   if (S.loadingBatch) {
     root.innerHTML = `<div class="empty" style="padding: 70px 16px;">
             <div class="loader-spinner" style="margin: 0 auto 16px;"></div>
-            <h3 style="font-size: 16px; margin-bottom: 6px; color: var(--text);">📅 Finding latest date…</h3>
+            <h3 style="font-size: 16px; margin-bottom: 6px; color: var(--text);">Finding latest date…</h3>
             <div class="muted" style="font-size: 13px;">Connecting to database and loading the newest batch</div>
           </div>`;
     return;
@@ -665,17 +688,16 @@ function renderPipeline() {
   if (S.layout === "board") {
     root.innerHTML =
       `<div class="board">` +
-      STAGES.map((st) => {
+      ACTIVE_STAGES.map((st) => {
         const c = rows.filter((l) => stageOf(l) === st);
         return `<div class="col" data-stage="${st}">
                 <div class="colhead">
                   <span class="stage-dot"></span>
                   <span>${st}</span>
                   <span class="n">${c.length}</span>
-                  ${st === "new" ? `<button class="sm ghost" data-act="view" data-v="batch" style="margin-left:auto;padding:1px 6px;font-size:10px" title="Add through Batch">+ Add</button>` : ""}
                 </div>
                 <div class="col-cards">
-                  ${c.map(cardHtml).join("") || '<div class="muted" style="font-size:11px;text-align:center;padding:16px 8px;border:1px dashed var(--line);border-radius:var(--r)">Drop lead here</div>'}
+                  ${c.map(cardHtml).join("") || '<div class="empty-drop">Drop lead here</div>'}
                 </div>
               </div>`;
       }).join("") +
@@ -686,12 +708,93 @@ function renderPipeline() {
         rows
           .map(
             (l) =>
-              `<tr class="${S.checked.has(l.handle) ? "picked" : ""}" data-act="open" data-h="${esc(l.handle)}">${S.selmode ? `<td><input type="checkbox" ${S.checked.has(l.handle) ? "checked" : ""} data-act="check" data-h="${esc(l.handle)}"></td>` : ""}<td><div style="display:flex;gap:10px;align-items:center">${avatarHtml(l, "width:32px;height:32px;font-size:13px;background:hsl(" + hue(l.handle) + " 45% 40%)")}<div><div style="font-weight:650">${esc(l.name || "@" + l.handle)}</div><div class="muted" style="font-size:12px">@${esc(l.handle)}</div></div></div></td><td><span class="status ${esc(l.status)}">${esc(l.status || "queued")}</span> ${l.site_path && (l.site_path.startsWith("http") || l.site_path.startsWith("/preview/")) ? '<span class="cloud-badge">☁️ R2</span>' : ""} ${l.has_recording || l.stage === "recorded" ? `<button class="demo-badge sm" data-act="playCardRec" data-h="${esc(l.handle)}" title="Watch video demo">▶ Demo</button>` : ""}</td><td>${esc(stageOf(l))}</td><td>${esc(l.area || "—")}</td><td>${esc(l.phone || "—")}</td></tr>`,
+              `<tr class="${S.checked.has(l.handle) ? "picked" : ""}" data-act="open" data-h="${esc(l.handle)}">${S.selmode ? `<td><input type="checkbox" ${S.checked.has(l.handle) ? "checked" : ""} data-act="check" data-h="${esc(l.handle)}"></td>` : ""}<td><div style="display:flex;gap:10px;align-items:center">${avatarHtml(l, "width:32px;height:32px;font-size:13px;background:hsl(" + hue(l.handle) + " 45% 40%)")}<div><div style="font-weight:650">${esc(l.name || "@" + l.handle)}</div><div class="muted" style="font-size:12px">@${esc(l.handle)}</div></div></div></td><td><span class="status ${esc(l.status)}">${esc(l.status || "queued")}</span> ${l.site_path && (l.site_path.startsWith("http") || l.site_path.startsWith("/preview/")) ? `<span class="cloud-badge">${ic("cloud", 11)} R2</span>` : ""} ${l.has_recording || (l.recordings && Object.keys(l.recordings).length) ? `<button class="demo-badge sm" data-act="playCardRec" data-h="${esc(l.handle)}" title="Watch video demo">${ic("play", 10)} Demo</button>` : ""}</td><td>${esc(stageOf(l))}</td><td>${esc(l.area || "—")}</td><td>${esc(l.phone || "—")}</td></tr>`,
           )
           .join("") +
         `</tbody></table></div></div>`
       : `<div class="empty"><h3>No matches</h3>Try a different filter.</div>`;
   }
+}
+function renderClients() {
+  const allLeads = S.st.leads || [];
+  const wonLeads = allLeads.filter((l) => stageOf(l) === "won");
+  const q = ($("#q-clients")?.value || "").trim().toLowerCase();
+  const filtered = wonLeads.filter((l) => {
+    if (!q) return true;
+    return [l.name, l.handle, l.phone, l.area, l.notes, l.price]
+      .filter(Boolean)
+      .join(" ")
+      .toLowerCase()
+      .includes(q);
+  });
+
+  let totalRev = 0;
+  wonLeads.forEach((l) => {
+    const num = parseFloat(String(l.price || "").replace(/[^0-9.]/g, ""));
+    if (!isNaN(num) && num > 0) totalRev += num;
+  });
+  const avgDeal = wonLeads.length ? Math.round(totalRev / wonLeads.length) : 0;
+
+  if ($("#metric-clients-count"))
+    $("#metric-clients-count").textContent = wonLeads.length;
+  if ($("#metric-clients-rev"))
+    $("#metric-clients-rev").textContent = `$${totalRev.toLocaleString()}`;
+  if ($("#metric-clients-avg"))
+    $("#metric-clients-avg").textContent = `$${avgDeal.toLocaleString()}`;
+
+  const tbody = $("#clients-tbody");
+  const empty = $("#clients-empty");
+  if (!tbody) return;
+
+  if (!filtered.length) {
+    tbody.innerHTML = "";
+    if (empty) empty.hidden = false;
+    return;
+  }
+  if (empty) empty.hidden = true;
+
+  tbody.innerHTML = filtered
+    .map((l) => {
+      const h = esc(l.handle);
+      const priceDisplay = l.price
+        ? `<span class="deal-badge">$${esc(String(l.price).replace(/^\$/, ""))}</span>`
+        : `<span class="muted" style="font-size:11px">—</span>`;
+      const phoneClean = (l.phone || "").replace(/\D/g, "");
+      const waBtn = phoneClean
+        ? `<button class="sm ghost card-btn" data-act="cardWa" data-h="${h}" title="Message on WhatsApp">${ic("chat", 12)}<span>WhatsApp</span></button>`
+        : `<span class="muted" style="font-size:11px">${esc(l.phone || "No phone")}</span>`;
+      const siteBtn = l.site_path
+        ? `<button class="sm ghost card-btn" data-act="openPreviewTab" data-h="${h}" title="View live site mockup in new tab">${ic("external", 12)}<span>View Site</span></button>`
+        : `<span class="muted" style="font-size:11px">No site</span>`;
+      const zipBtn = `<a class="sm ghost card-btn" href="/api/lead/${enc(l.handle)}/zip?mode=site" download="${h}-site.zip" title="Download Site ZIP">${ic("download", 12)}<span>Site ZIP</span></a>`;
+      const updateDate = l.updated_at
+        ? esc(l.updated_at.split("T")[0] || l.updated_at.split(" ")[0])
+        : "—";
+
+      return `<tr>
+        <td>
+          <div style="display:flex;gap:10px;align-items:center">
+            ${avatarHtml(l, "width:34px;height:34px;font-size:13px;border-radius:6px;background:hsl(" + hue(l.handle) + " 45% 40%)")}
+            <div>
+              <div style="font-weight:600;font-size:13px">${esc(l.name || "@" + l.handle)}</div>
+              <div class="muted" style="font-size:11px">@${h}${l.area ? " · " + esc(l.area) : ""}</div>
+            </div>
+          </div>
+        </td>
+        <td>${priceDisplay}</td>
+        <td>${waBtn}</td>
+        <td>${siteBtn}</td>
+        <td>${zipBtn}</td>
+        <td><span class="muted" style="font-size:11px">${updateDate}</span></td>
+        <td>
+          <div style="display:flex;gap:6px;align-items:center">
+            <button class="sm ghost" data-act="open" data-h="${h}" title="Open Lead Studio">Studio</button>
+            <button class="sm ghost" data-act="reopenLead" data-h="${h}" title="Move back to Pipeline (Replied)">Reopen</button>
+          </div>
+        </td>
+      </tr>`;
+    })
+    .join("");
 }
 function renderSelbar() {
   let b = $("#selbar");
@@ -768,7 +871,6 @@ function syncStudioLead(l, overwrite = false) {
   updateContactMenu();
   const hasRec = !!(
     l.has_recording ||
-    l.stage === "recorded" ||
     (S.ld?.recordings && Object.keys(S.ld.recordings).length)
   );
   if ($("#playrecbtn")) $("#playrecbtn").hidden = !hasRec;
@@ -820,7 +922,7 @@ async function openStudio(h) {
     ldr.classList.remove("fade-out");
     ldr.hidden = false;
     $("#loaderhandle").textContent = `@${h}`;
-    $("#loaderstatus").textContent = "☁️ Connecting to Cloudflare R2…";
+    $("#loaderstatus").textContent = "Connecting to Cloudflare R2…";
     $("#loadersub").textContent = "Fetching mockup, assets & recordings";
   }
   setSyncIndicator(`Loading @${h} from R2…`);
@@ -910,7 +1012,7 @@ async function loadLead(h, full) {
           ldr.hidden = false;
           if (d.cloud_newer) {
             $("#loaderstatus").textContent =
-              "☁️ Pulling latest revision from R2…";
+              "Pulling latest revision from R2…";
             $("#loadersub").textContent =
               "Syncing updated site files to local disk";
           } else {
@@ -929,7 +1031,7 @@ async function loadLead(h, full) {
             }
             f.hidden = false;
             if (d.cloud_newer) {
-              toast("☁️ Synced latest revision from Cloudflare R2!");
+              toast("Synced latest revision from Cloudflare R2!");
             }
           }
         };
@@ -1161,54 +1263,97 @@ function autosave() {
   }, 600);
 }
 async function setStage(st) {
+  const targetHandle = S.sel;
+  if (!targetHandle) return;
+  const lead = leadOf(targetHandle);
+  const prevStage = lead ? lead.stage : null;
+  if (lead) lead.stage = st;
+  if (S.ld && S.ld.lead) S.ld.lead.stage = st;
+  if ($("#f-stage")) $("#f-stage").value = st;
+  drawStrip();
+  drawNext();
+  render();
+
   try {
-    await putLead({ stage: st });
-    if (S.ld) S.ld.lead.stage = st;
-    leadOf(S.sel).stage = st;
+    await api(`${leadUrl(targetHandle)}/stage${bq()}`, {
+      method: "PATCH",
+      body: JSON.stringify({ stage: st }),
+    });
+    flashSaved();
+  } catch (e) {
+    if (lead && prevStage !== null) lead.stage = prevStage;
+    if (S.ld && S.ld.lead && prevStage !== null) S.ld.lead.stage = prevStage;
+    if ($("#f-stage") && prevStage !== null) $("#f-stage").value = prevStage;
     drawStrip();
     drawNext();
     render();
-  } catch (e) {
     toast(e.message);
   }
 }
-async function stageFor(h, st) {
-  // used by drag & drop, merges with full lead data first
+async function putLeadFor(h, extra = {}) {
   try {
     const d = await api(leadUrl(h) + bq());
     const l = d.lead;
+    const body = {
+      name: l.name || "",
+      phone: l.phone || "",
+      area: l.area || "",
+      followers: l.followers || "",
+      notes: l.notes || "",
+      stage: l.stage || "new",
+      follow_up: l.follow_up || "",
+      price: l.price || "",
+      ...extra,
+    };
     await api(`${leadUrl(h)}${bq()}`, {
       method: "PUT",
-      body: JSON.stringify({
-        name: l.name || "",
-        phone: l.phone || "",
-        area: l.area || "",
-        followers: l.followers || "",
-        notes: l.notes || "",
-        stage: st,
-        follow_up: l.follow_up || "",
-        price: l.price || "",
-      }),
+      body: JSON.stringify(body),
     });
-    leadOf(h).stage = st;
+    const local = leadOf(h);
+    if (local) Object.assign(local, body);
+    if (S.ld && S.sel === h) Object.assign(S.ld.lead, body);
     render();
-    toast(`Moved to ${st}`);
+    return true;
   } catch (e) {
     toast(e.message);
-    refresh(false);
+    return false;
   }
 }
-function pitch() {
-  const n = $("#f-name").value || S.sel;
+async function stageFor(h, st) {
+  // used by drag & drop - instant optimistic UI update
+  const lead = leadOf(h);
+  const prevStage = lead ? lead.stage : null;
+  if (lead) lead.stage = st;
+  if (S.ld && S.sel === h && S.ld.lead) S.ld.lead.stage = st;
+  render();
+
+  try {
+    await api(`${leadUrl(h)}/stage${bq()}`, {
+      method: "PATCH",
+      body: JSON.stringify({ stage: st }),
+    });
+    toast(`Moved to ${st}`);
+  } catch (e) {
+    if (lead && prevStage !== null) lead.stage = prevStage;
+    if (S.ld && S.sel === h && S.ld.lead && prevStage !== null) S.ld.lead.stage = prevStage;
+    render();
+    toast(`Failed to move lead: ${e.message}`);
+  }
+}
+function pitch(h) {
+  const l = h ? leadOf(h) : (S.ld?.lead || leadOf(S.sel));
+  const n = (l && l.name) || h || S.sel || "there";
   return `Hi ${n}, I came across your Instagram and made a website concept for your business. Would you like to take a look?`;
 }
-function whatsapp() {
-  const p = $("#f-phone").value.replace(/\D/g, "");
+function whatsapp(h) {
+  const l = h ? leadOf(h) : (S.ld?.lead || leadOf(S.sel));
+  const rawPhone = (l && l.phone) || ($("#f-phone")?.value) || "";
+  const p = rawPhone.replace(/\D/g, "");
   if (!p) {
     toast("No phone number on this lead");
     return false;
   }
-  window.open(`https://wa.me/${p}?text=${enc(pitch())}`, "_blank");
+  window.open(`https://wa.me/${p}?text=${enc(pitch(h))}`, "_blank");
   return true;
 }
 
@@ -1854,6 +1999,96 @@ const A = {
     }
     openStudio(el.dataset.h);
   },
+  openPreviewTab: (el, e) => {
+    e.stopPropagation();
+    const h = el.dataset.h;
+    if (h) window.open(previewUrl(h), "_blank");
+  },
+  cardWa: (el, e) => {
+    e.stopPropagation();
+    const h = el.dataset.h;
+    if (h) whatsapp(h);
+  },
+  cardMarkWon: async (el, e) => {
+    e.stopPropagation();
+    const h = el.dataset.h;
+    const cur = leadOf(h).price || "$499";
+    const p = prompt(`Enter quoted deal value for @${h}:`, cur);
+    if (p !== null) {
+      await putLeadFor(h, { stage: "won", price: p });
+      toast(`@${h} marked as Won! Moved to Clients.`);
+      await refresh(false);
+    }
+  },
+  cardMarkLost: async (el, e) => {
+    e.stopPropagation();
+    const h = el.dataset.h;
+    if (
+      await confirmDlg(
+        "Archive Lead",
+        `Move @${h} to Lost / Archive?`,
+        "Archive",
+      )
+    ) {
+      await api(`/api/lead/${enc(h)}/archive${bq()}`, { method: "POST" });
+      toast(`@${h} moved to Lost.`);
+      await refresh(false);
+    }
+  },
+  studioWon: async () => {
+    const h = S.sel;
+    if (!h) return;
+    const cur = $("#f-price")?.value || leadOf(h).price || "$499";
+    const p = prompt(`Enter quoted deal value for @${h}:`, cur);
+    if (p !== null) {
+      if ($("#f-price")) $("#f-price").value = p;
+      await putLead({ stage: "won", price: p });
+      toast(`@${h} marked as Won! Moved to Clients.`);
+      await refresh(false);
+      closeStudio();
+      setView("clients");
+    }
+  },
+  reopenLead: async (el, e) => {
+    e.stopPropagation();
+    const h = el.dataset.h;
+    if (h) {
+      await putLeadFor(h, { stage: "replied" });
+      toast(`Reopened @${h} to Replied.`);
+      await refresh(false);
+    }
+  },
+  cardMenu: (el, e) => {
+    e.stopPropagation();
+    const h = el.dataset.h;
+    const m = $(`#cardmenu-${h}`);
+    if (!m) return;
+    const isHidden = m.hidden;
+    $$(".card-menulist").forEach((x) => (x.hidden = true));
+    m.hidden = !isHidden;
+  },
+  cardCopyPitch: (el, e) => {
+    e.stopPropagation();
+    const h = el.dataset.h;
+    $$(".card-menulist").forEach((x) => (x.hidden = true));
+    navigator.clipboard.writeText(pitch(h)).then(() => toast("Pitch copied"));
+  },
+  cardRebuild: (el, e) => {
+    e.stopPropagation();
+    const h = el.dataset.h;
+    $$(".card-menulist").forEach((x) => (x.hidden = true));
+    runBuild([h], true);
+  },
+  cardZip: (el, e) => {
+    e.stopPropagation();
+    const h = el.dataset.h;
+    $$(".card-menulist").forEach((x) => (x.hidden = true));
+    const a = document.createElement("a");
+    a.href = `${leadUrl(h)}/zip?mode=site&${bq().slice(1)}`;
+    a.download = `${h}-site.zip`;
+    a.click();
+    toast(`Downloading ${h}-site.zip…`);
+  },
   retry: (el, e) => {
     e.stopPropagation();
     runBuild([el.dataset.h], true);
@@ -2080,7 +2315,7 @@ const A = {
       if (ldr) {
         ldr.classList.remove("fade-out");
         ldr.hidden = false;
-        $("#loaderstatus").textContent = "☁️ Checking R2 for revisions…";
+        $("#loaderstatus").textContent = "Checking R2 for revisions…";
         $("#loadersub").textContent = "Syncing latest website files";
         f.onload = () => {
           ldr.classList.add("fade-out");
@@ -2307,10 +2542,20 @@ async function chooseDelete(handles) {
 
 /* ---------- events ---------- */
 document.addEventListener("click", (e) => {
-  if (!e.target.closest(".menu")) $("#smenu").hidden = true;
+  if (justDragged) {
+    justDragged = false;
+    return;
+  }
+  if (!e.target.closest(".menu")) {
+    $("#smenu").hidden = true;
+    $$(".card-menulist").forEach((m) => (m.hidden = true));
+  }
   if (!e.target.closest("#v-del-wrap")) resetDelConfirm();
   const el = e.target.closest("[data-act]");
   if (el && A[el.dataset.act]) {
+    if (el.matches(".card") && e.target.closest(".card-actions")) {
+      return;
+    }
     if (el.type === "checkbox") {
       A[el.dataset.act](el, e);
       return;
@@ -2451,17 +2696,18 @@ $("#palq").addEventListener("input", () => {
   drawPalette();
 });
 $("#q").addEventListener("input", render);
+$("#q-clients")?.addEventListener("input", renderClients);
 $("#batch").addEventListener("change", async () => {
   const b = $("#batch").value;
   S.sel = "";
   S.checked.clear();
   S.loadingBatch = true;
-  setSyncIndicator(`☁️ Loading batch ${b}…`);
+  setSyncIndicator(`Loading batch ${b}…`);
   const root = $("#pipeline");
   if (root && S.view === "pipeline") {
     root.innerHTML = `<div class="empty" style="padding: 70px 16px;">
             <div class="loader-spinner" style="margin: 0 auto 16px;"></div>
-            <h3 style="font-size: 16px; margin-bottom: 6px; color: var(--text);">☁️ Loading batch ${esc(b)}…</h3>
+            <h3 style="font-size: 16px; margin-bottom: 6px; color: var(--text);">Loading batch ${esc(b)}…</h3>
             <div class="muted" style="font-size: 13px;">Pulling leads and mockups from database</div>
           </div>`;
   }
@@ -2486,35 +2732,88 @@ document.addEventListener("change", (e) => {
 });
 // drag & drop between pipeline stages
 let dragH = null;
+let justDragged = false;
+
+function getDropCol(target, clientX, clientY) {
+  if (!target) return null;
+  const col = target.closest?.(".col");
+  if (col) return col;
+  const board = target.closest?.(".board");
+  if (board && clientX !== undefined) {
+    const cols = $$(".col", board);
+    for (const c of cols) {
+      const rect = c.getBoundingClientRect();
+      if (
+        clientX >= rect.left - 12 &&
+        clientX <= rect.right + 12 &&
+        clientY >= rect.top - 20 &&
+        clientY <= rect.bottom + 20
+      ) {
+        return c;
+      }
+    }
+  }
+  return null;
+}
+
 document.addEventListener("dragstart", (e) => {
+  if (e.target.closest?.("button, input, select, textarea, .menu")) {
+    e.preventDefault();
+    return;
+  }
   const c = e.target.closest?.(".card[data-h]");
   if (!c) return;
   dragH = c.dataset.h;
   c.classList.add("dragging");
-  e.dataTransfer.effectAllowed = "move";
-  e.dataTransfer.setData("text/plain", dragH);
-});
-document.addEventListener("dragend", (e) => {
-  e.target.classList?.remove("dragging");
-  $$(".col.over").forEach((c) => c.classList.remove("over"));
-});
-document.addEventListener("dragover", (e) => {
-  const c = e.target.closest?.(".col");
-  if (c && dragH) {
-    e.preventDefault();
-    $$(".col.over").forEach((x) => x !== c && x.classList.remove("over"));
-    c.classList.add("over");
+  if (e.dataTransfer) {
+    e.dataTransfer.effectAllowed = "move";
+    e.dataTransfer.setData("text/plain", dragH);
   }
 });
-document.addEventListener("drop", (e) => {
-  const c = e.target.closest?.(".col");
-  if (!c || !dragH) return;
-  e.preventDefault();
-  const st = c.dataset.stage,
-    h = dragH;
+
+document.addEventListener("dragend", (e) => {
+  e.target.classList?.remove("dragging");
+  $$(".card.dragging").forEach((x) => x.classList.remove("dragging"));
+  $$(".col.over").forEach((c) => c.classList.remove("over"));
   dragH = null;
-  c.classList.remove("over");
-  if (stageOf(leadOf(h)) !== st) stageFor(h, st);
+  justDragged = true;
+  setTimeout(() => {
+    justDragged = false;
+  }, 150);
+});
+
+document.addEventListener("dragover", (e) => {
+  if (!dragH) return;
+  const c = getDropCol(e.target, e.clientX, e.clientY);
+  if (c || e.target.closest?.(".board")) {
+    e.preventDefault();
+    if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+  }
+  if (c) {
+    $$(".col.over").forEach((x) => x !== c && x.classList.remove("over"));
+    c.classList.add("over");
+  } else {
+    $$(".col.over").forEach((x) => x.classList.remove("over"));
+  }
+});
+
+document.addEventListener("drop", (e) => {
+  if (!dragH) return;
+  const c = getDropCol(e.target, e.clientX, e.clientY);
+  const h = dragH || e.dataTransfer?.getData("text/plain");
+  dragH = null;
+  $$(".col.over").forEach((x) => x.classList.remove("over"));
+  $$(".card.dragging").forEach((x) => x.classList.remove("dragging"));
+  if (!c || !h) return;
+  e.preventDefault();
+  const st = c.dataset.stage;
+  justDragged = true;
+  setTimeout(() => {
+    justDragged = false;
+  }, 150);
+  if (st && stageOf(leadOf(h)) !== st) {
+    stageFor(h, st);
+  }
 });
 
 /* live activity */
@@ -2592,7 +2891,7 @@ function initApp() {
   $("#batch").disabled = true;
   $("#batch").classList.add("loading-date");
   $("#batch").title = "Finding latest date from database…";
-  setSyncIndicator("📅 Finding latest date…");
+  setSyncIndicator("Finding latest date…");
   $("#jobpill").classList.add("run");
   $("#jobtext").textContent = "Finding date…";
   setView("pipeline");

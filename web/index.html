@@ -7,9 +7,22 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
-      href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..800;1,9..40,400..800&family=Space+Grotesk:wght@400..700&display=swap"
-      rel="stylesheet"
+      rel="preload"
+      as="style"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,400..800;1,9..40,400..800&display=swap"
     />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,400..800;1,9..40,400..800&display=swap"
+      media="print"
+      onload="this.media = 'all'"
+    />
+    <noscript>
+      <link
+        rel="stylesheet"
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Sans:ital,opsz,wght@0,9..40,400..800;1,9..40,400..800&display=swap"
+      />
+    </noscript>
     <link rel="stylesheet" href="styles.css" />
     <script>
       try {
@@ -23,7 +36,12 @@
   <body>
     <!-- Client-Side Authentication Overlay -->
     <div class="auth-overlay" id="auth-overlay">
-      <div class="auth-card" role="dialog" aria-modal="true" aria-labelledby="auth-title">
+      <div
+        class="auth-card"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="auth-title"
+      >
         <div class="auth-brand">
           <div class="auth-logo">
             <img src="/assets/studio.png" alt="Studio" />
@@ -63,9 +81,7 @@
 
           <div class="auth-err" id="auth-err" hidden role="alert"></div>
 
-          <button type="submit" class="auth-btn" id="auth-btn">
-            Sign In
-          </button>
+          <button type="submit" class="auth-btn" id="auth-btn">Sign In</button>
         </form>
       </div>
     </div>
@@ -101,6 +117,22 @@
             </svg>
             <span>Pipeline</span>
             <span class="nav-count" id="count-pipeline">0</span>
+          </button>
+          <button
+            class="nav-item"
+            data-act="view"
+            data-v="clients"
+            id="nav-clients"
+            aria-label="Clients"
+          >
+            <svg class="i" viewBox="0 0 24 24">
+              <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
+              <circle cx="8.5" cy="7" r="4" />
+              <line x1="20" y1="8" x2="20" y2="14" />
+              <line x1="23" y1="11" x2="17" y2="11" />
+            </svg>
+            <span>Clients</span>
+            <span class="nav-count" id="count-clients">0</span>
           </button>
           <button
             class="nav-item"
@@ -194,12 +226,24 @@
             <span>Search leads or actions…</span>
             <span class="kbd">Ctrl K</span>
           </button>
-          <input
-            id="batch"
-            type="date"
-            title="Batch date"
-            aria-label="Batch date"
-          />
+          <div class="batch-select-wrap" title="Current batch date">
+            <svg
+              class="i"
+              viewBox="0 0 24 24"
+              style="width: 13px; height: 13px"
+            >
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+              <line x1="16" y1="2" x2="16" y2="6" />
+              <line x1="8" y1="2" x2="8" y2="6" />
+              <line x1="3" y1="10" x2="21" y2="10" />
+            </svg>
+            <input
+              id="batch"
+              type="date"
+              title="Batch date"
+              aria-label="Batch date"
+            />
+          </div>
           <span class="pill" id="jobpill">
             <span class="dot"></span><span id="jobtext">Ready</span>
           </span>
@@ -215,7 +259,11 @@
         </header>
 
         <div id="offlinebanner" hidden>
-          <span>ℹ️</span>
+          <svg class="i" viewBox="0 0 24 24" style="width: 15px; height: 15px">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="16" x2="12" y2="12" />
+            <line x1="12" y1="8" x2="12.01" y2="8" />
+          </svg>
           <span
             >Local Mode is active (using local SQLite and local filesystem).
             Cloud sync is manual.</span
@@ -282,6 +330,85 @@
             </div>
           </div>
           <div id="pipeline"></div>
+        </section>
+
+        <!-- VIEW: Clients (Won Deals & Revenue) -->
+        <section class="view" id="view-clients" hidden>
+          <div class="clients-view-wrap">
+            <div class="clients-metrics">
+              <div class="metric-card">
+                <span class="metric-label">Closed Clients</span>
+                <span class="metric-val" id="metric-clients-count">0</span>
+                <span class="metric-sub">Won deals</span>
+              </div>
+              <div class="metric-card">
+                <span class="metric-label">Total Booked Revenue</span>
+                <span class="metric-val text-success" id="metric-clients-rev"
+                  >$0</span
+                >
+                <span class="metric-sub">Across closed accounts</span>
+              </div>
+              <div class="metric-card">
+                <span class="metric-label">Avg. Deal Size</span>
+                <span class="metric-val" id="metric-clients-avg">$0</span>
+                <span class="metric-sub">Per closed business</span>
+              </div>
+            </div>
+
+            <div class="clients-toolbar">
+              <div class="q-wrap">
+                <svg
+                  class="i"
+                  viewBox="0 0 24 24"
+                  style="width: 14px; height: 14px"
+                >
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="M20 20l-4-4" />
+                </svg>
+                <input
+                  class="q"
+                  id="q-clients"
+                  placeholder="Filter clients…"
+                  aria-label="Filter clients"
+                />
+              </div>
+              <div class="spacer"></div>
+              <button
+                class="sm ghost"
+                data-act="exportCsv"
+                title="Export leads CSV"
+              >
+                <svg class="i" viewBox="0 0 24 24">
+                  <path d="M12 3v12M7 10l5 5 5-5M4 20h16" />
+                </svg>
+                <span>Export CSV</span>
+              </button>
+            </div>
+
+            <div class="table-card clients-table-card">
+              <table class="list clients-table">
+                <thead>
+                  <tr>
+                    <th>Client / Business</th>
+                    <th>Quoted Value</th>
+                    <th>WhatsApp Outreach</th>
+                    <th>Live Website</th>
+                    <th>Site Files</th>
+                    <th>Last Update</th>
+                    <th style="width: 140px">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="clients-tbody"></tbody>
+              </table>
+              <div class="empty clients-empty" id="clients-empty" hidden>
+                <h3>No won deals yet</h3>
+                <p class="muted">
+                  Mark leads as Won in the Pipeline or Studio to track
+                  fulfillment and revenue here.
+                </p>
+              </div>
+            </div>
+          </div>
         </section>
 
         <!-- VIEW 2: Batch Studio -->
@@ -572,6 +699,22 @@
           class="sm ghost"
           hidden
         ></button>
+        <button
+          class="sm win-btn"
+          data-act="studioWon"
+          id="b-studio-won"
+          title="Mark as Won (Closed Deal)"
+        >
+          ✓ Won
+        </button>
+        <button
+          class="sm ghost danger"
+          data-act="archiveLead"
+          id="b-studio-lost"
+          title="Archive lead as Lost"
+        >
+          ✕ Pass
+        </button>
         <div class="menu">
           <button
             class="iconbtn ghost"
@@ -586,20 +729,78 @@
             </svg>
           </button>
           <div class="menulist" id="smenu" hidden>
-            <button data-act="rebuild" id="m-rebuild">Rebuild site</button>
-            <button data-act="openTab" id="m-open">Open in new tab</button>
-            <button data-act="instagram" id="m-ig">Instagram profile</button>
-            <button data-act="whatsapp" id="m-wa">WhatsApp pitch</button>
-            <button data-act="copyPitch" id="m-pitch">Copy pitch text</button>
-            <button data-act="copyPath" id="m-path">Copy site path</button>
-            <button data-act="zipSite" id="m-zip">Download Site ZIP</button>
+            <div class="menu-sec-label">Outreach &amp; Links</div>
+            <button data-act="openTab" id="m-open">
+              <svg class="i" viewBox="0 0 24 24">
+                <path
+                  d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
+                />
+                <polyline points="15 3 21 3 21 9" />
+                <line x1="10" y1="14" x2="21" y2="3" /></svg
+              >Open in new tab
+            </button>
+            <button data-act="whatsapp" id="m-wa">
+              <svg class="i" viewBox="0 0 24 24">
+                <path d="M4 5h16v11H9l-5 4z" /></svg
+              >WhatsApp pitch
+            </button>
+            <button data-act="instagram" id="m-ig">
+              <svg class="i" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="9" />
+                <path
+                  d="M3 12h18M12 3c3 3 3 15 0 18M12 3c-3 3-3 15 0 18"
+                /></svg
+              >Instagram profile
+            </button>
+            <button data-act="copyPitch" id="m-pitch">
+              <svg class="i" viewBox="0 0 24 24">
+                <rect x="8" y="8" width="12" height="12" rx="2" />
+                <path
+                  d="M16 8V5a1 1 0 00-1-1H5a1 1 0 00-1 1v10a1 1 0 001 1h3"
+                /></svg
+              >Copy pitch text
+            </button>
+
+            <div class="menu-divider"></div>
+            <div class="menu-sec-label">Assets &amp; Code</div>
+            <button data-act="rebuild" id="m-rebuild">
+              <svg class="i" viewBox="0 0 24 24">
+                <path d="M20 11a8 8 0 10-2.3 5.7M20 4v7h-7" /></svg
+              >Rebuild site
+            </button>
+            <button data-act="zipSite" id="m-zip">
+              <svg class="i" viewBox="0 0 24 24">
+                <path d="M12 3v12M7 10l5 5 5-5M4 20h16" /></svg
+              >Download Site ZIP
+            </button>
             <button data-act="zipFull" id="m-zip-full">
-              Download Full Folder ZIP
+              <svg class="i" viewBox="0 0 24 24">
+                <path d="M12 3v12M7 10l5 5 5-5M4 20h16" /></svg
+              >Download Full Folder ZIP
             </button>
             <button data-act="downloadRec" id="m-rec-dl" hidden>
-              Download Demo Recording
+              <svg class="i" viewBox="0 0 24 24">
+                <circle cx="12" cy="12" r="8" />
+                <circle cx="12" cy="12" r="3" fill="currentColor" /></svg
+              >Download Demo Recording
             </button>
-            <button data-act="unlockLead" id="m-unlock">Unlock lead</button>
+            <button data-act="copyPath" id="m-path">
+              <svg class="i" viewBox="0 0 24 24">
+                <path
+                  d="M16 8V5a1 1 0 00-1-1H5a1 1 0 00-1 1v10a1 1 0 001 1h3"
+                />
+                <rect x="8" y="8" width="12" height="12" rx="2" /></svg
+              >Copy site path
+            </button>
+            <button data-act="unlockLead" id="m-unlock">
+              <svg class="i" viewBox="0 0 24 24">
+                <rect x="3" y="11" width="18" height="11" rx="2" />
+                <path d="M7 11V7a5 5 0 0110 0v4" /></svg
+              >Unlock lead
+            </button>
+
+            <div class="menu-divider"></div>
+            <div class="menu-sec-label">Danger Zone</div>
             <button class="danger" data-act="deleteRec" id="m-rec-del" hidden>
               Delete Recording…
             </button>
@@ -958,7 +1159,9 @@
             data-act="closeVideo"
             aria-label="Close"
           >
-            ✕
+            <svg class="i" viewBox="0 0 24 24">
+              <path d="M6 6l12 12M18 6L6 18" />
+            </svg>
           </button>
         </div>
         <div class="video-viewport" id="v-viewport">
@@ -986,7 +1189,10 @@
           >
           <div class="del-confirm-wrap" id="v-del-wrap">
             <button class="sm ghost danger" data-act="delAsk" id="v-del-btn">
-              🗑️ Delete
+              <svg class="i" viewBox="0 0 24 24">
+                <path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13" />
+              </svg>
+              <span>Delete</span>
             </button>
             <div class="del-confirm-box" id="v-del-confirm" hidden>
               <span style="font-size: 11px; color: var(--danger)"
@@ -1001,7 +1207,10 @@
             </div>
           </div>
           <button class="sm ghost" data-act="downloadVideo" id="v-dl-btn">
-            📥 Download
+            <svg class="i" viewBox="0 0 24 24">
+              <path d="M12 3v12M7 10l5 5 5-5M4 20h16" />
+            </svg>
+            <span>Download</span>
           </button>
         </div>
       </div>

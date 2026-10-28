@@ -176,7 +176,12 @@ def resolve_websites_root(root_str: str | None = None) -> Path:
         logging.getLogger("uvicorn.error").warning("Configured websites root directory does not exist: %s", p)
     return p
 
+_settings_cache: dict[str, Any] | None = None
+
 def settings():
+    global _settings_cache
+    if _settings_cache is not None:
+        return dict(_settings_cache)
     try:
         with connect() as d: rows=d.execute("SELECT key,value FROM settings").fetchall()
         conf = {r["key"]:json.loads(r["value"]) for r in rows if not str(r["key"]).startswith("_")}
@@ -193,6 +198,7 @@ def settings():
     conf["local_mode"] = bool(conf.get("local_mode", False) or is_local_mode())
     conf["credentials"] = str(resolve_credentials_path(conf.get("credentials")))
     conf["websites_root"] = str(resolve_websites_root(conf.get("websites_root")))
+    _settings_cache = dict(conf)
     return conf
 
 def clean_batch(batch):
@@ -233,6 +239,7 @@ class Accounts(BaseModel): text:str; batch:str|None=None
 class Run(BaseModel): handles:list[str]=Field(default_factory=list); force:bool=False; rescrape:bool=False; scrape_only:bool=False
 class SettingsBody(BaseModel): values:dict[str,Any]
 class LeadEdit(BaseModel): name:str=""; phone:str=""; area:str=""; followers:str=""; notes:str=""; stage:str="new"; follow_up:str=""; price:str=""
+class LeadStageUpdate(BaseModel): stage:str="new"
 class Revision(BaseModel): request:str
 class PhotoSelection(BaseModel): files:list[str]
 class BulkInput(BaseModel): handles:list[str]; mode:str="site"
@@ -288,7 +295,7 @@ def studio_logo(): return FileResponse(REPO/"assets"/"studio.png")
 
 @app.get("/api/state")
 def state(batch:str|None=None):
-    batch=clean_batch(batch or selected_batch); conf=settings(); base=Path(conf["websites_root"]).expanduser().resolve();root=base/batch
+    conf=settings(); base=Path(conf["websites_root"]).expanduser().resolve()
     db_batches=set()
     try:
         with connect() as d:
@@ -297,12 +304,25 @@ def state(batch:str|None=None):
     except Exception:pass
     disk_batches=set(p.name for p in base.iterdir() if p.is_dir()) if base.exists() else set()
     batches=sorted(db_batches | disk_batches,reverse=True)
+    if not batch:
+        dates=[]
+        for b in batches:
+            try:
+                dt.date.fromisoformat(str(b))
+                dates.append(str(b))
+            except (ValueError, TypeError):pass
+        batch = dates[0] if dates else dt.date.today().isoformat()
+    batch = clean_batch(batch)
+    global _cached_selected_batch
+    _cached_selected_batch = batch
     if batch not in batches:batches.insert(0,batch)
+    root=base/batch
     # Existing CLI-built batches predate the dashboard database. Discover them
     # on selection and seed lead rows without modifying any site files.
     if root.is_dir():
         with connect() as d:
             existing_handles = {r["handle"] for r in d.execute("SELECT handle FROM leads WHERE batch=?", (batch,)).fetchall()}
+            to_insert = []
             for account in root.iterdir():
                 try:
                     handle=clean_handle(account.name)
@@ -321,23 +341,22 @@ def state(batch:str|None=None):
                 try:
                     record=json.loads(summary_path.read_text(encoding="utf-8"))[0];name=record.get("name") or name;phone=record.get("phone","");area=record.get("area","")
                 except Exception:pass
-                d.execute("INSERT OR IGNORE INTO leads(batch,handle,name,phone,area,followers,status,site_path,qa) VALUES(?,?,?,?,? ,?,'done',?,'available')",(batch,handle,name,phone,area,followers,str(site)))
+                to_insert.append((batch,handle,name,phone,area,followers,'done',str(site),'available'))
                 existing_handles.add(handle)
+            if to_insert:
+                d.executemany("INSERT OR IGNORE INTO leads(batch,handle,name,phone,area,followers,status,site_path,qa) VALUES(?,?,?,?,?,?,?,?,?)", to_insert)
     with connect() as d:
         leads=[dict(r) for r in d.execute("SELECT * FROM leads WHERE batch=? ORDER BY updated_at DESC,handle",(batch,))]
     for l in leads:
         has_rec = bool(l.get("has_recording"))
         if not has_rec:
-            if l.get("stage") == "recorded":
-                has_rec = True
-            else:
-                h = l.get("handle") or ""
-                rec_dir = root / h / "recordings"
-                if rec_dir.is_dir():
-                    try:
-                        has_rec = any(f.suffix.lower() in {".webm", ".mp4"} for f in rec_dir.iterdir() if f.is_file())
-                    except OSError:
-                        pass
+            h = l.get("handle") or ""
+            rec_dir = root / h / "recordings"
+            if rec_dir.is_dir():
+                try:
+                    has_rec = any(f.suffix.lower() in {".webm", ".mp4"} for f in rec_dir.iterdir() if f.is_file())
+                except OSError:
+                    pass
         l["has_recording"] = 1 if has_rec else 0
     a=REPO/"config/accounts.txt"; auth=REPO/"config/auth.json"
     return {"batch":batch,"batches":batches,"settings":conf,"leads":leads,"accounts":a.read_text(encoding="utf-8") if a.exists() else "","auth_exists":auth.exists(),"auth_mtime":dt.datetime.fromtimestamp(auth.stat().st_mtime).isoformat(timespec="minutes") if auth.exists() else "","local_mode":is_local_mode(),"d1_offline":is_local_mode()}
@@ -386,6 +405,8 @@ def save_settings(b:SettingsBody):
                 d.execute("INSERT INTO settings VALUES('_dirty_settings',?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",(json.dumps(sorted(dirty)),))
             except Exception:
                 pass
+    global _settings_cache
+    _settings_cache = None
     return settings()
 
 @app.post("/api/sheets/test")
@@ -893,6 +914,18 @@ def edit_lead(handle:str,b:LeadEdit,batch:str|None=None):
     if is_r2_configured():
         upload_file(data,f"{batch}/{handle}/media/business_data.json","application/json")
     return {"saved":True}
+
+@app.patch("/api/lead/{handle}/stage")
+@app.patch("/api/lead/{handle}")
+def update_lead_stage(handle:str,b:LeadStageUpdate,batch:str|None=None):
+    st = b.stage.strip().lower()
+    allowed = {"new", "built", "recorded", "sent", "replied", "won", "lost"}
+    if st not in allowed:
+        raise HTTPException(400, f"Invalid stage: {st}. Must be one of {sorted(allowed)}")
+    handle=clean_handle(handle);batch=clean_batch(batch or selected_batch)
+    with connect() as d:
+        d.execute("UPDATE leads SET stage=?,updated_at=CURRENT_TIMESTAMP WHERE batch=? AND handle=?",(st,batch,handle))
+    return {"saved":True,"handle":handle,"stage":st}
 
 @app.post("/api/lead/{handle}/archive")
 def archive_lead(handle:str,batch:str|None=None):
