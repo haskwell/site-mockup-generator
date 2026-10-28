@@ -11,7 +11,7 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
 from starlette.background import BackgroundTask
 from pydantic import BaseModel, Field
-from src.pipeline_common import MODEL, TIMEOUT_SECONDS, account_handle, find_agy, get_venv_python, run_streaming
+from src.pipeline_common import MODEL, TIMEOUT_SECONDS, account_handle, find_agy, get_venv_python, launch_browser, run_streaming, REPO_ROOT, get_asset_path
 from src.run import process_account, validate_site
 from src.d1_client import (
     get_current_user,
@@ -47,7 +47,7 @@ from src.r2_storage import (
 )
 from tempfile import gettempdir
 
-REPO=Path(__file__).resolve().parents[1]; WEB=REPO/"web"
+REPO = REPO_ROOT; WEB = get_asset_path("web")
 DB=Path(os.environ.get("DASHBOARD_DB",REPO/"dashboard.sqlite3"))
 DEFAULTS={"websites_root":"websites","model":MODEL,"timeout":TIMEOUT_SECONDS,"parallelism":1,"max_posts":18,"captions":True,"headed":False,"attempts":3,"credentials":"config/creds.json","sheet_name":"websites","browser":"","sync_sheet":True,"local_mode":False}
 
@@ -291,7 +291,7 @@ def styles(): return FileResponse(WEB/"styles.css", media_type="text/css")
 def script(): return FileResponse(WEB/"script.js", media_type="application/javascript")
 
 @app.get("/assets/studio.png")
-def studio_logo(): return FileResponse(REPO/"assets"/"studio.png")
+def studio_logo(): return FileResponse(get_asset_path("assets/studio.png"))
 
 @app.get("/api/state")
 def state(batch:str|None=None):
@@ -431,7 +431,7 @@ def health_check():
         try:
             from playwright.sync_api import sync_playwright
             with sync_playwright() as p:
-                browser=p.chromium.launch(headless=True);browser.close()
+                browser=launch_browser(p, headless=True);browser.close()
             checks["browser"]=True
         except Exception:pass
     return {"checks":checks,"paths":{"agy":agy_path},"ok":all(checks.values())}
@@ -1097,7 +1097,7 @@ def login():
         from playwright.sync_api import sync_playwright
         pth=REPO/"config/auth.json";pth.parent.mkdir(parents=True,exist_ok=True)
         with sync_playwright() as p:
-            browser=p.chromium.launch(headless=False);ctx=browser.new_context(locale="en-US");page=ctx.new_page();page.goto("https://www.instagram.com/accounts/login/")
+            browser=launch_browser(p, headless=False);ctx=browser.new_context(locale="en-US");page=ctx.new_page();page.goto("https://www.instagram.com/accounts/login/")
             try:page.wait_for_function("!location.pathname.includes('/accounts/login')",timeout=600000);ctx.storage_state(path=str(pth));emit("","done","Instagram session saved")
             except Exception as e:emit("","failed",str(e))
             browser.close()

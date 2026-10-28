@@ -9,10 +9,10 @@ import datetime as dt
 import shutil
 import sys
 from pathlib import Path
-from src.pipeline_common import Logger, MODEL, MIN_SIZE, TIMEOUT_SECONDS, account_handle, find_agy, run_streaming
+from src.pipeline_common import Logger, MODEL, MIN_SIZE, TIMEOUT_SECONDS, account_handle, find_agy, run_streaming, REPO_ROOT, get_asset_path
 from src.r2_storage import download_site, get_lead_text, get_r2_mtime, is_r2_configured, upload_file, upload_site
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = REPO_ROOT
 
 
 def clear_applied_sections(content: str, applied: set[str], accounts: set[str]) -> str:
@@ -117,8 +117,8 @@ def revise(user: str, revision: str, root: Path, accounts: set[str], logger: Log
         return 1
     try:
         (account / "logs").mkdir(parents=True, exist_ok=True)
-        shutil.copy2(REPO / "prompts/GEMINI.md", account / "GEMINI.md")
-        shutil.copy2(REPO / "prompts/SKILL.md", account / "SKILL.md")
+        shutil.copy2(get_asset_path("prompts/GEMINI.md"), account / "GEMINI.md")
+        shutil.copy2(get_asset_path("prompts/SKILL.md"), account / "SKILL.md")
     except OSError as exc:
         logger.log("ERROR", f"{user}: failed to copy generation instructions: {exc}")
         return 1

@@ -11,11 +11,11 @@ import shutil
 import sys
 import time
 from pathlib import Path
-from src.pipeline_common import Logger, MODEL, MIN_SIZE, TIMEOUT_SECONDS, account_handle, find_agy, get_venv_python, run_streaming
+from src.pipeline_common import Logger, MODEL, MIN_SIZE, TIMEOUT_SECONDS, account_handle, find_agy, get_venv_python, run_streaming, REPO_ROOT, get_asset_path
 from src.r2_storage import is_r2_configured, upload_lead_assets, upload_lead_media, upload_site
 
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = REPO_ROOT
 
 
 def parse_revision_sections(content: str, accounts: set[str]) -> dict[str, str]:
@@ -125,7 +125,7 @@ def process_account(user: str, root: Path, python: str, force: bool, logger: Log
         (account / "logs").mkdir(parents=True, exist_ok=True)
         if not scrape_only:
             (site / "assets").mkdir(parents=True, exist_ok=True)
-            shutil.copy2(REPO / "prompts/SKILL.md", account / "SKILL.md")
+            shutil.copy2(get_asset_path("prompts/SKILL.md"), account / "SKILL.md")
     except OSError as exc:
         logger.log("ERROR", f"{user}: failed to prepare account files: {exc}")
         return 1
@@ -230,7 +230,7 @@ def process_account(user: str, root: Path, python: str, force: bool, logger: Log
 </html>
 """, encoding="utf-8")
         (site / "style.css").write_text("", encoding="utf-8")
-        shutil.copy2(REPO / "prompts/GEMINI.md", account / "GEMINI.md")
+        shutil.copy2(get_asset_path("prompts/GEMINI.md"), account / "GEMINI.md")
     except OSError as exc:
         logger.log("ERROR", f"{user}: failed to prepare site: {exc}")
         restore_backup(site, backup)

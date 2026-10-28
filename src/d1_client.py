@@ -11,9 +11,10 @@ from typing import Any, Iterator, Sequence
 
 import requests
 from dotenv import load_dotenv
+from src.pipeline_common import REPO_ROOT
 
 # Automatically load .env if present
-REPO = Path(__file__).resolve().parents[1]
+REPO = REPO_ROOT
 load_dotenv(REPO / ".env")
 
 

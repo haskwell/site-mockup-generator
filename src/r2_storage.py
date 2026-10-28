@@ -10,8 +10,9 @@ import time
 from typing import Any
 
 from dotenv import load_dotenv
+from src.pipeline_common import REPO_ROOT
 
-REPO = Path(__file__).resolve().parents[1]
+REPO = REPO_ROOT
 load_dotenv(REPO / ".env")
 
 # Fallback MIME mappings to ensure reliable Content-Type across all platforms (Windows/Linux)

@@ -18,6 +18,18 @@ MODEL = "gemini-3.8-flash-medium"
 MIN_SIZE = 600
 TIMEOUT_SECONDS = 900
 
+IS_FROZEN = getattr(sys, "frozen", False)
+REPO_ROOT = Path(sys.executable).parent.resolve() if IS_FROZEN else Path(__file__).resolve().parents[1]
+BUNDLE_ROOT = Path(getattr(sys, "_MEIPASS", REPO_ROOT)).resolve()
+
+
+def get_asset_path(rel_path: str | Path) -> Path:
+    """Return the path to a bundled asset (e.g. prompts/, web/, assets/)."""
+    bundled = BUNDLE_ROOT / rel_path
+    if bundled.exists():
+        return bundled
+    return REPO_ROOT / rel_path
+
 
 def get_venv_python(repo_dir: Path) -> str:
     """Return the virtual environment's python executable or fallback to sys.executable."""
@@ -103,6 +115,22 @@ def find_agy() -> str | None:
         if user_executable.is_file() and os.access(user_executable, os.X_OK):
             return str(user_executable)
     return None
+
+
+def launch_browser(playwright_instance: Any, headless: bool = True, **kwargs: Any) -> Any:
+    """Launch a Chromium browser cross-platform.
+
+    On Windows, prefers the pre-installed Microsoft Edge or Chrome channels so that
+    standalone executables do not need an external Chromium download.
+    On Linux, macOS, or if system channels fail, falls back to standard Chromium.
+    """
+    if sys.platform == "win32":
+        for channel in ("msedge", "chrome"):
+            try:
+                return playwright_instance.chromium.launch(channel=channel, headless=headless, **kwargs)
+            except Exception:
+                pass
+    return playwright_instance.chromium.launch(headless=headless, **kwargs)
 
 
 class Logger:

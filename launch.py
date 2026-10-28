@@ -13,9 +13,9 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
-from src.pipeline_common import get_venv_python, kill_process_tree
+from src.pipeline_common import REPO_ROOT, get_venv_python, kill_process_tree
 
-REPO = Path(__file__).resolve().parent
+REPO = REPO_ROOT
 try:
     from dotenv import load_dotenv
     load_dotenv(REPO / ".env")

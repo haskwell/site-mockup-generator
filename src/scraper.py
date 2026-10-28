@@ -21,6 +21,11 @@ except ModuleNotFoundError:
     from src.logging_config import get_logger
 
 try:
+    from pipeline_common import launch_browser
+except ModuleNotFoundError:
+    from src.pipeline_common import launch_browser
+
+try:
     from dotenv import load_dotenv
 
     load_dotenv()
@@ -324,7 +329,7 @@ def scrape_profile(
 
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=not headed)
+            browser = launch_browser(p, headless=not headed)
             ctx_kwargs: Dict[str, Any] = {
                 "user_agent": USER_AGENT,
                 "viewport": {"width": 1280, "height": 800},
@@ -513,7 +518,7 @@ def scrape_profile(
 def save_login_session(path: str) -> None:
     """Open a visible browser, let you log in manually, then save the session."""
     with sync_playwright() as p:
-        browser = p.chromium.launch(headless=False)
+        browser = launch_browser(p, headless=False)
         context = browser.new_context(user_agent=USER_AGENT)
         page = context.new_page()
         page.goto("https://www.instagram.com/accounts/login/")
