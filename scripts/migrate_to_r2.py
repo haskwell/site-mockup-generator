@@ -13,8 +13,8 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(REPO))
 
-from src.d1_client import get_db_connection, is_d1_configured
-from src.r2_storage import (
+from src.storage.d1 import get_db_connection, is_d1_configured
+from src.storage.r2 import (
     get_preview_url,
     get_s3_client,
     guess_content_type,

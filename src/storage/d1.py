@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any, Iterator, Sequence
 
 import requests
-from src.pipeline_common import REPO_ROOT
+from src.core.common import REPO_ROOT
 
 REPO = REPO_ROOT
 try:

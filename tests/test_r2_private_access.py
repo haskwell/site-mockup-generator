@@ -13,8 +13,8 @@ if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
 from fastapi.testclient import TestClient
-from src.app import app, init_db
-import src.r2_storage as r2_storage
+from src.server.app import app, init_db
+import src.storage.r2 as r2_storage
 
 
 class TestR2PrivateAccess(unittest.TestCase):
@@ -54,8 +54,8 @@ class TestR2PrivateAccess(unittest.TestCase):
         conn.commit()
         conn.close()
 
-        with patch("src.app.DB", self.db_path):
-            with patch("src.app.connect") as mock_connect:
+        with patch("src.server.app.DB", self.db_path):
+            with patch("src.server.app.connect") as mock_connect:
                 import sqlite3
                 conn = sqlite3.connect(self.db_path)
                 mock_connect.return_value = conn
@@ -69,7 +69,7 @@ class TestR2PrivateAccess(unittest.TestCase):
     def test_path_traversal_prevention(self):
         """Verify that ../ path traversal attempts in preview and media return 400."""
         from fastapi import HTTPException
-        from src.app import preview, media
+        from src.server.app import preview, media
 
         # Direct handler checks
         with self.assertRaises(HTTPException) as cm:
@@ -95,8 +95,8 @@ class TestR2PrivateAccess(unittest.TestCase):
         site_dir.mkdir(parents=True, exist_ok=True)
         (site_dir / "index.html").write_text("<html><body>Hello</body></html>", encoding="utf-8")
 
-        with patch("src.app.root_for", return_value=websites_root):
-            with patch("src.app.is_r2_configured", return_value=False):
+        with patch("src.server.app.root_for", return_value=websites_root):
+            with patch("src.server.app.is_r2_configured", return_value=False):
                 resp = self.client.get("/preview/2026-10-27/testlead/index.html")
                 self.assertEqual(resp.status_code, 200)
                 self.assertIn("Content-Security-Policy", resp.headers)
@@ -106,10 +106,10 @@ class TestR2PrivateAccess(unittest.TestCase):
 
     def test_preview_r2_fetch_no_redirect(self):
         """Verify that preview fetches from R2 directly via API without 302 redirect."""
-        with patch("src.app.is_r2_configured", return_value=True):
-            with patch("src.app.get_r2_mtime", return_value=123456789.0):
-                with patch("src.app.get_r2_object", return_value=(b"<h1>R2 Site</h1>", "text/html")):
-                    with patch("src.app.root_for", return_value=Path(self.temp_dir)):
+        with patch("src.server.app.is_r2_configured", return_value=True):
+            with patch("src.server.app.get_r2_mtime", return_value=123456789.0):
+                with patch("src.server.app.get_r2_object", return_value=(b"<h1>R2 Site</h1>", "text/html")):
+                    with patch("src.server.app.root_for", return_value=Path(self.temp_dir)):
                         resp = self.client.get("/preview/2026-10-27/testlead/index.html", follow_redirects=False)
                         self.assertEqual(resp.status_code, 200)
                         self.assertEqual(resp.content, b"<h1>R2 Site</h1>")
@@ -118,9 +118,9 @@ class TestR2PrivateAccess(unittest.TestCase):
 
     def test_media_r2_fetch_no_redirect(self):
         """Verify that media fetches from R2 directly via API without 302 redirect."""
-        with patch("src.app.is_r2_configured", return_value=True):
-            with patch("src.app.get_r2_object", return_value=(b"fake_image_bytes", "image/jpeg")):
-                with patch("src.app.root_for", return_value=Path(self.temp_dir)):
+        with patch("src.server.app.is_r2_configured", return_value=True):
+            with patch("src.server.app.get_r2_object", return_value=(b"fake_image_bytes", "image/jpeg")):
+                with patch("src.server.app.root_for", return_value=Path(self.temp_dir)):
                     resp = self.client.get("/media/2026-10-27/testlead/photo1.jpg", follow_redirects=False)
                     self.assertEqual(resp.status_code, 200)
                     self.assertEqual(resp.content, b"fake_image_bytes")
@@ -135,28 +135,28 @@ class TestR2PrivateAccess(unittest.TestCase):
         self.assertIn("Invalid screen size", resp.text)
 
         # Valid screen with presigned URL returns 302 redirect to signed URL
-        with patch("src.app.is_r2_configured", return_value=True):
-            with patch("src.app.list_recordings", return_value=["testlead-desktop.webm"]):
-                with patch("src.app.get_presigned_recording_url", return_value="https://bucket.r2.cloudflarestorage.com/rec?X-Amz-Signature=123"):
-                    with patch("src.app.root_for", return_value=Path(self.temp_dir)):
+        with patch("src.server.app.is_r2_configured", return_value=True):
+            with patch("src.server.app.list_recordings", return_value=["testlead-desktop.webm"]):
+                with patch("src.server.app.get_presigned_recording_url", return_value="https://bucket.r2.cloudflarestorage.com/rec?X-Amz-Signature=123"):
+                    with patch("src.server.app.root_for", return_value=Path(self.temp_dir)):
                         resp = self.client.get("/api/lead/testlead/recording/desktop", follow_redirects=False)
                         self.assertEqual(resp.status_code, 302)
                         self.assertEqual(resp.headers["location"], "https://bucket.r2.cloudflarestorage.com/rec?X-Amz-Signature=123")
 
     def test_has_r2_site_and_preview_url_verification(self):
         """Verify that get_preview_url with verify_exists=True returns None when site is missing in R2."""
-        with patch("src.r2_storage.is_r2_configured", return_value=True):
-            with patch("src.r2_storage.has_r2_site", return_value=False):
+        with patch("src.storage.r2.is_r2_configured", return_value=True):
+            with patch("src.storage.r2.has_r2_site", return_value=False):
                 url = r2_storage.get_preview_url("batch1", "lead1", verify_exists=True)
                 self.assertIsNone(url)
 
-            with patch("src.r2_storage.has_r2_site", return_value=True):
+            with patch("src.storage.r2.has_r2_site", return_value=True):
                 url = r2_storage.get_preview_url("batch1", "lead1", verify_exists=True)
                 self.assertEqual(url, "/preview/batch1/lead1/index.html")
 
     def test_get_lead_text_finds_site_design_md(self):
         """Verify that get_lead_text looks under site/DESIGN.md in R2."""
-        with patch("src.r2_storage.is_r2_configured", return_value=True):
+        with patch("src.storage.r2.is_r2_configured", return_value=True):
             mock_s3 = MagicMock()
             # Simulate site/DESIGN.md being found
             def mock_get_object(Bucket, Key):
@@ -167,7 +167,7 @@ class TestR2PrivateAccess(unittest.TestCase):
                 raise Exception("Not found")
 
             mock_s3.get_object.side_effect = mock_get_object
-            with patch("src.r2_storage.get_s3_client", return_value=mock_s3):
+            with patch("src.storage.r2.get_s3_client", return_value=mock_s3):
                 content = r2_storage.get_lead_text("2026-10-11", "mylead", "DESIGN.md")
                 self.assertEqual(content, "# Site Design Direction")
 
@@ -180,10 +180,10 @@ class TestR2PrivateAccess(unittest.TestCase):
         local_index.write_text("<h1>v1.0</h1>", encoding="utf-8")
         os.utime(local_index, (1000.0, 1000.0))
 
-        with patch("src.app.is_r2_configured", return_value=True):
-            with patch("src.app.get_r2_mtime", return_value=2000.0):
-                with patch("src.app.get_r2_object", return_value=(b"<h1>v1.1 from R2</h1>", "text/html")):
-                    with patch("src.app.root_for", return_value=websites_root):
+        with patch("src.server.app.is_r2_configured", return_value=True):
+            with patch("src.server.app.get_r2_mtime", return_value=2000.0):
+                with patch("src.server.app.get_r2_object", return_value=(b"<h1>v1.1 from R2</h1>", "text/html")):
+                    with patch("src.server.app.root_for", return_value=websites_root):
                         resp = self.client.get("/preview/2026-10-27/lead_sync/index.html")
                         self.assertEqual(resp.status_code, 200)
                         self.assertEqual(resp.content, b"<h1>v1.1 from R2</h1>")
@@ -193,7 +193,7 @@ class TestR2PrivateAccess(unittest.TestCase):
 
     def test_revisions_pulls_newer_r2_version_before_revising(self):
         """Verify that revise() pulls latest files when R2 has a newer version."""
-        from src.revisions import revise
+        from src.pipeline.revisions import revise
         websites_root = Path(self.temp_dir) / "websites_rev"
         account = websites_root / "lead_rev"
         site_dir = account / "site"
@@ -204,10 +204,10 @@ class TestR2PrivateAccess(unittest.TestCase):
         (account / "DESIGN.md").write_text("# Design", encoding="utf-8")
 
         mock_download_site = MagicMock()
-        with patch("src.revisions.is_r2_configured", return_value=True):
-            with patch("src.revisions.get_r2_mtime", return_value=3000.0):
-                with patch("src.revisions.download_site", mock_download_site):
-                    with patch("src.revisions.find_agy", return_value=None):
+        with patch("src.pipeline.revisions.is_r2_configured", return_value=True):
+            with patch("src.pipeline.revisions.get_r2_mtime", return_value=3000.0):
+                with patch("src.pipeline.revisions.download_site", mock_download_site):
+                    with patch("src.pipeline.revisions.find_agy", return_value=None):
                         # agy is None so revise will exit right after downloading/preparing
                         logger = MagicMock()
                         revise("lead_rev", "Change background color", websites_root, {"lead_rev"}, logger)
@@ -243,8 +243,8 @@ class TestR2PrivateAccess(unittest.TestCase):
         conn.close()
 
         # Run init_db() to test ALTER TABLE migration adding has_recording
-        with patch("src.app.DB", self.db_path):
-            with patch("src.app.connect", side_effect=lambda: sqlite3.connect(self.db_path)):
+        with patch("src.server.app.DB", self.db_path):
+            with patch("src.server.app.connect", side_effect=lambda: sqlite3.connect(self.db_path)):
                 init_db()
 
         # Verify column exists
@@ -261,19 +261,19 @@ class TestR2PrivateAccess(unittest.TestCase):
         (rec_dir / "lead_disk_rec-desktop.webm").write_bytes(b"dummy_video_bytes")
 
         # Query /api/state
-        with patch("src.app.DB", self.db_path):
+        with patch("src.server.app.DB", self.db_path):
             def custom_connect():
                 c = sqlite3.connect(self.db_path)
                 c.row_factory = sqlite3.Row
                 return c
-            with patch("src.app.connect", side_effect=custom_connect):
-                with patch("src.app.settings", return_value={"websites_root": str(websites_root)}):
-                    with patch("src.app.root_for", return_value=batch_dir):
+            with patch("src.server.app.connect", side_effect=custom_connect):
+                with patch("src.server.app.settings", return_value={"websites_root": str(websites_root)}):
+                    with patch("src.server.app.root_for", return_value=batch_dir):
                         resp = self.client.get("/api/state?batch=2026-10-27")
                         self.assertEqual(resp.status_code, 200)
                         leads = {l["handle"]: l for l in resp.json()["leads"]}
-                        # lead_with_stage has stage='recorded'
-                        self.assertEqual(leads["lead_with_stage"]["has_recording"], 1)
+                        # lead_with_stage has stage='recorded' without a physical file, so has_recording=0 per bug 18
+                        self.assertEqual(leads["lead_with_stage"]["has_recording"], 0)
                         # lead_disk_rec has video file in recordings/
                         self.assertEqual(leads["lead_disk_rec"]["has_recording"], 1)
                         # lead_no_rec has no recording
@@ -313,10 +313,10 @@ class TestR2PrivateAccess(unittest.TestCase):
             c.row_factory = sqlite3.Row
             return c
 
-        with patch("src.app.DB", self.db_path):
-            with patch("src.app.connect", side_effect=custom_connect):
-                with patch("src.app.root_for", return_value=batch_dir):
-                    with patch("src.app.is_r2_configured", return_value=False):
+        with patch("src.server.app.DB", self.db_path):
+            with patch("src.server.app.connect", side_effect=custom_connect):
+                with patch("src.server.app.root_for", return_value=batch_dir):
+                    with patch("src.server.app.is_r2_configured", return_value=False):
                         resp = self.client.post(
                             "/api/lead/testsave/recording?batch=2026-10-27&screen=desktop&extension=webm",
                             content=b"test_video_data_123"
@@ -331,7 +331,7 @@ class TestR2PrivateAccess(unittest.TestCase):
 
     def test_delete_recording_r2(self):
         """Verify delete_recording() removes objects from R2."""
-        with patch("src.r2_storage.is_r2_configured", return_value=True):
+        with patch("src.storage.r2.is_r2_configured", return_value=True):
             mock_s3 = MagicMock()
             mock_paginator = MagicMock()
             mock_paginator.paginate.return_value = [
@@ -343,7 +343,7 @@ class TestR2PrivateAccess(unittest.TestCase):
                 }
             ]
             mock_s3.get_paginator.return_value = mock_paginator
-            with patch("src.r2_storage.get_s3_client", return_value=mock_s3):
+            with patch("src.storage.r2.get_s3_client", return_value=mock_s3):
                 with patch.dict(os.environ, {"R2_BUCKET_NAME": "test-bucket"}):
                     # Delete phone only
                     deleted = r2_storage.delete_recording("2026-10-27", "deltest", screen="phone")
@@ -395,10 +395,10 @@ class TestR2PrivateAccess(unittest.TestCase):
             c.row_factory = sqlite3.Row
             return c
 
-        with patch("src.app.DB", self.db_path):
-            with patch("src.app.connect", side_effect=custom_connect):
-                with patch("src.app.root_for", return_value=batch_dir):
-                    with patch("src.app.is_r2_configured", return_value=False):
+        with patch("src.server.app.DB", self.db_path):
+            with patch("src.server.app.connect", side_effect=custom_connect):
+                with patch("src.server.app.root_for", return_value=batch_dir):
+                    with patch("src.server.app.is_r2_configured", return_value=False):
                         # 1. Test invalid screen
                         resp = self.client.delete("/api/lead/multirec/recording/tv?batch=2026-10-27")
                         self.assertEqual(resp.status_code, 400)
@@ -474,10 +474,10 @@ class TestR2PrivateAccess(unittest.TestCase):
             c.row_factory = sqlite3.Row
             return c
 
-        with patch("src.app.DB", self.db_path):
-            with patch("src.app.connect", side_effect=custom_connect):
-                with patch("src.app.root_for", return_value=batch_dir):
-                    with patch("src.app.is_r2_configured", return_value=False):
+        with patch("src.server.app.DB", self.db_path):
+            with patch("src.server.app.connect", side_effect=custom_connect):
+                with patch("src.server.app.root_for", return_value=batch_dir):
+                    with patch("src.server.app.is_r2_configured", return_value=False):
                         # Delete desktop only
                         resp = self.client.delete("/api/lead/twoscreens/recording/desktop?batch=2026-10-27")
                         self.assertEqual(resp.status_code, 200)

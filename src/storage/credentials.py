@@ -6,9 +6,9 @@ import os
 from pathlib import Path
 from typing import Any
 
-from src.pipeline_common import REPO_ROOT
-from src.d1_client import D1Connection, is_d1_configured, set_d1_offline, is_local_mode
-from src.r2_storage import is_r2_configured
+from src.core.common import REPO_ROOT
+from src.storage.d1 import D1Connection, is_d1_configured, set_d1_offline, is_local_mode
+from src.storage.r2 import is_r2_configured
 
 ENV_PATH = REPO_ROOT / ".env"
 
@@ -137,12 +137,12 @@ def save_credentials(data: dict[str, str]) -> dict[str, Any]:
 
     # Reset any cached clients & offline state
     set_d1_offline(False)
-    import src.r2_storage as r2s
+    import src.storage.r2 as r2s
 
     r2s._cached_s3_client = None
     r2s._cached_s3_creds = None
 
-    import src.d1_client as d1c
+    import src.storage.d1 as d1c
 
     d1c._cached_d1_session = None
 

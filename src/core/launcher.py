@@ -1,5 +1,4 @@
-#!/usr/bin/env python3
-"""Start the local dashboard and open it in Chromium."""
+"""Desktop window launcher for Studio."""
 
 from __future__ import annotations
 
@@ -14,7 +13,7 @@ import urllib.request
 import webbrowser
 from pathlib import Path
 
-from src.pipeline_common import IS_FROZEN, REPO_ROOT, get_venv_python, kill_process_tree
+from src.core.common import IS_FROZEN, REPO_ROOT, get_venv_python, kill_process_tree
 
 REPO = REPO_ROOT
 try:
@@ -96,7 +95,7 @@ def open_browser(profile: Path, browser_bin: str | None) -> int:
     return 0
 
 
-def main() -> int:
+def launch_desktop() -> int:
     browser_bin = find_browser()
     if os.name == "nt":
         cache_base = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / ".cache")))
@@ -104,7 +103,6 @@ def main() -> int:
         cache_base = Path.home() / ".cache"
     profile = cache_base / "studio-profile"
 
-    # Match launch.sh: if a dashboard is already running, open it and exit.
     if server_is_running():
         return open_browser(profile, browser_bin)
 
@@ -113,10 +111,8 @@ def main() -> int:
     log_file = None
 
     if IS_FROZEN:
-        # In frozen executable, run server directly in a daemon thread to avoid
-        # spawning a duplicate executable process and incurring duplicate startup latency.
         import uvicorn
-        from src.app import app
+        from src.server.app import app
 
         def _run_server() -> None:
             config = uvicorn.Config(
@@ -138,19 +134,20 @@ def main() -> int:
         log_file = (log_dir / "server.log").open("a", encoding="utf-8")
         server_kwargs: dict = {
             "cwd": REPO,
-            "stdin": subprocess.DEVNULL,  # pythonw has no stdin to inherit
+            "stdin": subprocess.DEVNULL,
             "stdout": log_file,
             "stderr": subprocess.STDOUT,
         }
         if os.name == "nt":
-            # CREATE_NO_WINDOW stops the console from flashing up when
-            # launched via pythonw.exe
             server_kwargs["creationflags"] = (
                 subprocess.CREATE_NEW_PROCESS_GROUP | subprocess.CREATE_NO_WINDOW
             )
         else:
             server_kwargs["start_new_session"] = True
-        server = subprocess.Popen([python, str(REPO / "app.py")], **server_kwargs)
+        
+        main_script = REPO / "main.py"
+        server_cmd = [python, str(main_script), "--server"] if main_script.is_file() else [python, "-m", "src.server.app"]
+        server = subprocess.Popen(server_cmd, **server_kwargs)
 
     try:
         startup_deadline = time.monotonic() + 30.0
@@ -165,8 +162,6 @@ def main() -> int:
                 return 1
             time.sleep(0.2)
         open_browser(profile, browser_bin)
-        # On Windows Edge, open_browser may return immediately because Edge delegates
-        # to its background process. Keep the launcher alive until the server shuts down.
         if server is not None and server.poll() is None:
             try:
                 server.wait()
@@ -188,6 +183,10 @@ def main() -> int:
                 pass
         if log_file is not None:
             log_file.close()
+
+
+def main() -> int:
+    return launch_desktop()
 
 
 if __name__ == "__main__":

@@ -17,26 +17,26 @@ if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
 from fastapi.testclient import TestClient
-from src.app import app, clean_handle, export_leads, unlock_lead, resolve_credentials_path, resolve_websites_root
-import src.r2_storage as r2_storage
-from src.run import validate_site
+from src.server.app import app, clean_handle, export_leads, unlock_lead, resolve_credentials_path, resolve_websites_root
+import src.storage.r2 as r2_storage
+from src.pipeline.builder import validate_site
 
 
 class TestLoggingAndDecodings(unittest.TestCase):
     def test_imports_succeed(self):
         """Verify that all pipeline modules import without error."""
-        import src.scraper
-        import src.profile_summary
-        import src.update_sheet
-        import src.design
-        self.assertIsNotNone(src.scraper.get_logger)
-        self.assertIsNotNone(src.profile_summary.get_logger)
-        self.assertIsNotNone(src.update_sheet.get_logger)
-        self.assertIsNotNone(src.design.get_logger)
+        import src.pipeline.scraper
+        import src.pipeline.summary
+        import src.pipeline.sheets
+        import src.pipeline.design
+        self.assertIsNotNone(src.pipeline.scraper.get_logger)
+        self.assertIsNotNone(src.pipeline.summary.get_logger)
+        self.assertIsNotNone(src.pipeline.sheets.get_logger)
+        self.assertIsNotNone(src.pipeline.design.get_logger)
 
     def test_home_utf8_decoding(self):
         """Verify that home() reads web/index.html in UTF-8 without errors."""
-        from src.app import home
+        from src.server.app import home
         html = home()
         self.assertTrue(len(html) > 1000)
         self.assertIn("<!doctype html>", html.lower())
@@ -55,7 +55,7 @@ class TestLockTTLAndUnlock(unittest.TestCase):
         shutil.rmtree(self.temp_dir, ignore_errors=True)
 
     def test_unlock_lead_endpoint(self):
-        """Verify unlock_lead() in src.app clears locked_by and locked_at in the database."""
+        """Verify unlock_lead() in src.server.app clears locked_by and locked_at in the database."""
         conn = sqlite3.connect(self.db_path)
         conn.execute("INSERT INTO leads(batch, handle, locked_by, locked_at) VALUES('2026-10-11', 'locked_user', 'alice', '2026-10-26 12:00:00')")
         conn.commit()
@@ -66,7 +66,7 @@ class TestLockTTLAndUnlock(unittest.TestCase):
             c.row_factory = sqlite3.Row
             return c
 
-        with patch("src.app.connect", side_effect=custom_connect):
+        with patch("src.server.app.connect", side_effect=custom_connect):
             res = unlock_lead("locked_user", batch="2026-10-11")
             self.assertEqual(res, {"unlocked": True})
 
@@ -106,7 +106,7 @@ class TestSqlite3RowRegression(unittest.TestCase):
 
     def test_save_recording_with_real_sqlite_row(self):
         """Test save_recording with real sqlite3.Row factory does not raise AttributeError."""
-        from src.app import save_recording
+        from src.server.app import save_recording
         def custom_connect():
             c = sqlite3.connect(self.db_path)
             c.row_factory = sqlite3.Row
@@ -118,9 +118,9 @@ class TestSqlite3RowRegression(unittest.TestCase):
         mock_request.body = fake_body
 
         import asyncio
-        with patch("src.app.connect", side_effect=custom_connect):
-            with patch("src.app.is_r2_configured", return_value=False):
-                with patch("src.app.root_for", return_value=Path(self.temp_dir)):
+        with patch("src.server.app.connect", side_effect=custom_connect):
+            with patch("src.server.app.is_r2_configured", return_value=False):
+                with patch("src.server.app.root_for", return_value=Path(self.temp_dir)):
                     res = asyncio.run(save_recording("rowuser", mock_request, batch="2026-10-11", screen="desktop"))
                     self.assertEqual(res["screen"], "desktop")
 
@@ -145,7 +145,7 @@ class TestCSVExportFormulaInjection(unittest.TestCase):
             c.row_factory = sqlite3.Row
             return c
 
-        with patch("src.app.connect", side_effect=custom_connect):
+        with patch("src.server.app.connect", side_effect=custom_connect):
             resp = export_leads("2026-10-11")
             content = resp.body.decode("utf-8")
             self.assertIn("'=cmd|calc!A1", content)
@@ -219,13 +219,13 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
         """Bug 1: /api/events must return a StreamingResponse and not hold event_lock while streaming."""
         import asyncio
         from fastapi.responses import StreamingResponse
-        from src.app import stream, emit, event_lock, subscribers
+        from src.server.app import stream, emit, event_lock, subscribers
         resp = stream(MagicMock())
         self.assertIsInstance(resp, StreamingResponse)
         self.assertEqual(resp.media_type, "text/event-stream")
         # event_lock must NOT be held while waiting for events, so emit() works without deadlocking
         self.assertFalse(event_lock.locked())
-        with patch("src.app.connect", side_effect=Exception("skip db")):
+        with patch("src.server.app.connect", side_effect=Exception("skip db")):
             emit("testhandle", "log", "hello stream", "2026-10-27")
         gen = resp.body_iterator
         chunk = asyncio.run(gen.__anext__())
@@ -235,8 +235,8 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
 
     def test_2_rescrape_not_skipped_for_built_site(self):
         """Bug 2: process_account must not skip an already-built site when rescrape is True."""
-        from src.run import process_account
-        from src.pipeline_common import MIN_SIZE
+        from src.pipeline.builder import process_account
+        from src.core.common import MIN_SIZE
         root = Path(self.temp_dir) / "2026-10-27"
         site = root / "acc1" / "site"
         site.mkdir(parents=True)
@@ -246,15 +246,15 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
         rc_skip = process_account("acc1", root, "python", False, logger, options={"rescrape": False})
         self.assertEqual(rc_skip, 2)
         # With force=False and rescrape=True, proceeds to scraper instead of returning 2
-        with patch("src.run.run_streaming", return_value=(1, False)) as mock_run:
+        with patch("src.pipeline.builder.run_streaming", return_value=(1, False)) as mock_run:
             rc_rescrape = process_account("acc1", root, "python", False, logger, options={"rescrape": True})
             self.assertEqual(rc_rescrape, 1)
             self.assertTrue(any("--force" in call.args[0] for call in mock_run.call_args_list))
 
     def test_3_offline_d1_changes_merged_back_on_restart(self):
         """Bug 3: Offline SQLite changes made in manual local mode are merged when manual sync is invoked."""
-        from src.app import init_db
-        from src.d1_client import set_local_mode, is_local_mode, sync_local_to_d1, D1Row, D1Cursor
+        from src.server.app import init_db
+        from src.storage.d1 import set_local_mode, is_local_mode, sync_local_to_d1, D1Row, D1Cursor
         env = {
             "CLOUDFLARE_ACCOUNT_ID": "acc123",
             "CLOUDFLARE_API_TOKEN": "tok123",
@@ -262,7 +262,7 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
             "DASHBOARD_DB": str(self.db_path),
         }
         with patch.dict(os.environ, env):
-            with patch("src.app.DB", self.db_path):
+            with patch("src.server.app.DB", self.db_path):
                 # 1. Manually enable local mode
                 set_local_mode(True)
                 init_db()
@@ -289,8 +289,8 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
                     d1_queries.append((sql, params))
                     return D1Cursor([])
 
-                with patch("src.d1_client.D1Connection._query", side_effect=fake_d1_query):
-                    from src.d1_client import D1Connection
+                with patch("src.storage.d1.D1Connection._query", side_effect=fake_d1_query):
+                    from src.storage.d1 import D1Connection
                     d1 = D1Connection("acc123", "db123", "tok123")
                     sync_local_to_d1(self.db_path, d1)
                     self.assertTrue(
@@ -302,8 +302,8 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
 
     def test_4_failed_revision_missing_index_restores_backup_and_records_path(self):
         """Bug 4: If agy exits 0 but removes site/index.html, backup is restored and recorded for Undo."""
-        from src.app import revision_worker
-        from src.pipeline_common import MIN_SIZE
+        from src.server.app import revision_worker
+        from src.core.common import MIN_SIZE
         batch_dir = Path(self.temp_dir) / "2026-10-27"
         account = batch_dir / "revlead"
         site_dir = account / "site"
@@ -327,13 +327,13 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
             (site_dir / "index.html").unlink()
             return 0, False
 
-        with patch("src.app.connect", side_effect=custom_connect), \
-             patch("src.app.root_for", return_value=batch_dir), \
-             patch("src.app.settings", return_value={"model": "m", "timeout": 30}), \
-             patch("src.app.emit"), \
-             patch("src.revisions.is_r2_configured", return_value=False), \
-             patch("src.revisions.find_agy", return_value="/usr/bin/agy"), \
-             patch("src.revisions.run_streaming", side_effect=remove_index_and_exit_0):
+        with patch("src.server.app.connect", side_effect=custom_connect), \
+             patch("src.server.app.root_for", return_value=batch_dir), \
+             patch("src.server.app.settings", return_value={"model": "m", "timeout": 30}), \
+             patch("src.server.app.emit"), \
+             patch("src.pipeline.revisions.is_r2_configured", return_value=False), \
+             patch("src.pipeline.revisions.find_agy", return_value="/usr/bin/agy"), \
+             patch("src.pipeline.revisions.run_streaming", side_effect=remove_index_and_exit_0):
             revision_worker("revlead", "2026-10-27", rid, "Break index")
 
         # Site index.html must be restored from backup
@@ -360,10 +360,10 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
             (dest / "index.html").write_text("fresh from R2", encoding="utf-8")
             return True
 
-        with patch("src.app.root_for", return_value=batch_dir), \
-             patch("src.app.is_r2_configured", return_value=True), \
-             patch("src.app.get_r2_mtime", return_value=2000.0), \
-             patch("src.app.download_site", side_effect=fake_download_site):
+        with patch("src.server.app.root_for", return_value=batch_dir), \
+             patch("src.server.app.is_r2_configured", return_value=True), \
+             patch("src.server.app.get_r2_mtime", return_value=2000.0), \
+             patch("src.server.app.download_site", side_effect=fake_download_site):
             resp = self.client.get("/api/lead/ziplead/zip?batch=2026-10-27&mode=site")
             self.assertEqual(resp.status_code, 200)
             import io
@@ -387,8 +387,8 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
             m.__getitem__.return_value.read.return_value = b"first"
             return m
         mock_s3.get_object.side_effect = fail_on_second
-        with patch("src.r2_storage.is_r2_configured", return_value=True), \
-             patch("src.r2_storage.get_s3_client", return_value=mock_s3), \
+        with patch("src.storage.r2.is_r2_configured", return_value=True), \
+             patch("src.storage.r2.get_s3_client", return_value=mock_s3), \
              patch.dict(os.environ, {"R2_BUCKET_NAME": "b"}):
             dest = Path(self.temp_dir) / "dl_dest"
             self.assertFalse(r2_storage.download_lead_folder("2026-10-27", "ziplead", dest))
@@ -426,7 +426,7 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
         """Bug 7: queue_run attaches cancellation Event before starting worker thread."""
         import threading
         import time
-        import src.app as app_mod
+        import src.server.app as app_mod
         started_event = threading.Event()
         observed_cancelled = []
 
@@ -436,7 +436,7 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
             with app_mod.job_lock:
                 app_mod.active_job = None
 
-        with patch("src.app.run_worker", side_effect=fake_worker):
+        with patch("src.server.app.run_worker", side_effect=fake_worker):
             res = app_mod.queue_run(["testuser"], "2026-10-27", False, False, False)
             self.assertIn("job_id", res)
             # Cancel before worker thread proceeds
@@ -466,7 +466,7 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
             c.row_factory = sqlite3.Row
             c.execute("CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY, value TEXT)")
             return c
-        with patch("src.app.connect", side_effect=custom_connect):
+        with patch("src.server.app.connect", side_effect=custom_connect):
             resp = self.client.put("/api/settings", json={"values": {"timeout": 0}})
             self.assertEqual(resp.status_code, 400)
             resp2 = self.client.put("/api/settings", json={"values": {"attempts": ""}})
@@ -483,8 +483,8 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
         (data_dir / "profile_data.json").write_text("{}", encoding="utf-8")
         mock_s3 = MagicMock()
         mock_s3.put_object.side_effect = RuntimeError("S3 put failed")
-        with patch("src.r2_storage.is_r2_configured", return_value=True), \
-             patch("src.r2_storage.get_s3_client", return_value=mock_s3), \
+        with patch("src.storage.r2.is_r2_configured", return_value=True), \
+             patch("src.storage.r2.get_s3_client", return_value=mock_s3), \
              patch.dict(os.environ, {"R2_BUCKET_NAME": "b"}):
             with self.assertRaises(RuntimeError):
                 r2_storage.upload_lead_media(account_dir, "2026-10-27", "acc_media")
@@ -493,42 +493,42 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
         """Bug 10: R2 recording deletion errors are not swallowed and return 502 from API."""
         mock_s3 = MagicMock()
         mock_s3.get_paginator.side_effect = RuntimeError("R2 unavailable")
-        with patch("src.r2_storage.is_r2_configured", return_value=True), \
-             patch("src.r2_storage.get_s3_client", return_value=mock_s3), \
+        with patch("src.storage.r2.is_r2_configured", return_value=True), \
+             patch("src.storage.r2.get_s3_client", return_value=mock_s3), \
              patch.dict(os.environ, {"R2_BUCKET_NAME": "b"}):
             with self.assertRaises(RuntimeError):
                 r2_storage.delete_recording("2026-10-27", "lead1", screen="desktop")
 
-        with patch("src.app.is_r2_configured", return_value=True), \
-             patch("src.app.root_for", return_value=Path(self.temp_dir)), \
-             patch("src.app.delete_recording", side_effect=RuntimeError("R2 delete failed")):
+        with patch("src.server.app.is_r2_configured", return_value=True), \
+             patch("src.server.app.root_for", return_value=Path(self.temp_dir)), \
+             patch("src.server.app.delete_recording", side_effect=RuntimeError("R2 delete failed")):
             resp = self.client.delete("/api/lead/lead1/recording/desktop?batch=2026-10-27")
             self.assertEqual(resp.status_code, 502)
 
-    def test_11_revisions_cli_appends_date_to_websites_root(self):
-        """Bug 11: src/revisions.py main() resolves WEBSITES_ROOT/<date>."""
-        import src.revisions as revisions_mod
+    def test_11_revise_without_accounts_whitelist(self):
+        """Verify revise() executes directly without requiring a CLI accounts whitelist."""
+        import src.pipeline.revisions as revisions_mod
+        from src.core.common import MIN_SIZE
         ws_root = Path(self.temp_dir) / "custom_websites"
         dated_dir = ws_root / "2026-10-27"
-        dated_dir.mkdir(parents=True)
-        cfg_dir = Path(self.temp_dir) / "config"
-        cfg_dir.mkdir(parents=True)
-        (cfg_dir / "REVISIONS.md").write_text("# user1\nfix hero\n", encoding="utf-8")
-        (cfg_dir / "accounts.txt").write_text("user1\n", encoding="utf-8")
+        account_dir = dated_dir / "user1"
+        site_dir = account_dir / "site"
+        site_dir.mkdir(parents=True)
+        html_content = "<!doctype html>\n<html><head><title>Mockup</title></head><body>" + "x" * (MIN_SIZE + 50) + "</body></html>"
+        (site_dir / "index.html").write_text(html_content, encoding="utf-8")
 
-        with patch.dict(os.environ, {"WEBSITES_ROOT": str(ws_root)}), \
-             patch("src.revisions.REPO", Path(self.temp_dir)), \
-             patch("builtins.input", return_value="2026-10-27"), \
-             patch("src.revisions.revise", return_value=0) as mock_revise:
-            rc = revisions_mod.main()
+        logger = MagicMock()
+        with patch("src.pipeline.revisions.find_agy", return_value="/bin/true"), \
+             patch("src.pipeline.revisions.run_streaming", return_value=(0, False)), \
+             patch("src.pipeline.revisions.is_r2_configured", return_value=False):
+            rc = revisions_mod.revise("user1", "fix hero", dated_dir, logger=logger)
             self.assertEqual(rc, 0)
-            self.assertEqual(mock_revise.call_args.args[2], dated_dir.resolve())
 
     def test_13_concurrent_update_sheet_no_duplicate_serials(self):
         """Bug 13: Concurrent update_sheet calls serialize and assign unique serial numbers."""
         from concurrent.futures import ThreadPoolExecutor
         import time
-        from src.update_sheet import update_sheet
+        from src.pipeline.sheets import update_sheet
 
         creds = Path(self.temp_dir) / "creds.json"
         creds.write_text("{}", encoding="utf-8")
@@ -562,11 +562,11 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
         self.assertEqual(serials, [1, 2, 3, 4])
 
     def test_14_launch_respects_custom_port(self):
-        """Bug 14: launch.py uses PORT environment variable for probing and opening browser."""
-        import launch
+        """Bug 14: launcher uses PORT environment variable for probing and opening browser."""
+        from src.core import launcher
         with patch.dict(os.environ, {"PORT": "9876"}):
-            self.assertEqual(launch._current_url(), "http://127.0.0.1:9876")
-            self.assertEqual(launch._current_state_url(), "http://127.0.0.1:9876/api/state")
+            self.assertEqual(launcher._current_url(), "http://127.0.0.1:9876")
+            self.assertEqual(launcher._current_state_url(), "http://127.0.0.1:9876/api/state")
 
     def test_15_preview_and_media_use_no_cache(self):
         """Lower-priority issue: preview and media return no-cache headers so refreshed assets aren't stale."""
@@ -578,8 +578,8 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
         data_dir.mkdir(parents=True)
         (data_dir / "pfp.jpg").write_bytes(b"imgbytes")
 
-        with patch("src.app.root_for", return_value=websites_root), \
-             patch("src.app.is_r2_configured", return_value=False):
+        with patch("src.server.app.root_for", return_value=websites_root), \
+             patch("src.server.app.is_r2_configured", return_value=False):
             r_css = self.client.get("/preview/2026-10-27/lead1/style.css")
             self.assertEqual(r_css.status_code, 200)
             self.assertIn("no-cache", r_css.headers.get("Cache-Control", ""))
@@ -601,9 +601,9 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
             c.row_factory = sqlite3.Row
             return c
 
-        with patch("src.app.connect", side_effect=custom_connect), \
-             patch("src.app.is_r2_configured", return_value=True), \
-             patch("src.app.upload_file") as mock_upload:
+        with patch("src.server.app.connect", side_effect=custom_connect), \
+             patch("src.server.app.is_r2_configured", return_value=True), \
+             patch("src.server.app.upload_file") as mock_upload:
             resp = self.client.patch(
                 "/api/lead/patchuser/stage?batch=2026-10-28",
                 json={"stage": "recorded"},
@@ -630,7 +630,7 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
 
     def test_17_d1_connection_session_reuse(self):
         """Verify D1Connection reuses a pooled requests.Session across queries."""
-        from src.d1_client import D1Connection
+        from src.storage.d1 import D1Connection
         c1 = D1Connection("acct", "db", "token123")
         c2 = D1Connection("acct", "db", "token123")
         self.assertIs(c1.session, c2.session)
@@ -651,8 +651,8 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
             c.row_factory = sqlite3.Row
             return c
 
-        with patch("src.app.connect", side_effect=custom_connect), \
-             patch("src.app.is_r2_configured", return_value=False):
+        with patch("src.server.app.connect", side_effect=custom_connect), \
+             patch("src.server.app.is_r2_configured", return_value=False):
             resp = self.client.get("/api/state?batch=2026-10-28")
             self.assertEqual(resp.status_code, 200)
             leads = resp.json().get("leads", [])
@@ -669,7 +669,7 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
         self.assertIn("Missing or invalid X-Studio header", resp.text)
 
         # POST with X-Studio and application/json must succeed
-        with patch("src.app._shutdown_timer", None):
+        with patch("src.server.app._shutdown_timer", None):
             resp = bare_client.post(
                 "/api/shutdown",
                 headers={"Host": "127.0.0.1", "X-Studio": "1", "Content-Type": "application/json"}
@@ -692,7 +692,7 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
 
     def test_21_process_account_first_build_cleanup(self):
         """Bug 3: On first-build failure, empty site skeleton is removed and no backup is stacked."""
-        from src.run import process_account
+        from src.pipeline.builder import process_account
         root = Path(self.temp_dir) / "first_build_root"
         root.mkdir(parents=True, exist_ok=True)
         account = root / "new_user"
@@ -700,8 +700,8 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
 
         logger = MagicMock()
         # Simulate scraper failure on first build
-        with patch("src.run.run_streaming", return_value=(1, False)), \
-             patch("src.run.find_agy", return_value="/bin/true"):
+        with patch("src.pipeline.builder.run_streaming", return_value=(1, False)), \
+             patch("src.pipeline.builder.find_agy", return_value="/bin/true"):
             rc = process_account("new_user", root, "python", False, logger)
             self.assertEqual(rc, 1)
             # Empty skeleton site should be removed
@@ -712,7 +712,7 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
 
     def test_22_extract_phone_deduplicates_different_prefix_formats(self):
         """Bug 4: extract_phone deduplicates phone numbers across different prefix formats (0300 vs +92300)."""
-        from src.profile_summary import extract_phone
+        from src.pipeline.summary import extract_phone
         bio = "Call: 03001234567 or WhatsApp: +923001234567 or intl: 00923001234567"
         result = extract_phone(bio)
         self.assertEqual(result, "+923001234567")
@@ -724,11 +724,11 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
 
     def test_23_init_db_raises_and_logs_on_database_error(self):
         """Bug 5: init_db must log and raise on broken database setup instead of silent pass."""
-        from src.app import init_db
+        from src.server.app import init_db
         def broken_connect():
             raise RuntimeError("Corrupt database connection failed")
 
-        with patch("src.app.connect", side_effect=broken_connect):
+        with patch("src.server.app.connect", side_effect=broken_connect):
             with self.assertLogs("uvicorn.error", level="ERROR") as cm:
                 with self.assertRaises(RuntimeError):
                     init_db()
@@ -761,9 +761,9 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
         client = TestClient(app, headers={"Host": "127.0.0.1", "X-Studio": "1", "Content-Type": "application/json"})
 
         # 1. Reject during active batch job
-        with patch("src.app.active_job", {"id": "123", "batch": "2026-10-29", "handles": ["user_undo"]}), \
-             patch("src.app.connect", side_effect=custom_connect), \
-             patch("src.app.root_for", return_value=root):
+        with patch("src.server.app.active_job", {"id": "123", "batch": "2026-10-29", "handles": ["user_undo"]}), \
+             patch("src.server.app.connect", side_effect=custom_connect), \
+             patch("src.server.app.root_for", return_value=root):
             resp = client.post("/api/revision/user_undo/1/undo?batch=2026-10-29")
             self.assertEqual(resp.status_code, 409)
             self.assertIn("Cannot undo revision while a build is running", resp.text)
@@ -771,10 +771,10 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
             self.assertEqual((site / "index.html").read_text(), "mid-build-content")
 
         # 2. Reject during active revision
-        with patch("src.app.active_job", None), \
-             patch("src.app.revision_active", True), \
-             patch("src.app.connect", side_effect=custom_connect), \
-             patch("src.app.root_for", return_value=root):
+        with patch("src.server.app.active_job", None), \
+             patch("src.server.app.revision_active", True), \
+             patch("src.server.app.connect", side_effect=custom_connect), \
+             patch("src.server.app.root_for", return_value=root):
             resp = client.post("/api/revision/user_undo/1/undo?batch=2026-10-29")
             self.assertEqual(resp.status_code, 409)
             self.assertIn("Cannot undo revision while a build is running", resp.text)

@@ -11,9 +11,9 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, Response, StreamingResponse
 from starlette.background import BackgroundTask
 from pydantic import BaseModel, Field
-from src.pipeline_common import MODEL, TIMEOUT_SECONDS, account_handle, find_agy, get_venv_python, launch_browser, run_streaming, REPO_ROOT, get_asset_path
-from src.run import process_account, validate_site
-from src.d1_client import (
+from src.core.common import MODEL, TIMEOUT_SECONDS, account_handle, find_agy, get_venv_python, launch_browser, run_streaming, REPO_ROOT, get_asset_path
+from src.pipeline.builder import process_account, validate_site
+from src.storage.d1 import (
     get_current_user,
     get_db_connection,
     is_d1_configured,
@@ -23,7 +23,7 @@ from src.d1_client import (
     set_local_mode,
     sync_local_to_d1,
 )
-from src.r2_storage import (
+from src.storage.r2 import (
     delete_lead_assets,
     delete_site_assets,
     delete_recording,
@@ -332,7 +332,7 @@ def sync_d1():
     )
     if not (account_id and api_token and database_id):
         raise HTTPException(400, "Cloudflare D1 credentials are not configured in .env")
-    from src.d1_client import D1Connection
+    from src.storage.d1 import D1Connection
     d1 = D1Connection(account_id, database_id, api_token)
     try:
         synced = sync_local_to_d1(DB, d1, DEFAULTS)
@@ -347,12 +347,12 @@ def sync_d1():
 
 @app.get("/api/credentials")
 def get_credentials():
-    from src.credentials_manager import get_credentials_status
+    from src.storage.credentials import get_credentials_status
     return get_credentials_status()
 
 @app.post("/api/credentials")
 def update_credentials(b: CredentialsReq):
-    from src.credentials_manager import save_credentials
+    from src.storage.credentials import save_credentials
     try:
         res = save_credentials(b.model_dump())
         init_db()
@@ -1064,9 +1064,9 @@ def revision_worker(handle,batch,rid,text,token=None):
     try:
         class Log:
             def log(self,level,msg):emit(handle,"log",f"{level}: {msg}",batch)
-        from src.revisions import revise
+        from src.pipeline.revisions import revise
         conf=settings()
-        rc=revise(handle,text,root_for(batch),{handle},Log(),emit=lambda h,s,l:emit(h,s,l,batch),model=conf["model"],timeout=int(conf["timeout"]),cancel_event=token)
+        rc=revise(handle,text,root_for(batch),logger=Log(),emit=lambda h,s,l:emit(h,s,l,batch),model=conf["model"],timeout=int(conf["timeout"]),cancel_event=token)
         created=list(set(backup_dir.glob("site_before_revision_*"))-before) if backup_dir.exists() else []
         backup=max(created,key=lambda p:p.stat().st_mtime) if created else None
         status="applied" if rc==0 else "failed"

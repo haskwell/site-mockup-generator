@@ -37,7 +37,7 @@ Scrapes Instagram profile data, extracts business information, and uses `agy` to
 
 ## Dashboard Features
 
-Start the dashboard with `python app.py` and open `http://127.0.0.1:8765`.
+Start the dashboard desktop application with `python main.py` (or headless server with `python main.py --server`) and open `http://127.0.0.1:8765`.
 
 - **Pipeline & Stages**: Track leads across sales outreach stages: `new`, `built`, `recorded`, `sent`, `replied`, `won`, and `lost`.
 - **Photo Selection**: Filter and select which scraped Instagram post photos should be incorporated into the website mockup before building.
@@ -48,7 +48,8 @@ Start the dashboard with `python app.py` and open `http://127.0.0.1:8765`.
 
 ## Launchers & Setup
 
-- **Desktop Launcher**: Run `python launch.py` for a dedicated desktop window launcher with system tray integration.
+- **Desktop Launcher**: Run `python main.py` for a dedicated desktop window launcher.
+- **Server Only**: Run `python main.py --server` to start only the background FastAPI server without launching a browser window.
 - **Windows Shortcuts**: Run `launch-setup.bat` (or [launch-setup.ps1](launch-setup.ps1)) to generate desktop launch shortcuts pointing to your project directory.
 - **Batch Command**: On Windows, double-click `launch.bat` to launch the dashboard server.
 
@@ -78,25 +79,6 @@ python -m unittest tests/test_fixes.py
 python -m unittest tests/test_r2_private_access.py
 ```
 
-## CLI Usage
-
-### Build Batch
-```bash
-python run.py [path/to/accounts.txt]
-```
-Outputs sites to `<WEBSITES_ROOT>/YYYY-MM-DD/<handle>/site/index.html`. Set `WEBSITES_ROOT` in `.env` or settings (default: `~/websites`). Set `FORCE=1` to force rebuilds of previously built leads.
-
-### Revise Sites via CLI
-Add revision instructions under handle headers in [config/REVISIONS.md](config/REVISIONS.md):
-```markdown
-# example_handle
-Make the contact button larger and fix hero text alignment.
-```
-Then run:
-```bash
-python revisions.py
-```
-
 ## Important Notes & Security
 
 - **Pakistan-Tuned Extraction**: Contact extraction in [src/profile_summary.py](src/profile_summary.py) includes specialized pattern recognition for Pakistani phone formats (`03xx`, `+923xx`, `00923xx`) and major Pakistani cities (Lahore, Karachi, Islamabad, Rawalpindi, Faisalabad, etc.).
@@ -107,29 +89,32 @@ python revisions.py
 
 ```text
 ├── assets/                     Icons and branding graphics
-├── config/                     Account lists, revision requests, local credentials
-├── logs/                       Timestamped CLI and session build logs
+├── config/                     Account lists and local credentials
+├── logs/                       Application and server logs
 ├── prompts/
 │   ├── GEMINI.md               Generation instructions for agy
 │   └── SKILL.md                Craft and design guidance rules
 ├── scripts/
 │   ├── migrate_to_d1.py        SQLite -> Cloudflare D1 migration script
-│   ├── migrate_to_r2.py        Local websites -> Cloudflare R2 migration script
-│   ├── open_accounts.py        Bulk Instagram profile browser opener
-│   └── open_all.py             Batch website index browser opener
+│   └── migrate_to_r2.py        Local websites -> Cloudflare R2 migration script
 ├── src/
-│   ├── app.py                  FastAPI local dashboard server and API endpoints
-│   ├── credentials_manager.py  Secrets and credentials manager
-│   ├── d1_client.py            Cloudflare D1 HTTP client with SQLite fallback
-│   ├── design.py               Visual theme and palette generation
-│   ├── logging_config.py       Structured logging configuration
-│   ├── pipeline_common.py      Shared constants, CLI helpers, process runners
-│   ├── profile_summary.py      Business bio, phone, and city extraction
-│   ├── r2_storage.py           Cloudflare R2 storage client and asset sync
-│   ├── revisions.py            Revision processing workflow
-│   ├── run.py                  Main CLI pipeline and site HTML/CSS validation
-│   ├── scraper.py              Playwright Instagram profile scraper
-│   └── update_sheet.py         Google Sheets sync with serial race guard
+│   ├── core/                   Infrastructure, logging, and desktop launcher
+│   │   ├── common.py           Process helpers, constants, and utilities
+│   │   ├── launcher.py         Desktop Chromium window and server lifecycle manager
+│   │   └── logging.py          Consistently formatted console and event logger
+│   ├── pipeline/               Site build, revision, scraping, and design pipeline
+│   │   ├── builder.py          Site build orchestration and HTML/CSS validation
+│   │   ├── design.py           Visual theme and palette generation
+│   │   ├── revisions.py        Mockup revision processing engine
+│   │   ├── scraper.py          Playwright Instagram profile scraper
+│   │   ├── sheets.py           Google Sheets lead synchronization
+│   │   └── summary.py          Profile bio, contact, and city extraction
+│   ├── server/                 FastAPI dashboard backend
+│   │   └── app.py              API endpoints, SSE streams, and worker queues
+│   └── storage/                Database and cloud asset management
+│       ├── credentials.py      Secrets and environment credential manager
+│       ├── d1.py               Cloudflare D1 HTTP client and SQLite adapter
+│       └── r2.py               Cloudflare R2 / S3 storage and asset synchronization
 ├── tests/
 │   ├── __init__.py             Test package marker
 │   ├── test_fixes.py           Audit fixes test suite
@@ -138,12 +123,8 @@ python revisions.py
 │   ├── index.html              Single-page studio dashboard interface
 │   ├── script.js               Dashboard frontend interaction logic
 │   └── styles.css              Dashboard stylesheets
-├── app.py                      Dashboard compatibility entrypoint
 ├── build_exe.bat               Windows standalone executable build script
-├── entrypoint.py               Subprocess and executable dispatcher
-├── launch.py                   Desktop dashboard launcher
+├── main.py                     Unified desktop launcher and subprocess entrypoint
 ├── requirements.txt            Python dependencies
-├── revisions.py                CLI revision entrypoint
-├── run.py                      CLI build command entrypoint
 └── studio.spec                 PyInstaller packaging specification
 ```

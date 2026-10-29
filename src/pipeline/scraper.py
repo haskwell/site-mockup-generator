@@ -16,14 +16,20 @@ from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
 
 try:
-    from logging_config import get_logger
+    from src.core.logging import get_logger
 except ModuleNotFoundError:
-    from src.logging_config import get_logger
+    try:
+        from logging_config import get_logger
+    except ModuleNotFoundError:
+        from src.logging_config import get_logger
 
 try:
-    from pipeline_common import launch_browser
+    from src.core.common import launch_browser
 except ModuleNotFoundError:
-    from src.pipeline_common import launch_browser
+    try:
+        from pipeline_common import launch_browser
+    except ModuleNotFoundError:
+        from src.pipeline_common import launch_browser
 
 try:
     from dotenv import load_dotenv

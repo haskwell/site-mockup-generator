@@ -11,9 +11,12 @@ from pathlib import Path
 from typing import Any
 
 try:
-    from logging_config import get_logger
+    from src.core.logging import get_logger
 except ModuleNotFoundError:
-    from src.logging_config import get_logger
+    try:
+        from logging_config import get_logger
+    except ModuleNotFoundError:
+        from src.logging_config import get_logger
 
 logger = get_logger("update_sheet")
 _sheet_thread_lock = threading.Lock()

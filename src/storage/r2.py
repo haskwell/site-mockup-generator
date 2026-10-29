@@ -9,7 +9,7 @@ import threading
 import time
 from typing import Any
 
-from src.pipeline_common import REPO_ROOT
+from src.core.common import REPO_ROOT
 
 try:
     from dotenv import load_dotenv
@@ -47,7 +47,7 @@ def guess_content_type(file_path: Path) -> str:
     return guessed or "application/octet-stream"
 
 
-from src.d1_client import is_local_mode
+from src.storage.d1 import is_local_mode
 
 
 def is_r2_configured() -> bool:

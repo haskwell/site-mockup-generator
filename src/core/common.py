@@ -20,7 +20,7 @@ MIN_SIZE = 600
 TIMEOUT_SECONDS = 900
 
 IS_FROZEN = getattr(sys, "frozen", False)
-REPO_ROOT = Path(sys.executable).parent.resolve() if IS_FROZEN else Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(sys.executable).parent.resolve() if IS_FROZEN else Path(__file__).resolve().parents[2]
 BUNDLE_ROOT = Path(getattr(sys, "_MEIPASS", REPO_ROOT)).resolve()
 
 
@@ -179,7 +179,7 @@ def account_handle(value: str) -> str:
 def run_streaming(
     command: list[str],
     cwd: Path,
-    logger: Logger | None = None,
+    logger: Logger | Any | None = None,
     log_path: Path | None = None,
     timeout: int | None = None,
     prefix: str = "",
@@ -206,11 +206,10 @@ def run_streaming(
     try:
         proc = subprocess.Popen(command, **popen_kwargs)
     except OSError as exc:
-        (
+        if logger and hasattr(logger, "log"):
             logger.log("ERROR", f"Could not run {command[0]}: {exc}")
-            if logger
-            else print(exc, file=sys.stderr)
-        )
+        else:
+            print(exc, file=sys.stderr)
         return 127, False
 
     deadline = None if timeout is None else time.monotonic() + timeout
@@ -262,7 +261,7 @@ def run_streaming(
             if output_file:
                 output_file.write(clean_line + "\n")
                 output_file.flush()
-            if logger:
+            if logger and hasattr(logger, "log"):
                 logger.log("INFO", prefix + clean_line)
             else:
                 print(clean_line, flush=True)
