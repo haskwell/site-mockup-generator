@@ -5,7 +5,8 @@ from pathlib import Path
 import subprocess
 import shutil
 
-ACCOUNTS_FILE = Path("config/accounts.txt")
+REPO = Path(__file__).resolve().parents[1]
+ACCOUNTS_FILE = REPO / "config/accounts.txt"
 
 # Find Zen Browser executable
 BROWSER = shutil.which("zen") or shutil.which("zen-browser")

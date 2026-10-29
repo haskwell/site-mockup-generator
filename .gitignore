@@ -29,3 +29,6 @@ debug/
 
 logs/
 dashboard.sqlite3
+
+build/
+dist/

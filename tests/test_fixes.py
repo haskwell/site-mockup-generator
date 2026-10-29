@@ -661,6 +661,125 @@ class TestHighImpactAndEdgeCases(unittest.TestCase):
             self.assertEqual(norec["stage"], "recorded")
             self.assertEqual(norec["has_recording"], 0)
 
+    def test_19_api_shutdown_requires_csrf_header(self):
+        """Bug 1: POST /api/shutdown without X-Studio must be rejected with 403."""
+        bare_client = TestClient(app)
+        resp = bare_client.post("/api/shutdown", headers={"Host": "127.0.0.1"})
+        self.assertEqual(resp.status_code, 403)
+        self.assertIn("Missing or invalid X-Studio header", resp.text)
+
+        # POST with X-Studio and application/json must succeed
+        with patch("src.app._shutdown_timer", None):
+            resp = bare_client.post(
+                "/api/shutdown",
+                headers={"Host": "127.0.0.1", "X-Studio": "1", "Content-Type": "application/json"}
+            )
+            self.assertEqual(resp.status_code, 200)
+            self.assertEqual(resp.json(), {"status": "shutting_down"})
+
+    def test_20_validate_site_protocol_relative_urls(self):
+        """Bug 2: validate_site must accept protocol-relative URLs (//...) in HTML and CSS."""
+        pad = "<!-- " + "x" * 700 + " -->"
+        site = Path(self.temp_dir) / "protocol_rel_site"
+        site.mkdir(parents=True, exist_ok=True)
+        (site / "index.html").write_text(
+            f"<!doctype html>\n<html><head><title>Test</title><link rel='stylesheet' href='//fonts.googleapis.com/css?family=Inter'>{pad}</head><body></body></html>",
+            encoding="utf-8"
+        )
+        (site / "style.css").write_text("body { background: url(//example.com/bg.png); }", encoding="utf-8")
+        errors = validate_site(site)
+        self.assertEqual(errors, [])
+
+    def test_21_process_account_first_build_cleanup(self):
+        """Bug 3: On first-build failure, empty site skeleton is removed and no backup is stacked."""
+        from src.run import process_account
+        root = Path(self.temp_dir) / "first_build_root"
+        root.mkdir(parents=True, exist_ok=True)
+        account = root / "new_user"
+        site = account / "site"
+
+        logger = MagicMock()
+        # Simulate scraper failure on first build
+        with patch("src.run.run_streaming", return_value=(1, False)), \
+             patch("src.run.find_agy", return_value="/bin/true"):
+            rc = process_account("new_user", root, "python", False, logger)
+            self.assertEqual(rc, 1)
+            # Empty skeleton site should be removed
+            self.assertFalse(site.exists())
+            # No backup should have been created
+            backups = list((account / "backups").glob("*")) if (account / "backups").exists() else []
+            self.assertEqual(len(backups), 0)
+
+    def test_22_extract_phone_deduplicates_different_prefix_formats(self):
+        """Bug 4: extract_phone deduplicates phone numbers across different prefix formats (0300 vs +92300)."""
+        from src.profile_summary import extract_phone
+        bio = "Call: 03001234567 or WhatsApp: +923001234567 or intl: 00923001234567"
+        result = extract_phone(bio)
+        self.assertEqual(result, "+923001234567")
+
+        # Multiple distinct numbers should both be retained
+        bio_multiple = "03001111111 and 03212222222"
+        result_multiple = extract_phone(bio_multiple)
+        self.assertEqual(result_multiple, "+923001111111 / +923212222222")
+
+    def test_23_init_db_raises_and_logs_on_database_error(self):
+        """Bug 5: init_db must log and raise on broken database setup instead of silent pass."""
+        from src.app import init_db
+        def broken_connect():
+            raise RuntimeError("Corrupt database connection failed")
+
+        with patch("src.app.connect", side_effect=broken_connect):
+            with self.assertLogs("uvicorn.error", level="ERROR") as cm:
+                with self.assertRaises(RuntimeError):
+                    init_db()
+                self.assertTrue(any("Database initialization failed" in output for output in cm.output))
+
+    def test_24_undo_revision_rejected_during_active_build(self):
+        """Bug 6: undo_revision must reject with 409 if a build or revision is running."""
+        root = Path(self.temp_dir) / "undo_test"
+        account = root / "user_undo"
+        site = account / "site"
+        site.mkdir(parents=True)
+        (site / "index.html").write_text("mid-build-content")
+
+        backups = account / "backups" / "site_before_revision_1"
+        backups.mkdir(parents=True)
+        (backups / "index.html").write_text("old-revision-backup")
+
+        db_path = root / "undo_test.sqlite3"
+        conn = sqlite3.connect(db_path)
+        conn.execute("CREATE TABLE revisions (id INTEGER PRIMARY KEY, batch TEXT, handle TEXT, request TEXT, status TEXT, backup_path TEXT)")
+        conn.execute("INSERT INTO revisions VALUES (1, '2026-10-29', 'user_undo', 'req', 'applied', ?)", (str(backups),))
+        conn.commit()
+        conn.close()
+
+        def custom_connect():
+            c = sqlite3.connect(db_path)
+            c.row_factory = sqlite3.Row
+            return c
+
+        client = TestClient(app, headers={"Host": "127.0.0.1", "X-Studio": "1", "Content-Type": "application/json"})
+
+        # 1. Reject during active batch job
+        with patch("src.app.active_job", {"id": "123", "batch": "2026-10-29", "handles": ["user_undo"]}), \
+             patch("src.app.connect", side_effect=custom_connect), \
+             patch("src.app.root_for", return_value=root):
+            resp = client.post("/api/revision/user_undo/1/undo?batch=2026-10-29")
+            self.assertEqual(resp.status_code, 409)
+            self.assertIn("Cannot undo revision while a build is running", resp.text)
+            # Mid-build content must NOT be overwritten
+            self.assertEqual((site / "index.html").read_text(), "mid-build-content")
+
+        # 2. Reject during active revision
+        with patch("src.app.active_job", None), \
+             patch("src.app.revision_active", True), \
+             patch("src.app.connect", side_effect=custom_connect), \
+             patch("src.app.root_for", return_value=root):
+            resp = client.post("/api/revision/user_undo/1/undo?batch=2026-10-29")
+            self.assertEqual(resp.status_code, 409)
+            self.assertIn("Cannot undo revision while a build is running", resp.text)
+            self.assertEqual((site / "index.html").read_text(), "mid-build-content")
+
 
 if __name__ == "__main__":
     unittest.main()

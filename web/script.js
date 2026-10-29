@@ -1190,7 +1190,7 @@ function drawRevisions() {
     r
       .map(
         (x) =>
-          `<div class="rev"><div>${esc(x.request)}</div><div class="rh"><span class="status ${x.status === "applied" ? "done" : ""}">${esc(x.status)}</span><span class="spacer"></span><button class="sm" data-act="reapply" data-id="${x.id}" ${S.job.batch_active ? "disabled" : ""}>${ic("refresh", 14)} Rerun</button>${x.backup_path ? `<button class="sm" data-act="undorev" data-id="${x.id}">${ic("undo", 14)} Undo</button>` : ""}</div></div>`,
+          `<div class="rev"><div>${esc(x.request)}</div><div class="rh"><span class="status ${x.status === "applied" ? "done" : ""}">${esc(x.status)}</span><span class="spacer"></span><button class="sm" data-act="reapply" data-id="${x.id}" ${S.job.batch_active ? "disabled" : ""}>${ic("refresh", 14)} Rerun</button>${x.backup_path ? `<button class="sm" data-act="undorev" data-id="${x.id}" ${S.job.batch_active || S.job.revision_active ? "disabled" : ""}>${ic("undo", 14)} Undo</button>` : ""}</div></div>`,
       )
       .join("") ||
     '<div class="muted">No revisions yet. Describe a change below.</div>';
@@ -3048,7 +3048,12 @@ function initApp() {
     fetch("/api/heartbeat", { method: "POST" }).catch(() => {});
   }, 3000);
   window.addEventListener("beforeunload", () => {
-    navigator.sendBeacon("/api/shutdown");
+    fetch("/api/shutdown", {
+      method: "POST",
+      headers: { "X-Studio": "1", "Content-Type": "application/json" },
+      body: "{}",
+      keepalive: true,
+    }).catch(() => {});
   });
   if ("Notification" in window && Notification.permission === "default")
     Notification.requestPermission();

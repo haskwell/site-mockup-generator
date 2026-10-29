@@ -70,12 +70,12 @@ Start the dashboard with `python app.py` and open `http://127.0.0.1:8765`.
 
 Execute the automated test suite with Python's built-in `unittest`:
 ```bash
-python -m unittest discover -s scripts
+python -m unittest discover -s tests
 ```
 Or run individual test modules:
 ```bash
-python scripts/test_fixes.py
-python scripts/test_r2_private_access.py
+python -m unittest tests/test_fixes.py
+python -m unittest tests/test_r2_private_access.py
 ```
 
 ## CLI Usage
@@ -115,10 +115,11 @@ python revisions.py
 ├── scripts/
 │   ├── migrate_to_d1.py        SQLite -> Cloudflare D1 migration script
 │   ├── migrate_to_r2.py        Local websites -> Cloudflare R2 migration script
-│   ├── test_fixes.py           Audit fixes test suite
-│   └── test_r2_private_access.py R2 private access test suite
+│   ├── open_accounts.py        Bulk Instagram profile browser opener
+│   └── open_all.py             Batch website index browser opener
 ├── src/
 │   ├── app.py                  FastAPI local dashboard server and API endpoints
+│   ├── credentials_manager.py  Secrets and credentials manager
 │   ├── d1_client.py            Cloudflare D1 HTTP client with SQLite fallback
 │   ├── design.py               Visual theme and palette generation
 │   ├── logging_config.py       Structured logging configuration
@@ -127,12 +128,22 @@ python revisions.py
 │   ├── r2_storage.py           Cloudflare R2 storage client and asset sync
 │   ├── revisions.py            Revision processing workflow
 │   ├── run.py                  Main CLI pipeline and site HTML/CSS validation
+│   ├── scraper.py              Playwright Instagram profile scraper
 │   └── update_sheet.py         Google Sheets sync with serial race guard
+├── tests/
+│   ├── __init__.py             Test package marker
+│   ├── test_fixes.py           Audit fixes test suite
+│   └── test_r2_private_access.py R2 private access test suite
 ├── web/
-│   └── index.html              Single-page studio dashboard interface
+│   ├── index.html              Single-page studio dashboard interface
+│   ├── script.js               Dashboard frontend interaction logic
+│   └── styles.css              Dashboard stylesheets
 ├── app.py                      Dashboard compatibility entrypoint
+├── build_exe.bat               Windows standalone executable build script
+├── entrypoint.py               Subprocess and executable dispatcher
 ├── launch.py                   Desktop dashboard launcher
-├── launch-setup.ps1            PowerShell desktop shortcut generator
 ├── requirements.txt            Python dependencies
-└── run.py                      CLI build command entrypoint
+├── revisions.py                CLI revision entrypoint
+├── run.py                      CLI build command entrypoint
+└── studio.spec                 PyInstaller packaging specification
 ```

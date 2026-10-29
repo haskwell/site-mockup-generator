@@ -33,6 +33,25 @@ PHONE_RE = re.compile(
 )
 
 
+def normalize_phone(raw: str) -> str:
+    cleaned = re.sub(r"[\s().-]", "", raw.strip())
+    if not cleaned:
+        return ""
+    if cleaned.startswith("+92"):
+        rest = cleaned[3:]
+    elif cleaned.startswith("0092"):
+        rest = cleaned[4:]
+    elif cleaned.startswith("92"):
+        rest = cleaned[2:]
+    elif cleaned.startswith("0"):
+        rest = cleaned[1:]
+    else:
+        rest = cleaned
+    if rest.startswith("0"):
+        rest = rest[1:]
+    return f"+92{rest}"
+
+
 def extract_phone(text: str) -> str:
     matches = list(PHONE_RE.finditer(text))
     if not matches:
@@ -40,8 +59,8 @@ def extract_phone(text: str) -> str:
     # Return every distinct number so bios with multiple contact lines survive.
     values = []
     for match in matches:
-        value = re.sub(r"[\s().-]", "", match.group(0).strip())
-        if value not in values:
+        value = normalize_phone(match.group(0))
+        if value and value not in values:
             values.append(value)
     return " / ".join(values)
 

@@ -63,7 +63,7 @@ async def security_middleware(request: Request, call_next):
     host = (request.headers.get("host") or "").split(":")[0].strip().lower()
     if host not in {"127.0.0.1", "localhost", "testserver", "::1"}:
         return Response("Invalid Host header", status_code=403)
-    if request.url.path in {"/api/shutdown", "/api/heartbeat"}:
+    if request.url.path == "/api/heartbeat":
         return await call_next(request)
     if request.method in {"POST", "PUT", "DELETE", "PATCH"}:
         if request.headers.get("X-Studio") != "1":
@@ -195,8 +195,10 @@ def init_db():
             except Exception:pass
             for k,v in DEFAULTS.items():
                 d.execute("INSERT OR IGNORE INTO settings VALUES(?,?)",(k,json.dumps(v)))
-    except Exception:
-        pass
+    except Exception as exc:
+        import logging
+        logging.getLogger("uvicorn.error").error("Database initialization failed: %s", exc)
+        raise
 
 def resolve_credentials_path(path_str: str | None = None) -> Path:
     env_creds = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
@@ -1121,6 +1123,9 @@ def apply_revision(handle:str,rid:int,batch:str|None=None):
 @app.post("/api/revision/{handle}/{rid}/undo")
 def undo_revision(handle:str,rid:int,batch:str|None=None):
     handle=clean_handle(handle);batch=clean_batch(batch or selected_batch)
+    with job_lock:
+        if active_job or revision_active:
+            raise HTTPException(409,"Cannot undo revision while a build is running")
     with connect() as d:r=d.execute("SELECT backup_path FROM revisions WHERE id=? AND batch=? AND handle=?",(rid,batch,handle)).fetchone()
     if not r or not r["backup_path"]:raise HTTPException(404,"No backup")
     base=root_for(batch)/handle;backup=Path(r["backup_path"]).resolve();site=base/"site"

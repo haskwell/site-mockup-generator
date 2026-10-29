@@ -72,7 +72,7 @@ def validate_site(site: Path) -> list[str]:
     errors = checker.errors
     errors.extend(f"required document tag <{tag}> is missing" for tag in {"html", "head", "body"} - checker.tags)
     for ref in checker.refs:
-        if ref.startswith(("https://", "http://", "data:", "#")):
+        if ref.startswith(("https://", "http://", "//", "data:", "#")):
             continue
         clean_ref = ref.lstrip("/").split("?", 1)[0].split("#", 1)[0]
         if not clean_ref:
@@ -86,7 +86,7 @@ def validate_site(site: Path) -> list[str]:
             css_text = css_file.read_text(encoding="utf-8")
             for url_ref in re.findall(r'url\s*\(\s*[\'"]?([^\'")]+)[\'"]?\s*\)', css_text):
                 url_ref = url_ref.strip()
-                if not url_ref.startswith(("https://", "http://", "data:", "#")):
+                if not url_ref.startswith(("https://", "http://", "//", "data:", "#")):
                     clean_url_ref = url_ref.lstrip("/").split("?", 1)[0].split("#", 1)[0]
                     if not clean_url_ref:
                         continue
@@ -131,7 +131,6 @@ def process_account(user: str, root: Path, python: str, force: bool, logger: Log
     try:
         (account / "logs").mkdir(parents=True, exist_ok=True)
         if not scrape_only:
-            (site / "assets").mkdir(parents=True, exist_ok=True)
             shutil.copy2(get_asset_path("prompts/SKILL.md"), account / "SKILL.md")
     except OSError as exc:
         logger.log("ERROR", f"{user}: failed to prepare account files: {exc}")
@@ -143,7 +142,7 @@ def process_account(user: str, root: Path, python: str, force: bool, logger: Log
         return 2
 
     backup = account / "backups" / f"site_before_build_{dt.datetime.now():%Y%m%d_%H%M%S}"
-    if not scrape_only and site.exists():
+    if not scrape_only and site.exists() and any(site.iterdir()):
         backup.parent.mkdir(parents=True, exist_ok=True)
         shutil.copytree(site, backup)
     agy_log = account / "logs" / f"agy_{dt.datetime.now():%Y-%m-%d_%H%M}.log"
@@ -270,8 +269,7 @@ def process_account(user: str, root: Path, python: str, force: bool, logger: Log
     errors = validate_site(site)
     if errors:
         logger.log("ERROR", f"{user}: generated site failed validation: {'; '.join(errors)}")
-        if backup.exists():
-            restore_backup(site, backup)
+        restore_backup(site, backup)
         return 1
     size = index.stat().st_size
     logger.log("SUCCESS", f"{user}: done -> {index} ({size} bytes)")
