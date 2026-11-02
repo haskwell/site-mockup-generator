@@ -531,9 +531,9 @@ def sync_local_to_d1(
 
 
 def get_db_connection(local_db_path: Path | None = None) -> D1Connection | ClosingLocalConnection:
-    """Return Cloudflare D1 connection by default. Return local SQLite only if local mode is manually enabled."""
+    """Return Cloudflare D1 connection when configured. Fall back to local SQLite when unconfigured or in local mode."""
     db_file = local_db_path or Path(os.environ.get("DASHBOARD_DB", REPO / "dashboard.sqlite3"))
-    if is_local_mode():
+    if is_local_mode() or not is_d1_configured():
         db_file.parent.mkdir(parents=True, exist_ok=True)
         conn = sqlite3.connect(db_file, timeout=15, factory=ClosingLocalConnection)
         conn.row_factory = sqlite3.Row
@@ -543,12 +543,6 @@ def get_db_connection(local_db_path: Path | None = None) -> D1Connection | Closi
         except Exception:
             pass
         return conn
-
-    if not is_d1_configured():
-        raise RuntimeError(
-            "Cloudflare D1 credentials are not configured in .env. "
-            "Please configure Cloudflare D1 or manually enable Local Mode in Settings."
-        )
 
     account_id = os.environ["CLOUDFLARE_ACCOUNT_ID"].strip()
     api_token = os.environ["CLOUDFLARE_API_TOKEN"].strip()
