@@ -1886,6 +1886,32 @@ function renderUploadProgress({
   }
 }
 
+window.testUploadProgress = (handle = "preview") => {
+  let pct = 0;
+  const interval = setInterval(() => {
+    pct += 15;
+    if (pct < 100) {
+      renderUploadProgress({
+        handle,
+        screen: "desktop",
+        percent: pct,
+        loaded: (pct / 100) * 12.5 * 1024 * 1024,
+        total: 12.5 * 1024 * 1024,
+        speedBps: 2.1 * 1024 * 1024,
+        stage: pct > 75 ? "syncing_r2" : "uploading",
+      });
+    } else {
+      clearInterval(interval);
+      renderUploadProgress({
+        handle,
+        screen: "desktop",
+        percent: 100,
+        stage: "complete",
+      });
+    }
+  }, 400);
+};
+
   P.rec.onstop = async () => {
     stream.getTracks().forEach((t) => t.stop());
     cancelAnimationFrame(P.raf);
