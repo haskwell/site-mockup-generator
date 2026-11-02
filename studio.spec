@@ -51,6 +51,8 @@ hiddenimports = [
 
 # Collect dynamic dependencies
 packages_to_collect = [
+    'uvicorn',
+    'h11',
     'fastapi',
     'starlette',
     'playwright',

@@ -12,12 +12,53 @@ from __future__ import annotations
 import multiprocessing
 import os
 import sys
+import traceback
+from pathlib import Path
 
-# Windows windowed (console=False) safeguard against NoneType stream crashes
-if sys.stdout is None:
-    sys.stdout = open(os.devnull, "w")
-if sys.stderr is None:
-    sys.stderr = open(os.devnull, "w")
+
+def show_fatal_error(title: str, msg: str) -> None:
+    """Display native message box on Windows so startup errors are never swallowed."""
+    if sys.platform == "win32":
+        try:
+            import ctypes
+            ctypes.windll.user32.MessageBoxW(0, msg, title, 0x10)
+        except Exception:
+            pass
+
+
+def setup_crash_logging() -> None:
+    """Redirect stdout/stderr to persistent log files and set a global crash handler."""
+    log_dir = Path(os.environ.get("TEMP", "/tmp")) / "Studio_Logs"
+    try:
+        log_dir.mkdir(parents=True, exist_ok=True)
+        log_path = log_dir / "studio_startup.log"
+        log_file = open(log_path, "a", encoding="utf-8", buffering=1)
+        if sys.stdout is None:
+            sys.stdout = log_file
+        if sys.stderr is None:
+            sys.stderr = log_file
+    except Exception:
+        if sys.stdout is None:
+            sys.stdout = open(os.devnull, "w")
+        if sys.stderr is None:
+            sys.stderr = open(os.devnull, "w")
+
+    def global_excepthook(exc_type, exc_val, exc_tb):
+        err = "".join(traceback.format_exception(exc_type, exc_val, exc_tb))
+        try:
+            sys.stderr.write(f"\n[FATAL CRASH] {err}\n")
+            sys.stderr.flush()
+        except Exception:
+            pass
+        show_fatal_error(
+            "Studio Startup Error",
+            f"Studio encountered an unhandled exception during startup:\n\n{err}\n\nLog saved to:\n%TEMP%\\Studio_Logs\\studio_startup.log"
+        )
+
+    sys.excepthook = global_excepthook
+
+
+setup_crash_logging()
 
 
 def dispatch_subcommand() -> bool:

@@ -108,25 +108,38 @@ def launch_desktop() -> int:
 
     server: subprocess.Popen | None = None
     server_thread: threading.Thread | None = None
+    server_errors: list[str] = []
     log_file = None
 
     if IS_FROZEN:
-        import uvicorn
-        from src.server.app import app
+        try:
+            import uvicorn
+            from src.server.app import app
 
-        def _run_server() -> None:
-            config = uvicorn.Config(
-                app,
-                host="127.0.0.1",
-                port=PORT,
-                log_level="info",
-                access_log=False,
-            )
-            srv = uvicorn.Server(config)
-            srv.run()
+            def _run_server() -> None:
+                try:
+                    config = uvicorn.Config(
+                        app,
+                        host="127.0.0.1",
+                        port=PORT,
+                        log_level="info",
+                        access_log=False,
+                    )
+                    srv = uvicorn.Server(config)
+                    srv.run()
+                except Exception:
+                    import traceback
+                    tb = traceback.format_exc()
+                    server_errors.append(tb)
+                    print(f"\n[SERVER THREAD CRASH] {tb}\n", file=sys.stderr)
 
-        server_thread = threading.Thread(target=_run_server, daemon=True)
-        server_thread.start()
+            server_thread = threading.Thread(target=_run_server, daemon=True)
+            server_thread.start()
+        except Exception:
+            import traceback
+            tb = traceback.format_exc()
+            server_errors.append(tb)
+            print(f"\n[SERVER IMPORT CRASH] {tb}\n", file=sys.stderr)
     else:
         python = get_venv_python(REPO)
         log_dir = REPO / "logs"
@@ -155,10 +168,34 @@ def launch_desktop() -> int:
             if server is not None and server.poll() is not None:
                 return 1
             if server_thread is not None and not server_thread.is_alive():
-                print("Error: Background server thread terminated unexpectedly.", file=sys.stderr)
+                err_detail = server_errors[0] if server_errors else "Thread exited unexpectedly without details."
+                print(f"Error: Background server thread terminated unexpectedly:\n{err_detail}", file=sys.stderr)
+                if sys.platform == "win32":
+                    try:
+                        import ctypes
+                        ctypes.windll.user32.MessageBoxW(
+                            0,
+                            f"Studio background server failed to start:\n\n{err_detail}",
+                            "Studio Server Crash",
+                            0x10,
+                        )
+                    except Exception:
+                        pass
                 return 1
             if time.monotonic() > startup_deadline:
                 print("Error: Server failed to start and respond to /api/ping within 30s.", file=sys.stderr)
+                if sys.platform == "win32":
+                    try:
+                        import ctypes
+                        ctypes.windll.user32.MessageBoxW(
+                            0,
+                            f"Studio server did not respond at http://127.0.0.1:{PORT}/ within 30 seconds.\n"
+                            f"Port {PORT} may be occupied or blocked by antivirus/firewall.",
+                            "Studio Startup Timeout",
+                            0x10,
+                        )
+                    except Exception:
+                        pass
                 return 1
             time.sleep(0.2)
         open_browser(profile, browser_bin)
