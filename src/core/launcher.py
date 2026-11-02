@@ -17,10 +17,14 @@ from src.core.common import IS_FROZEN, REPO_ROOT, get_venv_python, kill_process_
 
 REPO = REPO_ROOT
 try:
-    from dotenv import load_dotenv
-    load_dotenv(REPO / ".env")
+    from src.storage.credentials import hydrate_environment
+    hydrate_environment()
 except Exception:
-    pass
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(REPO / ".env")
+    except Exception:
+        pass
 
 PORT = int(os.environ.get("PORT", 8765))
 URL = f"http://127.0.0.1:{PORT}"

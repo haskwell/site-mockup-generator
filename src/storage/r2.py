@@ -12,10 +12,14 @@ from typing import Any
 from src.core.common import REPO_ROOT
 
 try:
-    from dotenv import load_dotenv
-    load_dotenv(REPO_ROOT / ".env")
-except ImportError:
-    pass
+    from src.storage.credentials import hydrate_environment
+    hydrate_environment()
+except Exception:
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(REPO_ROOT / ".env")
+    except Exception:
+        pass
 
 # Fallback MIME mappings to ensure reliable Content-Type across all platforms (Windows/Linux)
 MIME_OVERRIDES = {

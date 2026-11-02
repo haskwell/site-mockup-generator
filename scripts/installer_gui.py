@@ -34,6 +34,7 @@ PROJECTS_DIR = USER_PROFILE / "projects"
 INSTALL_DIR = PROJECTS_DIR / "Studio"
 EXE_PATH = INSTALL_DIR / "Studio.exe"
 ENV_PATH = INSTALL_DIR / ".env"
+CONFIG_JSON_PATH = INSTALL_DIR / "config.json"
 DESKTOP_DIR = USER_PROFILE / "Desktop"
 SHORTCUT_PATH = DESKTOP_DIR / "Studio.lnk"
 START_MENU_DIR = USER_PROFILE / "AppData/Roaming/Microsoft/Windows/Start Menu/Programs"
@@ -134,9 +135,9 @@ echo Removing Studio application files...
 if "%KEEP_ENV%"=="1" (
     for /d %%p in ("{target_dir}\\*.*") do rmdir /s /q "%%p" >nul 2>nul
     for %%f in ("{target_dir}\\*.*") do (
-        if /i not "%%~nxf"==".env" del /f /q "%%f" >nul 2>nul
+        if /i not "%%~nxf"==".env" if /i not "%%~nxf"=="config.json" del /f /q "%%f" >nul 2>nul
     )
-    echo Done. Application removed; .env preserved.
+    echo Done. Application removed; configuration preserved.
 ) else (
     cd /d "%USERPROFILE%"
     rmdir /s /q "{target_dir}" >nul 2>nul
@@ -512,12 +513,16 @@ class InstallerApp(tk.Tk):
             PROJECTS_DIR.mkdir(parents=True, exist_ok=True)
             INSTALL_DIR.mkdir(parents=True, exist_ok=True)
 
-            # 3. Safeguard existing .env
+            # 3. Safeguard existing .env and config.json
             env_backup = temp_dir / "studio_env_backup.tmp"
+            config_backup = temp_dir / "studio_config_backup.tmp"
             has_existing_env = ENV_PATH.is_file()
+            has_existing_config = CONFIG_JSON_PATH.is_file()
             if has_existing_env:
-                self._update_ui_status("Safeguarding .env configuration...", 65)
+                self._update_ui_status("Safeguarding configuration...", 65)
                 shutil.copy2(ENV_PATH, env_backup)
+            if has_existing_config:
+                shutil.copy2(CONFIG_JSON_PATH, config_backup)
 
             # 4. Extract archive
             self._update_ui_status("Extracting files to projects\\Studio...", 75)
@@ -539,8 +544,10 @@ class InstallerApp(tk.Tk):
                     if not rel or rel.endswith("/") or rel.endswith("\\"):
                         continue
 
-                    # Never overwrite .env during extraction
+                    # Never overwrite .env or config.json during extraction
                     if rel.lower() == ".env" and has_existing_env:
+                        continue
+                    if rel.lower() == "config.json" and has_existing_config:
                         continue
 
                     target_file = INSTALL_DIR / rel
@@ -553,12 +560,14 @@ class InstallerApp(tk.Tk):
                         pct = 75 + int((idx / total_entries) * 15)
                         self._update_ui_status("Extracting files...", pct)
 
-            # 5. Restore or Initialize .env
-            if has_existing_env:
-                if env_backup.is_file():
-                    shutil.copy2(env_backup, ENV_PATH)
-                    env_backup.unlink(missing_ok=True)
-            elif not ENV_PATH.is_file():
+            # 5. Restore or Initialize configuration
+            if has_existing_env and env_backup.is_file():
+                shutil.copy2(env_backup, ENV_PATH)
+                env_backup.unlink(missing_ok=True)
+            if has_existing_config and config_backup.is_file():
+                shutil.copy2(config_backup, CONFIG_JSON_PATH)
+                config_backup.unlink(missing_ok=True)
+            if not ENV_PATH.is_file() and not CONFIG_JSON_PATH.is_file():
                 example_env = INSTALL_DIR / ".env.example"
                 if example_env.is_file():
                     shutil.copy2(example_env, ENV_PATH)

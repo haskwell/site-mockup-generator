@@ -14,10 +14,14 @@ from src.core.common import REPO_ROOT
 
 REPO = REPO_ROOT
 try:
-    from dotenv import load_dotenv
-    load_dotenv(REPO / ".env")
-except ImportError:
-    pass
+    from src.storage.credentials import hydrate_environment
+    hydrate_environment()
+except Exception:
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(REPO / ".env")
+    except Exception:
+        pass
 
 
 def get_current_user() -> str:

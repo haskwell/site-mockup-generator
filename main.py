@@ -121,6 +121,12 @@ def dispatch_subcommand() -> bool:
 
 
 def main() -> int:
+    try:
+        from src.storage.credentials import hydrate_environment
+        hydrate_environment()
+    except Exception:
+        pass
+
     if dispatch_subcommand():
         return 0
 

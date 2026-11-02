@@ -198,6 +198,7 @@ def init_db():
     except Exception as exc:
         import logging
         logging.getLogger("uvicorn.error").error("Database initialization failed: %s", exc)
+        raise
 
 def resolve_credentials_path(path_str: str | None = None) -> Path:
     env_creds = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")

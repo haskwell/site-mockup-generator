@@ -30,6 +30,7 @@ $ProjectsDir = Join-Path $UserHome "projects"
 $InstallDir = Join-Path $ProjectsDir "Studio"
 $ExePath = Join-Path $InstallDir "Studio.exe"
 $EnvPath = Join-Path $InstallDir ".env"
+$ConfigJsonPath = Join-Path $InstallDir "config.json"
 $DesktopDir = [System.Environment]::GetFolderPath("Desktop")
 $ShortcutPath = Join-Path $DesktopDir "Studio.lnk"
 $StartMenuDir = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Programs)
@@ -111,11 +112,11 @@ echo Removing application files...
 if "%KEEP_ENV%"=="1" (
     for /d %%p in ("$TargetDir\*.*") do rmdir /s /q "%%p" >nul 2>nul
     for %%f in ("$TargetDir\*.*") do (
-        if /i not "%%~nxf"==".env" (
+        if /i not "%%~nxf"==".env" if /i not "%%~nxf"=="config.json" (
             del /f /q "%%f" >nul 2>nul
         )
     )
-    echo Application files removed. Your .env file was preserved.
+    echo Application files removed. Your configuration files were preserved.
 ) else (
     cd /d "%USERPROFILE%"
     rmdir /s /q "$TargetDir" >nul 2>nul
@@ -486,13 +487,18 @@ $btnAction.Add_Click({
         New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
     }
 
-    # Step 3: Safeguard Existing .env
+    # Step 3: Safeguard Existing .env and config.json
     $envBackup = Join-Path $env:TEMP "Studio_installer_env_backup.tmp"
+    $configBackup = Join-Path $env:TEMP "Studio_installer_config_backup.tmp"
     $hasExistingEnv = Test-Path $EnvPath
+    $hasExistingConfig = Test-Path $ConfigJsonPath
     if ($hasExistingEnv) {
-        $lblStatus.Text = "Preserving existing .env configuration..."
+        $lblStatus.Text = "Preserving existing configuration..."
         $form.Update()
         Copy-Item -Path $EnvPath -Destination $envBackup -Force
+    }
+    if ($hasExistingConfig) {
+        Copy-Item -Path $ConfigJsonPath -Destination $configBackup -Force
     }
 
     # Step 4: Extract Package
@@ -531,8 +537,9 @@ $btnAction.Add_Click({
                     New-Item -ItemType Directory -Path $destPath -Force | Out-Null
                 }
             } else {
-                # Never overwrite existing .env with a file from zip
-                if ($relPath.Equals(".env", [System.StringComparison]::OrdinalIgnoreCase) -and $hasExistingEnv) {
+                # Never overwrite existing .env or config.json with a file from zip
+                if (($relPath.Equals(".env", [System.StringComparison]::OrdinalIgnoreCase) -and $hasExistingEnv) -or
+                    ($relPath.Equals("config.json", [System.StringComparison]::OrdinalIgnoreCase) -and $hasExistingConfig)) {
                     continue
                 }
 
@@ -560,13 +567,16 @@ $btnAction.Add_Click({
         if (Test-Path $tempZip) { Remove-Item -Path $tempZip -Force -ErrorAction SilentlyContinue }
     }
 
-    # Step 5: Verify and Restore .env
-    if ($hasExistingEnv) {
-        if (Test-Path $envBackup) {
-            Copy-Item -Path $envBackup -Destination $EnvPath -Force
-            Remove-Item -Path $envBackup -Force -ErrorAction SilentlyContinue
-        }
-    } elseif (-not (Test-Path $EnvPath)) {
+    # Step 5: Verify and Restore configuration
+    if ($hasExistingEnv -and (Test-Path $envBackup)) {
+        Copy-Item -Path $envBackup -Destination $EnvPath -Force
+        Remove-Item -Path $envBackup -Force -ErrorAction SilentlyContinue
+    }
+    if ($hasExistingConfig -and (Test-Path $configBackup)) {
+        Copy-Item -Path $configBackup -Destination $ConfigJsonPath -Force
+        Remove-Item -Path $configBackup -Force -ErrorAction SilentlyContinue
+    }
+    if (-not (Test-Path $EnvPath)) {
         # First-time install: initialize .env from .env.example if present
         $exampleEnv = Join-Path $InstallDir ".env.example"
         if (Test-Path $exampleEnv) {

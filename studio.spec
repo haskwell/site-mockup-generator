@@ -47,6 +47,11 @@ hiddenimports = [
     'src.r2_storage',
     'src.d1_client',
     'src.credentials_manager',
+    'keyring',
+    'keyring.backends',
+    'keyring.backends.Windows',
+    'keyring.backends.SecretService',
+    'keyring.backends.chainer',
 ]
 
 # Collect dynamic dependencies
@@ -61,6 +66,10 @@ packages_to_collect = [
     'gspread',
     'google.auth',
     'PIL',
+    'keyring',
+    'jaraco.classes',
+    'jaraco.context',
+    'jaraco.functools',
 ]
 
 for pkg in packages_to_collect:

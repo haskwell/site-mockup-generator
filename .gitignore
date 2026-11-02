@@ -8,6 +8,7 @@ __pycache__/
 .env
 .env.*
 !.env.example
+config.json
 config/.env
 config/.env.*
 !config/.env.example
