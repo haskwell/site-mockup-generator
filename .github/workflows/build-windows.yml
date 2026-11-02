@@ -12,6 +12,9 @@ on:
       - '.gitignore'
       - 'docs/**'
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build Studio for Windows
@@ -56,10 +59,12 @@ jobs:
           path: dist/Studio-Windows.zip
           retention-days: 30
 
-      - name: Upload to GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
+      - name: Publish to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'latest' }}
+          name: ${{ startsWith(github.ref, 'refs/tags/') && github.ref_name || 'Latest Studio Build' }}
+          prerelease: false
           files: dist/Studio-Windows.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
