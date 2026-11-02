@@ -42,6 +42,14 @@ function Test-AppRunning {
     return ($null -ne $proc)
 }
 
+function Stop-AppRunning {
+    $procs = Get-Process -Name "Studio" -ErrorAction SilentlyContinue
+    if ($procs) {
+        $procs | Stop-Process -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Milliseconds 500
+    }
+}
+
 function Create-DesktopShortcut {
     param([string]$Target, [string]$WorkDir, [string]$LinkFile)
     try {
@@ -315,13 +323,17 @@ $btnClose.Add_Click({
 
 $btnUninstall.Add_Click({
     if (Test-AppRunning) {
-        [System.Windows.Forms.MessageBox]::Show(
-            "Studio is currently running. Please close it before uninstalling.",
-            "Application Running",
-            [System.Windows.Forms.MessageBoxButtons]::OK,
-            [System.Windows.Forms.MessageBoxIcon]::Warning
+        $closePrompt = [System.Windows.Forms.MessageBox]::Show(
+            "Studio is currently running in the background.`n`nWould you like to close it automatically to proceed with uninstallation?",
+            "Close Running Studio",
+            [System.Windows.Forms.MessageBoxButtons]::YesNo,
+            [System.Windows.Forms.MessageBoxIcon]::Question
         )
-        return
+        if ($closePrompt -eq [System.Windows.Forms.DialogResult]::Yes) {
+            Stop-AppRunning
+        } else {
+            return
+        }
     }
 
     $confirm = [System.Windows.Forms.MessageBox]::Show(
@@ -374,13 +386,17 @@ $btnUninstall.Add_Click({
 
 $btnAction.Add_Click({
     if (Test-AppRunning) {
-        [System.Windows.Forms.MessageBox]::Show(
-            "Studio is currently running. Please close it before proceeding with install/update.",
-            "Application Running",
-            [System.Windows.Forms.MessageBoxButtons]::OK,
-            [System.Windows.Forms.MessageBoxIcon]::Warning
+        $closePrompt = [System.Windows.Forms.MessageBox]::Show(
+            "Studio is currently running in the background.`n`nWould you like to close it automatically to proceed with install/update?",
+            "Close Running Studio",
+            [System.Windows.Forms.MessageBoxButtons]::YesNo,
+            [System.Windows.Forms.MessageBoxIcon]::Question
         )
-        return
+        if ($closePrompt -eq [System.Windows.Forms.DialogResult]::Yes) {
+            Stop-AppRunning
+        } else {
+            return
+        }
     }
 
     $btnAction.Enabled = $false

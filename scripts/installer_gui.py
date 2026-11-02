@@ -53,6 +53,19 @@ def is_app_running() -> bool:
         return False
 
 
+def stop_app_processes() -> None:
+    """Forcefully close any lingering Studio.exe processes."""
+    if sys.platform == "win32":
+        try:
+            subprocess.run(
+                ["taskkill", "/f", "/im", "Studio.exe"],
+                check=False,
+                creationflags=subprocess.CREATE_NO_WINDOW if hasattr(subprocess, "CREATE_NO_WINDOW") else 0,
+            )
+        except Exception:
+            pass
+
+
 def create_desktop_shortcut(target: Path, work_dir: Path, shortcut: Path) -> bool:
     """Create a Windows desktop shortcut without registry access."""
     if sys.platform != "win32":
@@ -373,11 +386,15 @@ class InstallerApp(tk.Tk):
 
     def _on_uninstall(self) -> None:
         if is_app_running():
-            messagebox.showwarning(
-                "App Running",
-                "Studio is currently running. Please close it before uninstalling.",
-            )
-            return
+            if messagebox.askyesno(
+                "Studio Running",
+                "Studio is currently running in the background.\n\nWould you like to close it automatically to proceed with uninstallation?",
+            ):
+                stop_app_processes()
+                import time
+                time.sleep(0.5)
+            else:
+                return
 
         if not messagebox.askyesno(
             "Confirm Uninstall",
@@ -420,11 +437,15 @@ class InstallerApp(tk.Tk):
 
     def _start_install_or_update(self) -> None:
         if is_app_running():
-            messagebox.showwarning(
-                "App Running",
-                "Studio is currently running. Please close it before continuing with installation/update.",
-            )
-            return
+            if messagebox.askyesno(
+                "Studio Running",
+                "Studio is currently running in the background.\n\nWould you like to close it automatically to proceed with install/update?",
+            ):
+                stop_app_processes()
+                import time
+                time.sleep(0.5)
+            else:
+                return
 
         self.btn_action.config(state="disabled")
         self.btn_uninstall.config(state="disabled")

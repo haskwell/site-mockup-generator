@@ -109,6 +109,7 @@ def launch_desktop() -> int:
     server: subprocess.Popen | None = None
     server_thread: threading.Thread | None = None
     server_errors: list[str] = []
+    srv_instance: Any = None
     log_file = None
 
     if IS_FROZEN:
@@ -117,6 +118,7 @@ def launch_desktop() -> int:
             from src.server.app import app
 
             def _run_server() -> None:
+                nonlocal srv_instance
                 try:
                     config = uvicorn.Config(
                         app,
@@ -125,8 +127,8 @@ def launch_desktop() -> int:
                         log_level="info",
                         access_log=False,
                     )
-                    srv = uvicorn.Server(config)
-                    srv.run()
+                    srv_instance = uvicorn.Server(config)
+                    srv_instance.run()
                 except Exception:
                     import traceback
                     tb = traceback.format_exc()
@@ -199,27 +201,33 @@ def launch_desktop() -> int:
                 return 1
             time.sleep(0.2)
         open_browser(profile, browser_bin)
+
+        # When open_browser returns, the user has closed the app window.
+        # Shut down background server cleanly and terminate process.
         if server is not None and server.poll() is None:
+            kill_process_tree(server)
             try:
-                server.wait()
-            except KeyboardInterrupt:
+                server.wait(timeout=3)
+            except Exception:
                 pass
         elif server_thread is not None:
-            try:
-                while server_thread.is_alive():
-                    time.sleep(1)
-            except KeyboardInterrupt:
-                pass
+            if srv_instance is not None:
+                srv_instance.should_exit = True
+            server_thread.join(timeout=2)
+            os._exit(0)
         return 0
     finally:
         if server is not None and server.poll() is None:
             kill_process_tree(server)
             try:
-                server.wait(timeout=5)
-            except subprocess.TimeoutExpired:
+                server.wait(timeout=3)
+            except Exception:
                 pass
         if log_file is not None:
             log_file.close()
+        # Ensure frozen process never lingers in background
+        if IS_FROZEN:
+            os._exit(0)
 
 
 def main() -> int:
