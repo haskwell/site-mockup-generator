@@ -36,6 +36,8 @@ EXE_PATH = INSTALL_DIR / "Studio.exe"
 ENV_PATH = INSTALL_DIR / ".env"
 DESKTOP_DIR = USER_PROFILE / "Desktop"
 SHORTCUT_PATH = DESKTOP_DIR / "Studio.lnk"
+START_MENU_DIR = USER_PROFILE / "AppData/Roaming/Microsoft/Windows/Start Menu/Programs"
+START_MENU_SHORTCUT = START_MENU_DIR / "Studio.lnk"
 
 
 def is_app_running() -> bool:
@@ -98,7 +100,7 @@ def remove_desktop_shortcut(shortcut: Path) -> None:
         pass
 
 
-def write_uninstall_bat(target_dir: Path, shortcut: Path) -> None:
+def write_uninstall_bat(target_dir: Path, shortcut: Path, start_menu_shortcut: Path) -> None:
     """Write an offline, registry-free uninstall.bat file inside the installation folder."""
     script_content = f"""@echo off
 setlocal
@@ -113,6 +115,11 @@ timeout /t 1 /nobreak >nul
 if exist "{shortcut}" (
     echo Removing Desktop Shortcut...
     del /f /q "{shortcut}" >nul 2>nul
+)
+
+if exist "{start_menu_shortcut}" (
+    echo Removing Start Menu Entry...
+    del /f /q "{start_menu_shortcut}" >nul 2>nul
 )
 
 set "KEEP_ENV=1"
@@ -227,17 +234,31 @@ class InstallerApp(tk.Tk):
         )
         lbl_path.pack(fill=tk.X)
 
-        # Desktop shortcut checkbox
+        # Shortcuts checkboxes
+        chk_frame = tk.Frame(content, bg="#F8F9FA")
+        chk_frame.pack(fill=tk.X, pady=(0, 8))
+
         self.var_shortcut = tk.BooleanVar(value=True)
         chk_shortcut = tk.Checkbutton(
-            content,
-            text="Create Desktop Shortcut (Studio.lnk)",
+            chk_frame,
+            text="Desktop Shortcut",
             variable=self.var_shortcut,
             font=("Segoe UI", 9),
             bg="#F8F9FA",
             activebackground="#F8F9FA",
         )
-        chk_shortcut.pack(anchor=tk.W, pady=(0, 8))
+        chk_shortcut.pack(side=tk.LEFT, padx=(0, 16))
+
+        self.var_start_menu = tk.BooleanVar(value=True)
+        chk_start_menu = tk.Checkbutton(
+            chk_frame,
+            text="Start Menu Entry",
+            variable=self.var_start_menu,
+            font=("Segoe UI", 9),
+            bg="#F8F9FA",
+            activebackground="#F8F9FA",
+        )
+        chk_start_menu.pack(side=tk.LEFT)
 
         # Source selection
         src_frame = tk.Frame(content, bg="#F8F9FA")
@@ -416,6 +437,7 @@ class InstallerApp(tk.Tk):
             keep_env = res
 
         remove_desktop_shortcut(SHORTCUT_PATH)
+        remove_desktop_shortcut(START_MENU_SHORTCUT)
 
         try:
             if keep_env and ENV_PATH.is_file():
@@ -541,13 +563,17 @@ class InstallerApp(tk.Tk):
                 if example_env.is_file():
                     shutil.copy2(example_env, ENV_PATH)
 
-            # 6. Desktop Shortcut
+            # 6. Shortcuts
             if self.var_shortcut.get():
                 self._update_ui_status("Creating Desktop shortcut...", 95)
                 create_desktop_shortcut(EXE_PATH, INSTALL_DIR, SHORTCUT_PATH)
+            if self.var_start_menu.get():
+                self._update_ui_status("Creating Start Menu entry...", 97)
+                START_MENU_DIR.mkdir(parents=True, exist_ok=True)
+                create_desktop_shortcut(EXE_PATH, INSTALL_DIR, START_MENU_SHORTCUT)
 
             # 7. Write Standalone Uninstaller script
-            write_uninstall_bat(INSTALL_DIR, SHORTCUT_PATH)
+            write_uninstall_bat(INSTALL_DIR, SHORTCUT_PATH, START_MENU_SHORTCUT)
 
             # Cleanup
             temp_zip.unlink(missing_ok=True)

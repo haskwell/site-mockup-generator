@@ -32,6 +32,8 @@ $ExePath = Join-Path $InstallDir "Studio.exe"
 $EnvPath = Join-Path $InstallDir ".env"
 $DesktopDir = [System.Environment]::GetFolderPath("Desktop")
 $ShortcutPath = Join-Path $DesktopDir "Studio.lnk"
+$StartMenuDir = [System.Environment]::GetFolderPath([System.Environment+SpecialFolder]::Programs)
+$StartMenuShortcut = Join-Path $StartMenuDir "Studio.lnk"
 $DownloadUrl = "https://github.com/$RepoOwner/$RepoName/releases/latest/download/$AssetName"
 
 # -------------------------------------------------------------
@@ -75,7 +77,7 @@ function Remove-DesktopShortcut {
 }
 
 function Write-UninstallHelper {
-    param([string]$TargetDir, [string]$LnkFile)
+    param([string]$TargetDir, [string]$LnkFile, [string]$StartMenuLnk)
     $script = @"
 @echo off
 setlocal
@@ -90,6 +92,11 @@ timeout /t 1 /nobreak >nul
 if exist "$LnkFile" (
     echo Removing Desktop Shortcut...
     del /f /q "$LnkFile" >nul 2>nul
+)
+
+if exist "$StartMenuLnk" (
+    echo Removing Start Menu Entry...
+    del /f /q "$StartMenuLnk" >nul 2>nul
 )
 
 set "KEEP_ENV=1"
@@ -177,11 +184,18 @@ $grpTarget.Controls.Add($txtTarget)
 
 # Status & Options
 $chkShortcut = New-Object System.Windows.Forms.CheckBox
-$chkShortcut.Text = "Create Desktop Shortcut (Studio.lnk)"
+$chkShortcut.Text = "Desktop Shortcut"
 $chkShortcut.Checked = $true
 $chkShortcut.Font = New-Object System.Drawing.Font("Segoe UI", 9)
 $chkShortcut.Location = New-Object System.Drawing.Point(24, 168)
-$chkShortcut.Size = New-Object System.Drawing.Size(300, 24)
+$chkShortcut.Size = New-Object System.Drawing.Size(150, 24)
+
+$chkStartMenu = New-Object System.Windows.Forms.CheckBox
+$chkStartMenu.Text = "Start Menu Entry"
+$chkStartMenu.Checked = $true
+$chkStartMenu.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+$chkStartMenu.Location = New-Object System.Drawing.Point(180, 168)
+$chkStartMenu.Size = New-Object System.Drawing.Size(160, 24)
 
 # Source selector (GitHub vs Local file)
 $lblSource = New-Object System.Windows.Forms.Label
@@ -248,7 +262,7 @@ $btnClose.Location = New-Object System.Drawing.Point(444, 340)
 $btnClose.Size = New-Object System.Drawing.Size(76, 42)
 
 $form.Controls.AddRange(@(
-    $panelHeader, $grpTarget, $chkShortcut, $lblSource, $btnBrowseLocal,
+    $panelHeader, $grpTarget, $chkShortcut, $chkStartMenu, $lblSource, $btnBrowseLocal,
     $progressBar, $lblStatus, $btnAction, $btnUninstall, $btnLaunch, $btnClose
 ))
 
@@ -359,8 +373,9 @@ $btnUninstall.Add_Click({
     $lblStatus.Text = "Removing Studio..."
     $form.Update()
 
-    # 1. Remove Desktop Shortcut
+    # 1. Remove Desktop and Start Menu Shortcuts
     Remove-DesktopShortcut -LinkFile $ShortcutPath
+    Remove-DesktopShortcut -LinkFile $StartMenuShortcut
 
     # 2. Remove Files
     try {
@@ -559,16 +574,24 @@ $btnAction.Add_Click({
         }
     }
 
-    # Step 6: Create Desktop Shortcut (if checked)
+    # Step 6: Create Desktop and Start Menu Shortcuts
     $progressBar.Value = 92
     if ($chkShortcut.Checked) {
         $lblStatus.Text = "Creating Desktop Shortcut..."
         $form.Update()
         Create-DesktopShortcut -Target $ExePath -WorkDir $InstallDir -LinkFile $ShortcutPath | Out-Null
     }
+    if ($chkStartMenu.Checked) {
+        $lblStatus.Text = "Creating Start Menu Entry..."
+        $form.Update()
+        if (-not (Test-Path $StartMenuDir)) {
+            New-Item -ItemType Directory -Path $StartMenuDir -Force | Out-Null
+        }
+        Create-DesktopShortcut -Target $ExePath -WorkDir $InstallDir -LinkFile $StartMenuShortcut | Out-Null
+    }
 
     # Step 7: Write Standalone Uninstaller Helper
-    Write-UninstallHelper -TargetDir $InstallDir -LnkFile $ShortcutPath
+    Write-UninstallHelper -TargetDir $InstallDir -LnkFile $ShortcutPath -StartMenuLnk $StartMenuShortcut
 
     $progressBar.Value = 100
     $lblStatus.Text = "Setup complete! Studio is ready to use.`nInstalled to: $InstallDir"

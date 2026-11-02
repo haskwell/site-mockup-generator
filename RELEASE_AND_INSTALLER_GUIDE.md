@@ -16,9 +16,9 @@ This guide explains how to package GitHub releases, test the zero-registry non-a
    - **Zero Admin / UAC**: Runs as standard user (`asInvoker`).
    - **Zero Registry**: Modifies zero Windows Registry keys (leaves no registry footprint).
    - **Target**: `C:\Users\<username>\projects\Studio`.
-   - **Desktop Shortcut**: Creates `%USERPROFILE%\Desktop\Studio.lnk` using shell link API.
+   - **Shortcuts**: Creates Desktop shortcut (`%USERPROFILE%\Desktop\Studio.lnk`) and Start Menu entry (`%APPDATA%\Microsoft\Windows\Start Menu\Programs\Studio.lnk`).
    - **Update Safe**: When run again, updates binaries but strictly preserves your `.env` file.
-   - **Uninstaller**: Offers one-click uninstallation from the GUI or via `projects\Studio\uninstall.bat`.
+   - **Uninstaller**: Offers one-click uninstallation from the GUI or via `projects\Studio\uninstall.bat` (removes both Desktop and Start Menu shortcuts, and clears application files).
 
 3. **Standalone Python GUI Installer** ([`scripts/installer_gui.py`](scripts/installer_gui.py) + [`scripts/build_installer.bat`](scripts/build_installer.bat)):
    - Complete Tkinter-based equivalent that can be compiled into a single `.exe`.
