@@ -2441,3 +2441,150 @@ html.is-auth #auth-overlay {
     transform: translateX(6px);
   }
 }
+
+/* Video Upload Progress Bar in Presenter Toolbar */
+.pupload {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-width: 220px;
+  max-width: 320px;
+  padding: 4px 10px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--line);
+  border-radius: var(--r-md);
+  gap: 4px;
+}
+.pupload-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 11px;
+}
+.pupload-title {
+  color: var(--text);
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}
+.pupload-stats {
+  color: var(--accent);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.pupload-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.pupload-bar {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.15s ease-out;
+}
+.pupload-bar.syncing {
+  background: linear-gradient(90deg, var(--accent) 0%, #a78bfa 50%, var(--accent) 100%);
+  background-size: 200% 100%;
+  animation: uploadStripeMove 1.5s linear infinite;
+}
+.pupload-bar.success {
+  background: var(--success);
+}
+.pupload-bar.error {
+  background: var(--danger);
+}
+
+/* Global Floating Upload Dock */
+.floating-upload {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  width: 320px;
+  background: var(--bg-card);
+  border: 1px solid var(--line);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
+  border-radius: var(--r-lg);
+  padding: 12px 14px;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  animation: floatUploadIn 0.25s ease-out;
+  backdrop-filter: blur(12px);
+}
+@keyframes floatUploadIn {
+  from { opacity: 0; transform: translateY(12px) scale(0.96); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+.floating-upload-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.floating-upload-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.floating-upload-icon {
+  font-size: 16px;
+  flex-shrink: 0;
+}
+.floating-upload-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.floating-upload-pct {
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--mono);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.floating-upload-track {
+  width: 100%;
+  height: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+}
+.floating-upload-bar {
+  height: 100%;
+  width: 0%;
+  background: var(--accent);
+  border-radius: 999px;
+  transition: width 0.15s ease-out;
+}
+.floating-upload-bar.syncing {
+  background: linear-gradient(90deg, var(--accent) 0%, #a78bfa 50%, var(--accent) 100%);
+  background-size: 200% 100%;
+  animation: uploadStripeMove 1.5s linear infinite;
+}
+.floating-upload-bar.success {
+  background: var(--success);
+}
+.floating-upload-bar.error {
+  background: var(--danger);
+}
+.floating-upload-stats {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--mono);
+  display: flex;
+  justify-content: space-between;
+}
+@keyframes uploadStripeMove {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}

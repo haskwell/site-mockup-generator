@@ -791,11 +791,21 @@ async def save_recording(handle:str,request:Request,batch:str|None=None,screen:s
     path=recordings/filename
     path.write_bytes(data)
     with connect() as d:
-        d.execute("UPDATE leads SET has_recording=1, updated_at=CURRENT_TIMESTAMP WHERE batch=? AND handle=?",(batch,handle))
+        d.execute(
+            """UPDATE leads 
+               SET has_recording=1, 
+                   stage=CASE WHEN stage IN ('new', 'built') THEN 'recorded' ELSE stage END, 
+                   updated_at=CURRENT_TIMESTAMP 
+               WHERE batch=? AND handle=?""",
+            (batch, handle),
+        )
+        row = d.execute("SELECT stage FROM leads WHERE batch=? AND handle=?", (batch, handle)).fetchone()
+        row_dict = dict(row) if row else {}
+        new_stage = row_dict.get("stage", "recorded")
     r2_url=None
     if is_r2_configured():
         r2_url=upload_recording(path,batch,handle,filename)
-    return {"path":str(path),"filename":filename,"r2_url":r2_url,"screen":screen}
+    return {"path":str(path),"filename":filename,"r2_url":r2_url,"screen":screen,"stage":new_stage,"has_recording":1}
 
 @app.get("/api/lead/{handle}/recording/{screen}")
 def get_recording(handle:str,screen:str,batch:str|None=None,download:bool=False):

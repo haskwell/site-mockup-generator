@@ -1145,6 +1145,15 @@
           <span>Fullscreen</span>
         </button>
         <div class="spacer"></div>
+        <div class="pupload" id="pupload" hidden>
+          <div class="pupload-info">
+            <span class="pupload-title" id="pupload-title">Uploading…</span>
+            <span class="pupload-stats" id="pupload-stats">0%</span>
+          </div>
+          <div class="pupload-track">
+            <div class="pupload-bar" id="pupload-bar"></div>
+          </div>
+        </div>
         <span class="rec" id="rec"><i></i><span id="rectime">00:00</span></span>
         <button
           class="record-button"
@@ -1317,6 +1326,21 @@
         </div>
         <div class="actions" id="dlgactions"></div>
       </div>
+    </div>
+
+    <!-- Global Persistent Floating Upload Dock -->
+    <div class="floating-upload" id="floating-upload" hidden>
+      <div class="floating-upload-top">
+        <div class="floating-upload-info">
+          <span class="floating-upload-icon" id="floating-upload-icon">☁️</span>
+          <span class="floating-upload-title" id="floating-upload-title">Uploading recording…</span>
+        </div>
+        <span class="floating-upload-pct" id="floating-upload-pct">0%</span>
+      </div>
+      <div class="floating-upload-track">
+        <div class="floating-upload-bar" id="floating-upload-bar"></div>
+      </div>
+      <div class="floating-upload-stats" id="floating-upload-stats">0 MB / 0 MB</div>
     </div>
 
     <!-- Global Toast Container -->

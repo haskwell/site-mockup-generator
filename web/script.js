@@ -1225,13 +1225,23 @@ let autosaveTimer = null;
 function autosave() {
   const targetHandle = S.sel;
   if (!targetHandle) return;
+  const leadCurrent = leadOf(targetHandle);
+  let formStage = $("#f-stage") ? $("#f-stage").value : "new";
+  if (
+    leadCurrent &&
+    leadCurrent.stage === "recorded" &&
+    (formStage === "new" || formStage === "built")
+  ) {
+    formStage = "recorded";
+    if ($("#f-stage")) $("#f-stage").value = "recorded";
+  }
   const body = {
     name: $("#f-name").value,
     phone: $("#f-phone").value,
     area: $("#f-area").value,
     followers: $("#f-followers").value,
     notes: $("#f-notes").value,
-    stage: $("#f-stage").value,
+    stage: formStage,
     follow_up: $("#f-follow_up").value,
     price: $("#f-price").value,
   };
@@ -1712,6 +1722,170 @@ async function toggleRecord() {
   });
   P.chunks = [];
   P.rec.ondataavailable = (e) => e.data.size && P.chunks.push(e.data);
+function uploadRecordingWithProgress(url, blob, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", url);
+    xhr.setRequestHeader("X-Studio", "1");
+    const t0 = Date.now();
+    xhr.upload.onprogress = (e) => {
+      if (e.lengthComputable && e.total > 0) {
+        const pct = Math.min(99, Math.round((e.loaded / e.total) * 100));
+        const elapsed = (Date.now() - t0) / 1000;
+        const bps = elapsed > 0 ? e.loaded / elapsed : 0;
+        onProgress({
+          loaded: e.loaded,
+          total: e.total,
+          percent: pct,
+          speedBps: bps,
+          stage: "uploading",
+        });
+      }
+    };
+    xhr.onload = () => {
+      try {
+        const json = JSON.parse(xhr.responseText || "{}");
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(json);
+        } else {
+          reject(
+            new Error(
+              json.detail || xhr.statusText || `Upload failed (${xhr.status})`,
+            ),
+          );
+        }
+      } catch {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve({});
+        } else {
+          reject(new Error(`Upload failed (${xhr.status})`));
+        }
+      }
+    };
+    xhr.onerror = () =>
+      reject(new Error("Network connection error during upload"));
+    xhr.send(blob);
+  });
+}
+
+function renderUploadProgress({
+  handle,
+  screen,
+  percent,
+  loaded,
+  total,
+  speedBps,
+  stage,
+  error,
+}) {
+  const pbar = $("#pupload");
+  const pstats = $("#pupload-stats");
+  const pbarEl = $("#pupload-bar");
+  const ptitle = $("#pupload-title");
+
+  const floatDock = $("#floating-upload");
+  const floatTitle = $("#floating-upload-title");
+  const floatPct = $("#floating-upload-pct");
+  const floatBar = $("#floating-upload-bar");
+  const floatStats = $("#floating-upload-stats");
+  const floatIcon = $("#floating-upload-icon");
+
+  const fmtMb = (b) => (b ? (b / (1024 * 1024)).toFixed(1) + " MB" : "0 MB");
+  const fmtSpeed = (bps) =>
+    bps ? (bps / (1024 * 1024)).toFixed(1) + " MB/s" : "0 MB/s";
+
+  const isPresenting = $("#present") && !$("#present").hidden;
+
+  if (stage === "start" || stage === "uploading" || stage === "syncing_r2") {
+    if (isPresenting && pbar) pbar.hidden = false;
+    if (floatDock) floatDock.hidden = false;
+
+    const pct = Math.max(0, Math.min(100, percent || 0));
+    const titleText =
+      stage === "syncing_r2"
+        ? `Syncing @${handle} to R2…`
+        : `Uploading @${handle} (${screen})…`;
+    const statsText = total
+      ? `${pct}% · ${fmtMb(loaded)} / ${fmtMb(total)} (${fmtSpeed(speedBps)})`
+      : `${pct}%`;
+
+    if (ptitle) ptitle.textContent = titleText;
+    if (pstats) pstats.textContent = statsText;
+    if (pbarEl) {
+      pbarEl.style.width = `${pct}%`;
+      pbarEl.className =
+        "pupload-bar" + (stage === "syncing_r2" ? " syncing" : "");
+    }
+
+    if (floatTitle) floatTitle.textContent = titleText;
+    if (floatPct) floatPct.textContent = `${pct}%`;
+    if (floatBar) {
+      floatBar.style.width = `${pct}%`;
+      floatBar.className =
+        "floating-upload-bar" + (stage === "syncing_r2" ? " syncing" : "");
+    }
+    if (floatStats) {
+      floatStats.textContent = total
+        ? `${fmtMb(loaded)} / ${fmtMb(total)} · ${fmtSpeed(speedBps)}`
+        : stage === "syncing_r2"
+          ? "Sending to Cloudflare R2…"
+          : "Starting upload…";
+    }
+    if (floatIcon) floatIcon.textContent = stage === "syncing_r2" ? "⚡" : "☁️";
+  } else if (stage === "complete") {
+    if (pbarEl) {
+      pbarEl.style.width = "100%";
+      pbarEl.className = "pupload-bar success";
+    }
+    if (pstats) pstats.textContent = "100% · Done";
+    if (ptitle) ptitle.textContent = `Uploaded @${handle} to R2!`;
+
+    if (floatPct) floatPct.textContent = "100%";
+    if (floatBar) {
+      floatBar.style.width = "100%";
+      floatBar.className = "floating-upload-bar success";
+    }
+    if (floatTitle) floatTitle.textContent = `Uploaded @${handle} to R2!`;
+    if (floatStats) floatStats.textContent = "Sync complete";
+    if (floatIcon) floatIcon.textContent = "✅";
+
+    setTimeout(() => {
+      if (pbar) pbar.hidden = true;
+      if (floatDock) floatDock.hidden = true;
+      if (pbarEl) {
+        pbarEl.style.width = "0%";
+        pbarEl.className = "pupload-bar";
+      }
+      if (floatBar) {
+        floatBar.style.width = "0%";
+        floatBar.className = "floating-upload-bar";
+      }
+    }, 2800);
+  } else if (stage === "error") {
+    if (pbarEl) pbarEl.className = "pupload-bar error";
+    if (pstats) pstats.textContent = "Failed";
+    if (ptitle) ptitle.textContent = error || "Upload failed";
+
+    if (floatBar) floatBar.className = "floating-upload-bar error";
+    if (floatTitle) floatTitle.textContent = "Upload failed";
+    if (floatStats) floatStats.textContent = error || "Server upload failed";
+    if (floatIcon) floatIcon.textContent = "❌";
+
+    setTimeout(() => {
+      if (pbar) pbar.hidden = true;
+      if (floatDock) floatDock.hidden = true;
+      if (pbarEl) {
+        pbarEl.style.width = "0%";
+        pbarEl.className = "pupload-bar";
+      }
+      if (floatBar) {
+        floatBar.style.width = "0%";
+        floatBar.className = "floating-upload-bar";
+      }
+    }, 4500);
+  }
+}
+
   P.rec.onstop = async () => {
     stream.getTracks().forEach((t) => t.stop());
     cancelAnimationFrame(P.raf);
@@ -1719,38 +1893,92 @@ async function toggleRecord() {
     $("#rec").classList.remove("on");
     $("#p-rec").innerHTML = lab("rec", "Start recording");
     $("#p-rec").setAttribute("aria-label", "Start recording");
+
+    const targetHandle = S.sel;
+    const targetBatch = S.st.batch;
+    const targetDevice = P.device;
+    if (!targetHandle) return;
+
     const type = P.rec.mimeType || "video/webm";
     const ext = type.includes("mp4") ? "mp4" : "webm";
     const a = document.createElement("a");
     a.href = URL.createObjectURL(new Blob(P.chunks, { type }));
-    a.download = `${S.sel || "site"}-${P.device}.${ext}`;
+    a.download = `${targetHandle}-${targetDevice}.${ext}`;
     a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 4000);
-    setSyncIndicator(`Uploading ${P.device} recording…`);
+
+    renderUploadProgress({
+      handle: targetHandle,
+      screen: targetDevice,
+      percent: 0,
+      stage: "start",
+    });
+
     try {
       const blob = new Blob(P.chunks, { type });
       const qs = new URLSearchParams({
-        batch: S.st.batch,
-        screen: P.device,
+        batch: targetBatch,
+        screen: targetDevice,
         extension: ext,
       });
-      const res = await api(`${leadUrl(S.sel)}/recording?${qs}`, {
-        method: "POST",
-        body: blob,
+
+      const res = await uploadRecordingWithProgress(
+        `${leadUrl(targetHandle)}/recording?${qs}`,
+        blob,
+        (progress) => {
+          renderUploadProgress({
+            handle: targetHandle,
+            screen: targetDevice,
+            ...progress,
+            stage: progress.percent >= 99 ? "syncing_r2" : "uploading",
+          });
+        },
+      );
+
+      renderUploadProgress({
+        handle: targetHandle,
+        screen: targetDevice,
+        percent: 100,
+        stage: "complete",
       });
-      setSyncIndicator(null);
+
       if (res && res.r2_url) {
         toast(`Recording uploaded & synced to Cloudflare R2!`);
       } else {
-        toast(`Recording saved as ${S.sel}-${P.device}.${ext}`);
+        toast(`Recording saved as ${targetHandle}-${targetDevice}.${ext}`);
       }
-      const st = stageOf(S.ld?.lead || {});
-      if (st === "new" || st === "built") await setStage("recorded");
+
+      // Update lead state atomically across the entire app
+      const newStage = res?.stage || "recorded";
+      const l = leadOf(targetHandle);
+      if (l) {
+        l.stage = newStage;
+        l.has_recording = 1;
+      }
+      if (S.ld && S.sel === targetHandle && S.ld.lead) {
+        S.ld.lead.stage = newStage;
+        S.ld.lead.has_recording = 1;
+        if (!S.ld.recordings) S.ld.recordings = {};
+        S.ld.recordings[targetDevice] = res?.filename || "";
+        if ($("#f-stage")) $("#f-stage").value = newStage;
+        drawStrip();
+        drawNext();
+      }
+      if (S.sel === targetHandle) {
+        const st = stageOf(S.ld?.lead || {});
+        if (st === "new" || st === "built") await setStage("recorded");
+      }
+      render();
     } catch (e) {
-      setSyncIndicator(null);
+      renderUploadProgress({
+        handle: targetHandle,
+        screen: targetDevice,
+        stage: "error",
+        error: e.message,
+      });
       toast(`Download saved; server upload failed: ${e.message}`);
     }
-    if (S.sel) loadLead(S.sel, true);
+    if (S.sel === targetHandle) loadLead(targetHandle, true);
   };
   P.rec.start(1000);
   P.t0 = Date.now();
